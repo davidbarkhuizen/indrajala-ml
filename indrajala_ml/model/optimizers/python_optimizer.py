@@ -148,9 +148,13 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
         rule = cast(Adam, self.rule)
         beta1, beta2, epsilon = rule.beta1, rule.beta2, rule.epsilon
         bias_correction1, bias_correction2 = rule.bias_corrections(self.t)
+        decay = rule.decay_factor(learning_rate)
 
         # state: the weights' m and v, the bias's m and v
         for weight_set, (weight_state, bias_state) in zip(weight_sets, self._zeros(index, weight_sets, 2)):
+            # AdamW: a decayed weight shrinks by decay before the Adam step (D9); 1.0 otherwise,
+            # which leaves Adam's bits
+            factor = decay if weight_set.weights_decayed else 1.0
             new_weights: list[float] = []
             new_m: list[float] = []
             new_v: list[float] = []
@@ -162,7 +166,7 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
                 v = beta2 * v + (1 - beta2) * g * g
                 m_hat = m / bias_correction1
                 v_hat = v / bias_correction2
-                new_weights.append(weight - learning_rate * m_hat / (math.sqrt(v_hat) + epsilon))
+                new_weights.append(weight * factor - learning_rate * m_hat / (math.sqrt(v_hat) + epsilon))
                 new_m.append(m)
                 new_v.append(v)
             weight_set.set_weights(new_weights)

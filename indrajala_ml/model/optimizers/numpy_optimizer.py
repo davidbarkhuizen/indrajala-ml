@@ -90,12 +90,17 @@ class NumpyOptimizer(ArrayOptimizerBase[FloatArray, TrainedArrayLayer[FloatArray
         state = self._zeros(index, layer, 2)
 
         bias_correction1, bias_correction2 = rule.bias_corrections(self.t)
+        decay = rule.decay_factor(learning_rate)
 
-        for i, (parameter, gradient) in enumerate(zip(layer.parameters(), self._gradients(layer))):
+        for i, (parameter, gradient, decayed) in enumerate(
+            zip(layer.parameters(), self._gradients(layer), layer.decayed)
+        ):
             g = gradient / batch_size
             m = beta1 * state[2 * i] + (1 - beta1) * g
             v = beta2 * state[2 * i + 1] + (1 - beta2) * g * g
             m_hat = m / bias_correction1
             v_hat = v / bias_correction2
+            if decayed and rule.weight_decay != 0.0:
+                parameter *= decay  # AdamW: the weight shrinks, then the Adam step (D9)
             parameter -= learning_rate * m_hat / (np.sqrt(v_hat) + epsilon)
             state[2 * i], state[2 * i + 1] = m, v

@@ -145,7 +145,12 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
 
 def rule_to_json(rule: UpdateRule) -> dict[str, Any]:
     name = next(name for name, cls in _RULES.items() if isinstance(rule, cls))
-    return {"rule": name, **asdict(rule)}
+    fields = asdict(rule)
+    if isinstance(rule, Adam) and rule.weight_decay == 0.0:
+        # Adam without decay writes as it did before AdamW (the training-recipe workplan, D9), so
+        # its files are unchanged; a missing weight_decay reads as 0
+        del fields["weight_decay"]
+    return {"rule": name, **fields}
 
 
 def rule_from_json(rule: dict[str, Any]) -> UpdateRule:
