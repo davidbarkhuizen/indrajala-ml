@@ -3,7 +3,7 @@ Timing A/Bs between two commits, run and reported by the protocol in
 docs/measurement.md (the A/B harness workplan in docs/next-steps.md has the design):
 
     python scripts/measurement/ab.py run --bench prepared_dataset_timing [--old main] [--new HEAD] [--order ONNONO]
-                             [--name NAME] [--control-backend numpy] [--script-from new|old|COMMIT]
+                             [--name NAME] [--control-backend numpy] [--script-from new|old|each|COMMIT]
                              [--allow-profile-change] [--allow-load] [-- <benchmark arguments>]
     python scripts/measurement/ab.py run --bench cmd [...] -- probe.py [probe arguments]
     python scripts/measurement/ab.py run --bench prepared_dataset_timing --old main --new main --old-crate 638ff13
@@ -32,7 +32,8 @@ and power limits are read again: a pass during which they left the machine profi
 run. `run` does a smoke run of each side with the benchmark's smallest settings before the passes.
 RUN defaults to the most recent run. The benchmark script comes from the new side's tree, or the
 old's, or with `--script-from COMMIT` from a third tree at that commit: to time two commits that
-predate a fix to the script itself.
+predate a fix to the script itself; with `--script-from each`, each side runs its own tree's script:
+to check that a change to the benchmark itself (the same work built another way) keeps its rows.
 
 The machine check uses the profile in docs/machine_profiles/ recorded on this host (its
 state.hostname); a host with none is refused unless --allow-profile-change, which compares against
@@ -780,7 +781,7 @@ def _run_step(
         provenance = check_provenance(run_dir, tree, env, extension["sha256"] if extension else None)
         if extension is None:
             manifest["extension"] = {"file": provenance["extension"], "sha256": provenance["sha256"]}
-    script_tree = Path(manifest[manifest["script_from"]]["tree"])
+    script_tree = tree if manifest["script_from"] == EACH else Path(manifest[manifest["script_from"]]["tree"])
     command = [sys.executable, *adapter.command(script_tree, args, run_dir / f"{stem}.json")]
     with (
         open(run_dir / f"{stem}.stdout", "w") as out,
@@ -1042,9 +1043,14 @@ def _guarded(run_dir: Path, manifest: dict[str, Any], work: Any) -> None:
 # ---- commands
 
 
+# --script-from each: each side runs its own tree's benchmark script, to time a change to the script
+# itself (the same work built another way) against the script it replaces
+EACH = "each"
+
+
 def _script_commit(repo: Path, script_from: str) -> str | None:
-    """The commit --script-from names, or None when it names a side (old or new)."""
-    if script_from in ("old", "new"):
+    """The commit --script-from names, or None when it names a side (old or new) or each."""
+    if script_from in ("old", "new", EACH):
         return None
     return _git(repo, "rev-parse", "--verify", f"{script_from}^{{commit}}")
 
@@ -1098,7 +1104,8 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
             if side in manifest:
                 manifest[side]["tree"] = str(ensure_worktree(repo, manifest[side]["commit"]))
         if adapter.name != "cmd":  # the report names it without the tree, which may be gone by then
-            manifest["command"] = _pass_command(adapter, Path(manifest[manifest["script_from"]]["tree"]), bench_args)
+            script_side = "new" if manifest["script_from"] == EACH else manifest["script_from"]
+            manifest["command"] = _pass_command(adapter, Path(manifest[script_side]["tree"]), bench_args)
         if crates["old"] != crates["new"]:  # switch the crate per pass; the venv is never touched
             for side in ("old", "new"):
                 crate = crates[side]
@@ -1710,6 +1717,8 @@ def _table(rows: list[RowStats], data: ReportData) -> list[str]:
 def _script_source(manifest: dict[str, Any]) -> str:
     if manifest["script_from"] == "script":
         return f"the script from `{manifest['script']['commit'][:7]}`, a third tree"
+    if manifest["script_from"] == EACH:
+        return "each side's script from its own tree"
     return f"the script from the {manifest['script_from']} tree"
 
 
@@ -1732,7 +1741,8 @@ def _ab_path(manifest: dict[str, Any]) -> str:
 def protocol_paragraph(data: ReportData) -> str:
     manifest = data.manifest
     adapter = ADAPTERS[manifest["bench"]]
-    script_tree = Path(manifest.get(manifest["script_from"], {}).get("tree", "<tree>"))
+    script_side = "new" if manifest["script_from"] == EACH else manifest["script_from"]
+    script_tree = Path(manifest.get(script_side, {}).get("tree", "<tree>"))
     if manifest["bench"] == "cmd":  # the probe as given: resolving it here would depend on the cwd
         command = " ".join(["python", *manifest["args"]])
     elif "command" in manifest:  # recorded when the run started
@@ -1912,7 +1922,11 @@ def _run_parser(run: argparse.ArgumentParser) -> argparse.ArgumentParser:
     run.add_argument("--order", default="ONNONO")
     run.add_argument("--name", help="default <branch>-<bench>")
     run.add_argument("--control-backend", choices=["numpy", "rust"], help="also read this backend's rows as controls")
-    run.add_argument("--script-from", default="new", help="old, new, or a commit whose benchmark script both sides run")
+    run.add_argument(
+        "--script-from",
+        default="new",
+        help="old, new, each (each side its own tree's), or a commit whose benchmark script both sides run",
+    )
     run.add_argument(
         "--old-crate", help="crate commit, or a prebuilt .whl, for the old side (default: its tree's rust/ submodule)"
     )
@@ -2210,7 +2224,7 @@ def main(argv: list[str] | None = None) -> int:
             with run_lock(f"{what} --detach, preparing"):  # nothing changes the checkout under a run
                 repo = Path(args.repo).resolve()
                 if getattr(args, "sync", False):
-                    script = [] if args.script_from in ("old", "new") else [args.script_from]
+                    script = [] if args.script_from in ("old", "new", EACH) else [args.script_from]
                     print("\n".join(sync_checkout(repo, [args.old, args.new, *script])))
                 if args.apply_setup and not args.skip_profile:
                     print(check_machine(repo, apply=True), flush=True)

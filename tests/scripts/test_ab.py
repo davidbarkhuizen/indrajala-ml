@@ -403,6 +403,23 @@ def test_a_run_across_the_source_layout_move_finds_each_sides_trainer(toy_repo: 
         assert all(Path(p["provenance"]["train"]) == tree / trainer for p in manifest["passes"] if p["side"] == side)
 
 
+def test_script_from_each_runs_each_sides_own_script(toy_repo: Path) -> None:
+    # a commit changes only the probe (its value ten times the package's); both sides import the same
+    # toy.VALUE, 2.0, so the rows differ only by the script each side ran
+    (toy_repo / "scripts/probe.py").write_text(PROBE.replace("toy.VALUE + i", "10 * toy.VALUE + i"))
+    _git(toy_repo, "commit", "-q", "-am", "the probe rebuilt")
+    args = ["run", "--bench", "cmd", "--skip-profile", "--old", "HEAD~1", "--new", "HEAD", "--order", "ON"]
+    assert _run(toy_repo, *args, "--script-from", "each", "--", "scripts/probe.py") == 0
+
+    run_dir = ab.find_run(None)
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["script_from"] == "each" and "script" not in manifest
+    data = ab.report_data(run_dir)
+    row = next(row for row in data.rows if row.case == "toy")
+    assert (min(row.old_runs), min(row.new_runs)) == (2.0, 20.0)
+    assert "each side's script from its own tree" in ab.protocol_paragraph(data)
+
+
 def test_script_from_a_commit_runs_that_commits_script_on_both_sides(toy_repo: Path) -> None:
     # a third commit fixes the probe; the two sides before it run the fixed script from a third tree
     (toy_repo / "scripts/probe.py").write_text(PROBE.replace('"case": "toy"', '"case": "fixed"'))
