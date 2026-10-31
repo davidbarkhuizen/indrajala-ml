@@ -1,7 +1,7 @@
 # Workplan: generation with a key/value cache (roadmap step 9)
 
 **Status: decisions D1-D9 settled by the owner (2026-10-10), building for extensibility and
-speed. Stages 1 (this plan) and 2 (the sampler, `indrajala_ml/generation/sampling.py`) done. Starts after step 8 (rotary positions, done 2026-10-12;
+speed. Stages 1 (this plan), 2 (the sampler, `indrajala_ml/generation/sampling.py`) and 3 (numpy decoding, `indrajala_ml/generation/decoder.py`) done. Starts after step 8 (rotary positions, done 2026-10-12;
 next-steps, From rotary positions), whose rotated keys this plan's cache keeps valid as its window
 slides. Its `train` builds rotary models by default (the rotary workplan's D9).**
 

@@ -4,13 +4,21 @@ import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
+from indrajala_ml.generation.decoder import Decoder
 from indrajala_ml.model.layers.python.conv_front_end import ArrayFrontEndLayer, load_conv_model_state
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.persistence.format2 import NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray
 from indrajala_ml.model.specs.bounds import validate_class_count, validate_layer_sizes
-from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, refuse_token_wise_output, token_wise_output
+from indrajala_ml.model.specs.layer_specs import (
+    Dense,
+    LayerSpec,
+    Position,
+    expand_specs,
+    refuse_token_wise_output,
+    token_wise_output,
+)
 from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -367,6 +375,20 @@ class SequentialSequenceShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
             for t, label in enumerate(self._labels(category)):
                 target_batch[row, t * self.class_count + label] = 1.0
         return target_batch
+
+    def decoder(self) -> Decoder:
+        """
+        A Decoder over this network's layers (the generation workplan, D2): prefill(ids), then step(id),
+        each the last token's probabilities. Refuses a network whose layers can't all decode.
+        """
+        return Decoder(
+            self.layers,
+            self.tokens,
+            ids_input=lambda ids: self.backend.vector([float(i) for i in ids]),
+            last_row=lambda out: out.tolist()[-1],
+            full_pass=lambda ids: self.predict_probabilities(tuple(float(i) for i in ids))[-1],
+            learned_positions=any(isinstance(spec, Position) for spec in expand_specs(self.layer_specs)),
+        )
 
     def _labels(self, category: Sequence[int]) -> Sequence[int]:
         assert len(category) == self.tokens, (

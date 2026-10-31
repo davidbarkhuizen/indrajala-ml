@@ -17,6 +17,7 @@ from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 
 
 def sum_features(R: FloatArray) -> FloatArray:
@@ -24,12 +25,13 @@ def sum_features(R: FloatArray) -> FloatArray:
     return np.cumsum(R, axis=1)[:, -1:]
 
 
-class LayerNormArrayLayer(BatchShaped, GammaAndBeta[FloatArray]):
+class LayerNormArrayLayer(RowDecoding[FloatArray], BatchShaped, GammaAndBeta[FloatArray]):
     """
     y = gamma * xhat + beta over each of tokens tokens of features features, gamma and beta (features,)
     shared over the tokens, starting at 1 and 0 and never decayed. A flat layer is one token of
     its whole size, a conv front end's image included. The statistics are computed on the
-    (N * tokens, features) rows, which a token-major batch is without a copy. Hidden only.
+    (N * tokens, features) rows, which a token-major batch is without a copy, and a decode's on the
+    new tokens' rows (_normalized). Hidden only.
     """
 
     def __init__(self, tokens: int, features: int, epsilon: float) -> None:
@@ -48,16 +50,23 @@ class LayerNormArrayLayer(BatchShaped, GammaAndBeta[FloatArray]):
     def _rows(self, batch: FloatArray) -> FloatArray:
         return batch.reshape(batch.shape[0] * self.tokens, self.features)
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
-        R = self._rows(X)
+    def _normalized(self, R: FloatArray) -> tuple[FloatArray, FloatArray, FloatArray]:
+        # (rows, features): y, and the backward pass's std and xhat
         d = self.features
         mu = sum_features(R) / d
         c = R - mu
         var = sum_features(c * c) / d
-        self._std = np.sqrt(var + self.epsilon)
-        self._xhat = c / self._std
-        self.A = (self.gamma * self._xhat + self.beta).reshape(X.shape)
+        std = np.sqrt(var + self.epsilon)
+        xhat = c / std
+        return self.gamma * xhat + self.beta, std, xhat
+
+    def forward_batch(self, X: FloatArray) -> FloatArray:
+        y, self._std, self._xhat = self._normalized(self._rows(X))
+        self.A = y.reshape(X.shape)
         return self.A
+
+    def decode_rows(self, R: FloatArray) -> FloatArray:
+        return self._normalized(R)[0]
 
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream
