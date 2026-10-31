@@ -2,23 +2,23 @@
 Window-recurrent networks timed on the Rust backend: the training step, the forward pass and a
 long test (the window-program workplan's stage 0). A case is a name, its kind first:
 
-- `learn-<window>-k<k>-s<s>-m<m>-B<B>-W<W>`: `learn_batch` of the window-recurrent study's network
-  (`window_recurrent_study.build`: the window, `transformer` or `linear`, beside a state of s
-  features and m codes), a batch of B examples of W windows of k columns, random column tokens and
-  digits (the time doesn't depend on them). The old name `k<k>-s<s>-m<m>-B<B>-W<W>` is the
+- `learn-<window>-k<k>-s<s>-m<m>-B<B>-W<W>`: `learn_batch` of the window-recurrent adder's network
+  (the window preset, `transformer` or `linear` (indrajala_ml/model/specs/window_presets.py), over
+  the adder's 27 column tokens and 3 digits, beside a state of s features and m codes), a batch of
+  B examples of W windows of k columns, random column tokens and digits (the time doesn't depend on
+  them). The old name `k<k>-s<s>-m<m>-B<B>-W<W>` is the
   transformer's (so the cases timed before stage 0 keep their rows).
-- `learn-family-p<p>-f<m>-B<B>-W<W>`: `learn_batch` of the division family's network
-  (`modular_family.network`: the transformer window reading its output, two factors of `s` 16 and m
-  codes; the sum and difference queried), B examples of W columns (`W - 1` uniform and the final zero).
+- `learn-family-p<p>-f<m>-B<B>-W<W>`: `learn_batch` of the division family's network (the
+  transformer window over the family's 11 tokens and p + 1 classes, three tokens a column (a digit,
+  the sum's and the difference's queries), two factors of `s` 16 and m codes reading the window's
+  output), B examples of W columns, random tokens and labels (the time doesn't depend on them).
 - `forward-linear-k1-s<s>-m<m>-n<n>` and `forward-family-p<p>-f<m>-n<n>`: `classify_rows` on one
   long-test chunk at n columns (`CHUNK_TOKENS // ((n + 1) * width)` rows of `n + 1` windows, or r
   rows with a field `r<r>`), the dataset prepared once before timing.
-- `long-test-family-p<p>-f<m>-U1-n<n>-c<c>`: the long test end to end at n columns, c cases of U1
-  through `QueryModel.predict` and `task.evaluate` (the examples, the network, the labels, the
-  checking), the network built from seed 0 (the time doesn't depend on its answers).
-- `study-family-p<p>-f<m>-e<e>`: a short study run end to end, `modular_family.run` of the family
-  arm (two factors of m codes, the window's output read) from seed 0 for e epochs in all, into a
-  temporary directory (the window-program workplan's stage 6: a real run, not one step).
+
+The end-to-end cases, a long test and a short study run (`long-test-family-...`, `study-family-...`),
+run the studies' own code, so they are indrajala-studies' `scripts/measurement/window_study_timing.py`,
+which reuses this script's parsing, timing and breakdown; ab.py runs it by its absolute path.
 
 Each case is built from a fixed seed, warmed up, then timed in repeats of loops steps (a learn
 case's loops `--loops`; a forward or long-test case's 1, each step seconds long); each repeat prints
@@ -51,7 +51,6 @@ import cProfile
 import json
 import os
 import pstats
-import random
 import statistics
 import sys
 import time
@@ -65,10 +64,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import numpy as np
 
+from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
+from indrajala_ml.model.specs import window_presets as wp
+from indrajala_ml.model.specs.update_rules import Adam
+from indrajala_ml.model.specs.window_recurrence import OUTPUT, AttentionPooling, Codes, Factor, WindowRecurrence
+
 # the study's cells: k 1 (E7, E8, C9's) and k 4 (stage 7's), the state and codes of E8b; E2b''s
 # linear window (its longest training length 18, and the final zero window) and the division
 # family's fork probe (p 7, two factors of 32 codes, certified at steps 9-15: 15 columns and the
-# zero); the long tests' forward pass and a long test at 1,024 (1,023 cases: three full chunks)
+# zero); the long tests' forward pass at 1,024 (the long test itself is window_study_timing.py's)
 DEFAULT_CASES = [
     "k1-s4-m16-B32-W12",
     "k4-s4-m16-B32-W5",
@@ -76,12 +80,16 @@ DEFAULT_CASES = [
     "learn-family-p7-f32-B64-W16",
     "forward-linear-k1-s16-m16-n1024",
     "forward-family-p7-f32-n1024",
-    "long-test-family-p7-f32-U1-n1024-c1023",
 ]
 
 KINDS = ("learn", "forward", "long-test", "study")
-FAMILY_QUERIES = ("sum", "difference")
 FAMILY_STATE = 16  # s of each factor, the division studies'
+# the window-recurrent adder's column tokens and digits (window_tasks.ADDITION's machine), and the
+# division family's tokens and tokens a column, the sum and difference queried (modular_family.Encoding)
+ADDITION_TOKENS, ADDITION_CLASSES = 27, 3
+FAMILY_TOKENS, FAMILY_WIDTH = 11, 3
+CHUNK_TOKENS = 1 << 20  # a long test's forward pass at most (window_recurrent_study.CHUNK_TOKENS)
+WINDOWS = {"transformer": wp.transformer_window, "linear": wp.linear_window}
 
 # pstats' table: a function (file, line, name) to its calls, primitive calls, own and cumulative time, callers
 Function = tuple[str, int, str]
@@ -111,117 +119,66 @@ def timed(step: Callable[[], object], repeats: int, loops: int) -> list[float]:
     return seconds
 
 
-def family(fields: dict[str, int]) -> tuple[Any, Any]:
-    """The division family's encoding and network: p, two factors of s 16 and f codes, reading the output."""
-    from indrajala_ml.model.specs.window_recurrence import OUTPUT
-    from indrajala_ml.studies import modular_family as mf
-
-    encoding = mf.Encoding(fields["p"], FAMILY_QUERIES)
-    factors = [(FAMILY_STATE, fields["f"])] * 2
-    return encoding, mf.network(encoding, factors, 0, reads=OUTPUT)
+def adder(window: str, fields: dict[str, int]) -> Any:
+    """The window-recurrent adder's network: the window over k columns, a state of s features and m codes, seed 0."""
+    recurrence = WindowRecurrence((Factor(fields["s"], Codes(fields["m"])),))
+    specs = WINDOWS[window](ADDITION_TOKENS, ADDITION_CLASSES)
+    return WindowRecurrentRustArrayNetwork.randomized((fields["k"],), specs, recurrence, Adam(), seed=0)
 
 
-def addition_rows(network: Any, k: int, batch: int, windows: int) -> list[tuple[tuple[float, ...], tuple[int, ...]]]:
-    """B examples of W windows of k columns: random column tokens and digits."""
+def family(fields: dict[str, int]) -> Any:
+    """The division family's network: p, two factors of s 16 and f codes, reading the window's output, seed 0."""
+    factors = (Factor(FAMILY_STATE, Codes(fields["f"])),) * 2
+    recurrence = WindowRecurrence(factors, False, pooling=AttentionPooling(OUTPUT))
+    specs = wp.transformer_window(FAMILY_TOKENS, fields["p"] + 1)
+    return WindowRecurrentRustArrayNetwork.randomized((FAMILY_WIDTH,), specs, recurrence, Adam(), seed=0)
+
+
+def random_rows(network: Any, batch: int, tokens: int) -> list[tuple[tuple[float, ...], tuple[int, ...]]]:
+    """B examples of the given tokens each: random tokens and labels."""
     rng = np.random.default_rng(0)
     vocabulary = network.layer_specs[0].vocabulary
-    tokens = rng.integers(0, vocabulary, size=(batch, windows * k))
-    digits = rng.integers(0, network.class_count, size=(batch, windows * k))
-    return [(tuple(float(t) for t in x), tuple(int(d) for d in y)) for x, y in zip(tokens, digits, strict=True)]
-
-
-def family_rows(encoding: Any, columns: int, batch: int) -> list[Any]:
-    """B examples of the given columns each (the last the final zero)."""
-    from indrajala_ml.studies import modular_family as mf
-
-    rng = random.Random(0)
-    return [encoding.example(mf.columns(columns - 1, rng)) for _ in range(batch)]
+    xs = rng.integers(0, vocabulary, size=(batch, tokens))
+    labels = rng.integers(0, network.class_count, size=(batch, tokens))
+    return [(tuple(float(t) for t in x), tuple(int(d) for d in y)) for x, y in zip(xs, labels, strict=True)]
 
 
 def chunk_rows(n: int, width: int) -> int:
     """A long test's rows a forward pass at n columns (the harness's chunk)."""
-    from indrajala_ml.studies import window_recurrent_study as wr
-
-    return max(1, wr.CHUNK_TOKENS // ((n + 1) * width))
+    return max(1, CHUNK_TOKENS // ((n + 1) * width))
 
 
 def learn_step(window: str, fields: dict[str, int]) -> Callable[[], object]:
     """One training step on a fixed batch."""
-    from indrajala_ml.studies import window_recurrent_study as wr
-    from indrajala_ml.studies import window_tasks as wt
-
     if window == "family":
-        encoding, network = family(fields)
-        rows = family_rows(encoding, fields["W"], fields["B"])
+        network = family(fields)
+        rows = random_rows(network, fields["B"], fields["W"] * FAMILY_WIDTH)
     else:
-        k = fields["k"]
-        network = wr.build(wt.ADDITION, k, fields["s"], fields["m"], seed=0, window=window)
-        rows = addition_rows(network, k, fields["B"], fields["W"])
+        network = adder(window, fields)
+        rows = random_rows(network, fields["B"], fields["W"] * fields["k"])
     return lambda: network.learn_batch(0.001, rows)
 
 
 def forward_step(window: str, fields: dict[str, int]) -> Callable[[], object]:
     """One long-test chunk's forward pass, its dataset prepared."""
-    from indrajala_ml.studies import window_recurrent_study as wr
-    from indrajala_ml.studies import window_tasks as wt
-
     n = fields["n"]
     if window == "family":
-        encoding, network = family(fields)
-        rows = family_rows(encoding, n + 1, fields.get("r") or chunk_rows(n, encoding.width))
+        network = family(fields)
+        rows = random_rows(network, fields.get("r") or chunk_rows(n, FAMILY_WIDTH), (n + 1) * FAMILY_WIDTH)
     else:
-        k = fields["k"]
-        network = wr.build(wt.ADDITION, k, fields["s"], fields["m"], seed=0, window=window)
-        rows = addition_rows(network, k, fields.get("r") or chunk_rows(n, k), -(-(n + 1) // k))
+        network, k = adder(window, fields), fields["k"]
+        rows = random_rows(network, fields.get("r") or chunk_rows(n, k), -(-(n + 1) // k) * k)
     prepared = network.prepare_dataset(rows)
     return lambda: network.classify_rows(prepared)
 
 
-def long_test_step(fields: dict[str, int], prop: str) -> Callable[[], object]:
-    """A long test at n columns: c cases of the property, examples to checked results."""
-    from indrajala_ml.data import addition_data as ad
-    from indrajala_ml.studies import modular_family as mf
-    from indrajala_ml.studies import window_recurrent_study as wr
-    from indrajala_ml.studies import window_tasks as wt
-
-    encoding, network = family(fields)
-    task = wt.task_named(f"modular-division-{fields['p']}")
-    catalogue = task.catalogue(fields["c"], ad.RELATION_SAMPLED, ad.PER_STRATUM, doubling=True)
-    tested = [p for p in wr.test_properties(task, catalogue) if p.id == prop]
-    model = mf.QueryModel(network, encoding, task, mf.slot(task.name))
-    n = fields["n"]
-    return lambda: task.evaluate(model.predict(n), n, tested)
-
-
-def study_step(fields: dict[str, int]) -> Callable[[], object]:
-    """A short family probe run of e epochs, each run into its own temporary directory."""
-    import tempfile
-    from pathlib import Path
-
-    from indrajala_ml.model.specs.window_recurrence import OUTPUT
-    from indrajala_ml.studies import modular_family as mf
-
-    encoding = mf.Encoding(fields["p"], FAMILY_QUERIES)
-    factors = [(16, fields["f"]), (16, fields["f"])]
-
-    def step() -> None:
-        with tempfile.TemporaryDirectory() as out:
-            mf.run(encoding, factors, 0, 1e9, Path(out), reads=OUTPUT, budget_epochs=fields["e"])
-
-    return step
-
-
 def case_step(case: str) -> tuple[Callable[[], object], bool]:
     """A case's step, and whether it is an inference step (one loop a repeat)."""
-    kind, window, fields, prop = parse_case(case)
+    kind, window, fields, _ = parse_case(case)
+    assert kind in ("learn", "forward"), f"{case}: an end-to-end case, indrajala-studies' window_study_timing.py"
     if kind == "learn":
         return learn_step(window, fields), False
-    if kind == "forward":
-        return forward_step(window, fields), True
-    if kind == "study":
-        return study_step(fields), True
-    assert prop is not None, f"{case}: a long test names its property"
-    return long_test_step(fields, prop), True
+    return forward_step(window, fields), True
 
 
 def control_step() -> Callable[[], object]:
@@ -233,9 +190,9 @@ def control_step() -> Callable[[], object]:
     return lambda: a @ b
 
 
-def breakdown(case: str) -> list[str]:
-    """A case's step once unprofiled and once under cProfile, its components (the module docstring)."""
-    step, _ = case_step(case)
+def breakdown(case: str, steps: Callable[[str], tuple[Callable[[], object], bool]] = case_step) -> list[str]:
+    """A case's step (from steps) once unprofiled and once under cProfile, its components (the module docstring)."""
+    step, _ = steps(case)
     step()  # warm-up
     begun = time.perf_counter()
     step()
@@ -273,20 +230,25 @@ def breakdown(case: str) -> list[str]:
     return lines
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--cases", nargs="+", default=DEFAULT_CASES)
+def main(
+    description: str | None = __doc__,
+    default_cases: list[str] = DEFAULT_CASES,
+    steps: Callable[[str], tuple[Callable[[], object], bool]] = case_step,
+) -> None:
+    """The command line, for this script's cases or (given) another's: window_study_timing.py's."""
+    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--cases", nargs="+", default=default_cases)
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--loops", type=int, default=20, help="a learn case's steps a repeat")
     parser.add_argument("--breakdown", nargs="+", metavar="CASE", help="profile these cases; no rows")
     arguments = parser.parse_args()
     if arguments.breakdown:
         for case in arguments.breakdown:
-            print("\n".join(breakdown(case)), flush=True)
+            print("\n".join(breakdown(case, steps)), flush=True)
         return
-    steps = [(case.replace("-", " "), *case_step(case), False) for case in arguments.cases]
-    steps.append(("matmul 256", control_step(), False, True))
-    for name, step, inference, control in steps:
+    timed_steps = [(case.replace("-", " "), *steps(case), False) for case in arguments.cases]
+    timed_steps.append(("matmul 256", control_step(), False, True))
+    for name, step, inference, control in timed_steps:
         seconds = timed(step, arguments.repeats, 1 if inference else arguments.loops)
         for value in seconds:
             row = {"case": name, "metric": "per step", "value": value, "unit": "s"}

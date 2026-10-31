@@ -23,8 +23,7 @@ def test_the_old_names_are_the_transformer_s_training_step() -> None:
 
 def test_every_default_case_parses() -> None:
     parsed = [timing.parse_case(case) for case in timing.DEFAULT_CASES]
-    assert [kind for kind, _, _, _ in parsed] == ["learn"] * 4 + ["forward"] * 2 + ["long-test"]
-    assert parsed[-1] == ("long-test", "family", {"p": 7, "f": 32, "n": 1024, "c": 1023}, "U1")
+    assert [kind for kind, _, _, _ in parsed] == ["learn"] * 4 + ["forward"] * 2
     assert parsed[3] == ("learn", "family", {"p": 7, "f": 32, "B": 64, "W": 16}, None)
 
 
@@ -35,8 +34,6 @@ def test_every_default_case_parses() -> None:
         "learn-family-p5-f16-B4-W3",
         "forward-linear-k1-s16-m16-n8-r4",
         "forward-family-p5-f16-n8-r4",
-        "long-test-family-p5-f16-U1-n8-c5",
-        "study-family-p5-f16-e2",
     ],
 )
 def test_each_kind_runs_and_its_breakdown_accounts_for_the_step(case: str) -> None:
@@ -46,3 +43,8 @@ def test_each_kind_runs_and_its_breakdown_accounts_for_the_step(case: str) -> No
     lines = timing.breakdown(case)
     shares = [float(line.rsplit(", ", 1)[1].rstrip("%")) for line in lines[1:]]
     assert all(share >= 0 for share in shares) and sum(shares) == pytest.approx(100, abs=0.5)
+
+
+def test_an_end_to_end_case_is_the_study_timings() -> None:
+    with pytest.raises(AssertionError, match="window_study_timing.py"):
+        timing.case_step("study-family-p5-f16-e2")

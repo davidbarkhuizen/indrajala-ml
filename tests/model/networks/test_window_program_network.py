@@ -5,11 +5,11 @@ its inference passes, forward_windows, window_states, state_codes and window_ste
 window in one crate call, by bits the per-layer path's (per_layer_windows, the
 reference, which numpy's network runs): for every layer kind a window holds, one, two and three
 factors (continuous and crossed among them, the poolings reading the output or the tokens before
-the first StateInput), the studies' windows (E2b''s linear window, the division family's) and
-their certificates. Every layer class a window can hold has an op.
+the first StateInput), and the studies' cells built from the library's window presets (E2b''s linear
+window, the division family's). Every layer class a window can hold has an op. The studies' own
+builders and the certificate are checked in tests/studies/test_window_program_studies.py.
 """
 
-import random
 from typing import Any
 
 import indrajala_math_rust as pa
@@ -23,6 +23,7 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
     _program_op,
     per_layer_path,
 )
+from indrajala_ml.model.specs import window_presets as wp
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     Dense,
@@ -38,12 +39,8 @@ from indrajala_ml.model.specs.layer_specs import (
 )
 from indrajala_ml.model.specs.spec_validation import validate_window_specs
 from indrajala_ml.model.specs.update_rules import Adam
-from indrajala_ml.model.specs.window_recurrence import OUTPUT
+from indrajala_ml.model.specs.window_recurrence import OUTPUT, AttentionPooling, Codes, Factor, WindowRecurrence
 from indrajala_ml.pcg64 import generator_state
-from indrajala_ml.studies import modular_family as mf
-from indrajala_ml.studies import window_recurrent_certificate as cert
-from indrajala_ml.studies import window_recurrent_study as wrs
-from indrajala_ml.studies import window_tasks as wt
 from tests.helpers import bits
 from tests.model.networks.test_window_recurrent_array_network import (
     BRANCHED,
@@ -79,6 +76,22 @@ ROTARY: list[LayerSpec] = [
 ]
 WINDOWS = {"the tests' window": WINDOW, "every kind": EVERY_KIND, "rotary": ROTARY}
 
+# the studies' cells from the library's presets: the window-recurrent adder's 27 column tokens and 3
+# digits; the division family at p 7, the sum and difference queried (11 tokens, 3 a column, 8 classes)
+PRESETS = {"transformer": wp.transformer_window, "linear": wp.linear_window, "ffn": wp.ffn_window}
+FAMILY_TOKENS, FAMILY_WIDTH = 11, 3
+
+
+def adder(window: str, k: int, s: int, m: int, seed: int) -> Any:
+    recurrence = WindowRecurrence((Factor(s, Codes(m)),))
+    return WindowRecurrentRustArrayNetwork.randomized((k,), PRESETS[window](27, 3), recurrence, Adam(), seed=seed)
+
+
+def family(seed: int) -> Any:
+    recurrence = WindowRecurrence((Factor(16, Codes(32)),) * 2, False, pooling=AttentionPooling(OUTPUT))
+    specs = wp.transformer_window(FAMILY_TOKENS, 8)
+    return WindowRecurrentRustArrayNetwork.randomized((FAMILY_WIDTH,), specs, recurrence, Adam(), seed=seed)
+
 
 def _passes(network: Any, X: Any) -> dict[str, Any]:
     # every inference pass's results, as bits and codes
@@ -112,31 +125,20 @@ def test_the_inference_passes_are_the_per_layer_paths(window: list[LayerSpec], r
     _assert_program_is_per_layer(network, RUST.matrix(X.tolist()))
 
 
-@pytest.mark.parametrize("window", list(wrs.WINDOWS))
-def test_the_studys_windows_are_the_per_layer_path(window: str):
+@pytest.mark.parametrize("window", list(PRESETS))
+def test_the_adders_windows_are_the_per_layer_path(window: str):
     # E2b''s cell (the linear window), k 1, a state of 16 features and 16 codes, and the others
-    network = wrs.build(wt.ADDITION, 1, 16, 16, seed=3, window=window)
+    network = adder(window, 1, 16, 16, seed=3)
     rng = np.random.default_rng(5)
     _assert_program_is_per_layer(network, RUST.matrix(rng.integers(0, 27, (6, 40)).astype(float).tolist()))
 
 
-def test_the_division_family_is_the_per_layer_path():
-    # the fork probe's cell: p 7, two factors of 32 codes, the window's output read
-    encoding = mf.Encoding(7, ("sum", "difference"))
-    network = mf.network(encoding, [(16, 32), (16, 32)], seed=2, reads=OUTPUT)
-    rng = random.Random(6)
-    rows = [encoding.example(mf.columns(20, rng))[0] for _ in range(4)]
-    _assert_program_is_per_layer(network, RUST.matrix([list(row) for row in rows]))
-
-
-def test_a_certificate_is_the_per_layer_paths():
-    network = wrs.build(wt.ADDITION, 1, 4, 8, seed=4, window="linear")
-    program = cert.certify(cert.NetworkMachine(network)).to_json()
-    with per_layer_path(network):
-        per_layer = cert.certify(cert.NetworkMachine(network)).to_json()
-    program.pop("seconds")
-    per_layer.pop("seconds")
-    assert program == per_layer
+def test_the_division_familys_network_is_the_per_layer_path():
+    # the fork probe's cell: p 7, two factors of 32 codes, the window's output read; 20 columns and the zero
+    network = family(seed=2)
+    rng = np.random.default_rng(6)
+    tokens = rng.integers(0, FAMILY_TOKENS, (4, 21 * FAMILY_WIDTH)).astype(float)
+    _assert_program_is_per_layer(network, RUST.matrix(tokens.tolist()))
 
 
 def test_training_runs_the_per_layer_path_and_the_program_refuses_it():
@@ -243,18 +245,23 @@ def test_training_through_the_program_keeps_the_per_layer_paths_weights(window: 
     assert generator_state(program.rng) == generator_state(per_layer.rng)
 
 
-def test_the_studys_and_the_familys_training_steps_are_the_per_layer_paths():
-    encoding = mf.Encoding(7, ("sum", "difference"))
-    rng = random.Random(9)
-    family = [mf.network(encoding, [(16, 32), (16, 32)], seed=2, reads=OUTPUT) for _ in range(2)]
-    examples = [encoding.example(mf.columns(15, rng)) for _ in range(6)]
-    linear = [wrs.build(wt.ADDITION, 1, 16, 16, seed=3, window="linear") for _ in range(2)]
+def test_the_adders_and_the_familys_training_steps_are_the_per_layer_paths():
+    rng = np.random.default_rng(9)
+    families = [family(seed=2) for _ in range(2)]
+    examples = [
+        (
+            tuple(float(v) for v in rng.integers(0, FAMILY_TOKENS, 16 * FAMILY_WIDTH)),
+            tuple(int(v) for v in rng.integers(0, 8, 16 * FAMILY_WIDTH)),
+        )
+        for _ in range(6)
+    ]
+    linear = [adder("linear", 1, 16, 16, seed=3) for _ in range(2)]
     digits = np.random.default_rng(10)
     sums = [
         (tuple(float(v) for v in digits.integers(0, 27, 19)), tuple(int(v) for v in digits.integers(0, 3, 19)))
         for _ in range(8)
     ]
-    for (program, per_layer), rows in ((family, examples), (linear, sums)):
+    for (program, per_layer), rows in ((families, examples), (linear, sums)):
         program.learn_batch(0.003, rows)
         with per_layer_path(per_layer):
             per_layer.learn_batch(0.003, rows)
