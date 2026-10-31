@@ -17,7 +17,6 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 | workplan | roadmap |
 | --- | --- |
-| [generation-workplan.md](library/generation-workplan.md) | step 9: generation with a key/value cache |
 | [training-recipe-workplan.md](library/training-recipe-workplan.md) | step 10: schedules, AdamW and gradient clipping |
 | [segments-workplan.md](library/segments-workplan.md) | step 11: packing, document masks and padding |
 | [context-length-workplan.md](library/context-length-workplan.md) | step 12: context length |

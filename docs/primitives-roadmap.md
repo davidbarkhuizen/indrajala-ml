@@ -41,8 +41,9 @@ bits.
 8. **Rotary position embedding**: positions inside attention, so that a cached key stays valid
    as a window slides; done (2026-10-12), and the default for new sequence models: lower held out
    than learned positions on every corpus (next-steps, From rotary positions).
-9. **Generation**: sampling text from a trained sequence model, with a key/value cache; planned
-   (2026-10-10, [generation-workplan.md](workplans/library/generation-workplan.md)).
+9. **Generation**: sampling text from a trained sequence model, with a key/value cache; done
+   (2026-10-31), in all three implementations and the crate (README, Generation; next-steps,
+   From generation).
 10. **The training recipe**: learning-rate schedules as data, AdamW and gradient clipping, with
     longer training; planned (2026-10-10, [training-recipe-workplan.md](workplans/library/training-recipe-workplan.md)).
 11. **Segments: packing, document masks and padding**: one segment id per token, for packed

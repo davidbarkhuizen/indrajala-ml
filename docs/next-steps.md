@@ -76,6 +76,7 @@ docs cite them by section:
 | Publishing the crate on PyPI and crates.io, the first release 0.1.0 (D1-D11) | #1118 | crate #78-#84, #1119-#1121, #1127, #1129, this PR | `git show 995f0bd:docs/workplans/infrastructure/release-workplan.md` |
 | The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
 | aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
+| Generation with a key/value cache (roadmap step 9, D1-D9) | #640 | #1143-#1148, crate #85, this PR | `git show 836e9a3:docs/workplans/library/generation-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -84,7 +85,7 @@ candidate optimizations) were retired the same way: `git show 0a04977:docs/optim
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
-tokens, Rotary positions, The addition study), [measurement.md](measurement.md)
+tokens, Rotary positions, Generation, The addition study), [measurement.md](measurement.md)
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/studies/residual_depth_study.py`'s, the patch-attention study's in
@@ -792,9 +793,8 @@ implementations and the crate; four corpora, each in its own dataset repository 
 non-overlapping windows of 65 characters, the last 10% held out (D4). The study
 (`scripts/studies/sequence_study.py`, D9) found every arm where D9 expected it (README, The sequence task).
 
-- **Generation** (D11 (b)): `scripts/sample_text.py`, a sliding window of the last `T` characters,
-  sampling from the output at the last position, `T` forward passes per window's worth of text. The
-  fixed-`T` network has no shorter prefix; a sliding window needs none.
+- **Generation** (D11 (b)): done by roadmap step 9 (From generation, below), with a key/value cache
+  rather than a full pass per character.
 - **Longer training.** Neither transformer had converged at 10 epochs: their held-out losses
   still fell by 0.01 to 0.05 bits per character over the last three. More epochs, with a decaying
   rate once the curve flattens (`lr_schedule.py` has linear warmup only), would show where the
@@ -863,6 +863,31 @@ Not planned yet:
   a linear `Dense`'s dropout would need a linear variant of every fused `layer_dropout_*` op.
 - Renormalizing each row of `P` after dropping (D3 (b)): no reference uses it.
 
+## From generation
+
+The workplan (roadmap step 9) built incremental decoding in all three implementations and the
+crate: a network's `decoder()`, each token layer's `prefill` and `step` (D2), attention's cache of
+rotated keys and values sliding past the window (D3), the crate's `attention_step` (D8); a chain of
+sampling filters and one seeded draw (D4); a tokenizer file beside a model (D5);
+`scripts/generation/sample_text.py` (D6); and the README's samples (D9, README, Generation).
+Within the window a decode is its implementation's full pass by bits in pure Python and on Rust,
+within rounding on numpy (D7).
+
+- **D9's samples are to be replaced when step 10's longer training gives better ones.** They are
+  from 10 epochs (2.410 and 1.438 bits per character held out); `train --epochs` takes more.
+- **numpy's cached step is overhead-bound:** 5.1x uncached against Rust's 12.1x (jebel, the
+  2-layer model). A step is a dozen small numpy calls per layer; a fused step would make it
+  arithmetic-bound, but nothing needs numpy's decode fast yet.
+- **One sequence at a time.** A batch of decodes (several prompts, or beams) needs padded
+  inference batches, which step 11 (segments) brings; the Decoder's caches are per decode
+  already, so a batch is a cache with an example axis.
+- **A prompt longer than `T`** is prefilled up to `T` and then stepped token by token. A
+  band-masked prefill in chunks of `T` would be one pass per chunk, and is exact.
+- **A learned `Position` past `T`** falls back to a full pass per token (D3 (a)), which is exact
+  but uncached. Rotary models, the default, slide.
+- **Not planned yet:** beam search, repetition penalties, stop sequences, and a BPE tokenizer
+  (the tokenizer file's `kind`).
+
 ## From rotary positions
 
 The workplan built rotary position embedding as an attention option, `Attention(positions="rotary",
@@ -874,8 +899,7 @@ positions on every corpus and arm, 0.024 to 0.062 bits per character at epoch 10
 at +3.5% an epoch alone; so new sequence models default to rotary (D9, the README's sequence
 example).
 
-- **D9's other half: step 9's `train` builds rotary models by default.** The generation workplan
-  owns `train`; its stage that adds it takes the default.
+- **D9's other half, done:** step 9's `train` builds rotary models by default.
 - **#678's unexplained Rust gain.** The tier 1 A/B of the crate bump (rotation off) came out 7 to
   18% faster on five Rust rows, unexplained and not claimed: a codegen or layout shift, as #627's,
   for the next baseline to measure against.
