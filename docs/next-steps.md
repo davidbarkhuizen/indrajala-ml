@@ -89,7 +89,7 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/patch_attention_study.py`'s, the multi-head attention study's in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
-`scripts/studies/rotary_study.py`'s, the addition study's in `scripts/studies/addition_study.py`'s.
+`scripts/studies/rotary_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
 
 ## From the release (retired 2026-10-31)
 
@@ -248,7 +248,7 @@ an option. The answers' own branch with the factors on a shared state branch is 
 
 The window-recurrent network's window loop runs in the crate on Rust, inference and training, by
 bits the per-layer path's (`per_layer_windows`, `per_layer_gradients`, `per_layer_path`;
-`scripts/studies/window_program_check.py` checks saved networks). Before and after on `jebel` (stage 6,
+indrajala-studies' `scripts/studies/window_program_check.py` checks saved networks). Before and after on `jebel` (stage 6,
 from before stage 1 to the end, tier 2): a real study run (a `p` 5 family probe run, 40 epochs) 32.9%
 faster (139 s to 93 s), the family long test 46.6% (21.1 s to 11.3 s), the training steps 43.9% (E2b''s
 linear window) and 34.1% (the `p` 7 family). Left:
@@ -957,7 +957,7 @@ as a submodule; the measurement tools they lived beside are in `indrajala_ml/mea
 ## From the addition study
 
 The catalogue, the eight candidates and the unattended harness are in the README (The addition
-study); the sweep's findings are in `scripts/studies/addition_study.py`'s docstring. The first three entries
+study); the sweep's findings are in indrajala-studies' `scripts/studies/addition_study.py`'s docstring. The first three entries
 were recorded while the sweep ran (2026-10-11); the rest are the workplan's leftovers: its
 decisions' unchosen options and its Excluded for missing infrastructure (`git show 8990f74:docs/addition-study-workplan.md`).
 

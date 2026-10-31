@@ -548,7 +548,7 @@ def per_layer_path(network: Any) -> Generator[None]:
     """
     A Rust network's inference passes and training steps through the per-layer path
     (per_layer_windows, per_layer_gradients) while open, the window program's reference: its parity
-    tests and scripts/window_program_check.py.
+    tests and indrajala-studies' scripts/studies/window_program_check.py.
     """
     # instance attributes shadow the class's methods while open
     setattr(network, "_run_windows", network.per_layer_windows)  # noqa: B010

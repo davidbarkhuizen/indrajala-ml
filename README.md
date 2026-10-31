@@ -905,16 +905,17 @@ seeds.
   longest distance every case reaches), the final carry and every one of the `7^n` column-sum
   patterns. Each check is exhaustive where it can be (every triple at `n = 4`, every pattern at
   `n = 6`).
-- **The candidates** (`indrajala_ml/studies/addition_study.py`) are an encoder, a network spec
+- **The candidates** ([indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies)'s `indrajala_studies/addition_study.py`, moved 2026-10-31) are an encoder, a network spec
   with its size knobs and a decoder: transformers with a token per column (causal, non-causal, or
   each column's digits as an unordered multiset), a string-format transformer, an FFN-only
   control, dense networks per sum digit, and two dense regressions. A new candidate, or a new
   property, is one more entry.
-- **The harness** (`scripts/studies/addition_study.py`) runs a JSON config unattended: it bisects each
+- **The harness** (indrajala-studies' `scripts/studies/addition_study.py`) runs a JSON config unattended: it bisects each
   shape's width, writes every run's result and trained model atomically, resumes a stopped sweep
   and builds its report at any time.
 
 ```bash
+# in indrajala-studies
 OPENBLAS_NUM_THREADS=1 python scripts/studies/addition_study.py run scripts/studies/configs/addition_sweep.json
 python scripts/studies/addition_study.py report scripts/studies/configs/addition_sweep.json --md report.md
 python scripts/studies/addition_study.py check data/addition/sweep/models/<run>

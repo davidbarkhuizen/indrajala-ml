@@ -126,7 +126,7 @@ where you meet a new trap; delete one that no longer holds.
   a `k` 1 long test on an E8c network grows past 1.6 GB at 1,024 columns, and with a `k` 4
   `certify` (about 620 MB) beside it the machine swapped. A `certify` pool worker at `k` 4 takes
   about 440-620 MB though one in-process probe measured 45 MB; at most 3 such workers on
-  `pyramidon`. **At most 2 long-test shares on `klip`** (5.3 GB): a `paper_reading.py long` child on
+  `pyramidon`. **At most 2 long-test shares on `klip`** (5.3 GB): an indrajala-studies `paper_reading.py long` child on
   a 16 x 16-code network grows to 1.0-1.3 GB at 1,024 columns, and 4 shares swapped it
   (2026-10-28). Stopping a share means its `modular_family_probe.py long-test` child too: killing the
   parent leaves the child running, orphaned.
@@ -505,7 +505,7 @@ where you meet a new trap; delete one that no longer holds.
   output file). Check `ps` before calling a waiter gone or broken; an old session's waiter can
   notify a new session, and its notification is real too (read it, check what it watched).
 - **A waiter's `pgrep -f` pattern matches its own command line**, and other waiters' too: anchor
-  on the python process, `pgrep -f "^.venv/bin/python scripts/studies/window_recurrent_study.py run"`.
+  on the python process, `pgrep -f "^.venv/bin/python scripts/studies/window_recurrent_study.py run"` (in indrajala-studies).
 - **An ssh that launches a nohup job holds on while the job runs** unless stdin is `/dev/null`;
   used on purpose it is the job's waiter (`setsid nohup ... < /dev/null`). Stopping a local
   background task doesn't kill its remote job.
