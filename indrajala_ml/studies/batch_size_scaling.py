@@ -12,7 +12,7 @@ study's workplan, deleted after it finished: git show 5ee017f:docs/batch-size-sc
   (95.13% +- 0.35%). Both sit near the stability edge (16 diverges at 0.0; 4 at 0.9). The demos'
   0.5 without momentum reaches only 93.61%.
 - Without warmup the scaled rate diverges from batch 128 up, at both momenta.
-- With warmup (linear_warmup, set in epochs and converted to steps) the rule holds to B = 128 at
+- With warmup (lr_schedule.Warmup, set in epochs and converted to steps) the rule holds to B = 128 at
   momentum 0.0 and to B = 512 at momentum 0.9, with a 1-epoch warmup only (95.09% +- 0.09%, 16x
   fewer steps). Past that it fails: at momentum 0.0, rates 64 and 128 stay at chance whatever the
   warmup. The likely cause, untested: a curvature ceiling on the stable rate, which a larger
@@ -81,7 +81,7 @@ best epoch would hide exactly the divergence the study looks for.
 import math
 import random
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import Any
 
 import indrajala_math_rust as pa
@@ -116,7 +116,7 @@ from indrajala_ml.model.networks.sequential_array_network import SequentialArray
 from indrajala_ml.model.protocols.classifier_protocols import BatchTrainableClassifier, Example
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerSpec
 from indrajala_ml.model.specs.update_rules import SGD, Momentum, UpdateRule
-from indrajala_ml.training.lr_schedule import linear_warmup
+from indrajala_ml.training.lr_schedule import Constant, LearningRate, Warmup
 from indrajala_ml.training.multiclass_evaluate import accuracy
 
 SIDE = 28
@@ -143,8 +143,8 @@ def warmup_steps(warmup_epochs: float, train_size: int, batch_size: int) -> int:
     return math.ceil(warmup_epochs * train_size / batch_size)
 
 
-def learning_rate_schedule(rate: float, warmup_step_count: int) -> float | Callable[[int], float]:
-    return linear_warmup(rate, warmup_step_count) if warmup_step_count > 0 else rate
+def learning_rate_schedule(rate: float, warmup_step_count: int) -> LearningRate:
+    return Warmup(warmup_step_count, Constant(rate)) if warmup_step_count > 0 else rate
 
 
 def conv_batch_norm_specs(group_size: int | None) -> list[LayerSpec]:
@@ -255,7 +255,7 @@ def train_epoch[L](
     network: BatchTrainableClassifier[L],
     train_data: Sequence[Example[L]],
     batch_size: int,
-    learning_rate: float | Callable[[int], float],
+    learning_rate: LearningRate,
     first_step: int,
     rng: random.Random | None = None,
 ) -> tuple[int, float]:
