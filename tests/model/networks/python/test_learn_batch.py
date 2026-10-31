@@ -74,7 +74,7 @@ def test_learn_batch_matches_averaging_three_individual_learn_steps_gradients_by
         via_manual._forward(state)
         via_manual._backward(category)
         via_manual._accumulate_gradients()
-    via_manual._apply_accumulated_gradients(learning_rate, len(batch))
+    via_manual.optimizer.step(via_manual.trainable_layers, learning_rate, len(batch))
 
     assert via_learn_batch.snapshot() == via_manual.snapshot()
 

@@ -31,6 +31,21 @@ class NumpyOptimizer(ArrayOptimizerBase[FloatArray, TrainedArrayLayer[FloatArray
         self._apply_rule(index, trained, learning_rate, batch_size)
         trained.reset_gradient_accum()
 
+    def _squared_gradient(self, layer: ArrayNetworkLayer[FloatArray]) -> float:
+        if not hasattr(layer, "parameters"):
+            return 0.0  # a pool layer
+        squares = 0.0
+        for gradient in cast("TrainedArrayLayer[FloatArray]", layer).gradients():
+            squares += float(np.vdot(gradient, gradient))
+        return squares
+
+    def _gradients(self, layer: TrainedArrayLayer[FloatArray]) -> list[FloatArray]:
+        # the layer's gradients as a rule reads them: times the clip factor during a step that
+        # clips (OptimizerBase.step)
+        scale = self._gradient_scale
+        gradients = layer.gradients()
+        return list(gradients) if scale is None else [gradient * scale for gradient in gradients]
+
     def step_single(
         self, index: int, layer: ArrayNetworkLayer[FloatArray], input_activation: FloatArray, learning_rate: float
     ) -> None:
@@ -41,14 +56,14 @@ class NumpyOptimizer(ArrayOptimizerBase[FloatArray, TrainedArrayLayer[FloatArray
     def _apply_sgd(
         self, _index: int, layer: TrainedArrayLayer[FloatArray], learning_rate: float, batch_size: int
     ) -> None:
-        for parameter, gradient in zip(layer.parameters(), layer.gradients()):
+        for parameter, gradient in zip(layer.parameters(), self._gradients(layer)):
             parameter -= learning_rate * (gradient / batch_size)
 
     def _apply_weight_decay(
         self, _index: int, layer: TrainedArrayLayer[FloatArray], learning_rate: float, batch_size: int
     ) -> None:
         l2_lambda = cast(WeightDecay, self.rule).l2_lambda
-        for parameter, gradient, decayed in zip(layer.parameters(), layer.gradients(), layer.decayed):
+        for parameter, gradient, decayed in zip(layer.parameters(), self._gradients(layer), layer.decayed):
             if decayed:
                 parameter -= learning_rate * (gradient / batch_size + l2_lambda * parameter)
             else:
@@ -60,7 +75,7 @@ class NumpyOptimizer(ArrayOptimizerBase[FloatArray, TrainedArrayLayer[FloatArray
         momentum = cast(Momentum, self.rule).momentum
         # state: a velocity per parameter
         state = self._zeros(index, layer, 1)
-        for i, (parameter, gradient) in enumerate(zip(layer.parameters(), layer.gradients())):
+        for i, (parameter, gradient) in enumerate(zip(layer.parameters(), self._gradients(layer))):
             state[i] = momentum_update(parameter, gradient, state[i], momentum, learning_rate, batch_size)
 
     def _apply_adam(
@@ -73,7 +88,7 @@ class NumpyOptimizer(ArrayOptimizerBase[FloatArray, TrainedArrayLayer[FloatArray
 
         bias_correction1, bias_correction2 = rule.bias_corrections(self.t)
 
-        for i, (parameter, gradient) in enumerate(zip(layer.parameters(), layer.gradients())):
+        for i, (parameter, gradient) in enumerate(zip(layer.parameters(), self._gradients(layer))):
             g = gradient / batch_size
             m = beta1 * state[2 * i] + (1 - beta1) * g
             v = beta2 * state[2 * i + 1] + (1 - beta2) * g * g

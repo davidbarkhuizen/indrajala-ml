@@ -42,8 +42,10 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
     def classify_state(self, state: tuple[float, ...]) -> float:
         return 1.0 if self.predict_probability(state) > 0.5 else 0.0
 
-    def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], float]]) -> None:
-        self._learn_batch(learning_rate, batch)
+    def learn_batch(
+        self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], float]], clip_norm: float | None = None
+    ) -> None:
+        self._learn_batch(learning_rate, batch, clip_norm)
 
     def _backward(self, reference_value: float) -> None:
         self._output_deltas(reference_value)

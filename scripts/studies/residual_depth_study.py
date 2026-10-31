@@ -136,8 +136,9 @@ class _FirstLayerGradient:
     def __init__(self) -> None:
         self.grad_W: Any = None
 
-    def begin_step(self) -> None:
-        pass
+    def step(self, layers: Any, learning_rate: float, batch_size: int, clip_norm: float | None = None) -> None:
+        for index, layer in enumerate(layers):
+            self.apply(index, layer, learning_rate, batch_size)
 
     def apply(self, index: int, layer: Any, _learning_rate: float, _batch_size: int) -> None:
         if index == 0:

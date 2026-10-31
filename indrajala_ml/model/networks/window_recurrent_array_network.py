@@ -409,13 +409,11 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
     def _learn_input(self, learning_rate: float, x: A, category: Any) -> None:
         self._learn_batch_input(learning_rate, self.backend.matrix([x.tolist()]), [category])
 
-    def _learn_batch_input(self, learning_rate: float, X: A, categories: Sequence[Any]) -> None:
-        examples = len(categories)
+    def _learn_batch_input(
+        self, learning_rate: float, X: A, categories: Sequence[Any], clip_norm: float | None = None
+    ) -> None:
         self._accumulate_gradients(X, self._target_batch_array(categories))
-        optimizer = self.optimizer
-        optimizer.begin_step()
-        for index, layer in enumerate([*self.layers, *self.parts]):
-            optimizer.apply(index, layer, learning_rate, examples)
+        self.optimizer.step([*self.layers, *self.parts], learning_rate, len(categories), clip_norm)
 
     def _accumulate_gradients(self, X: Any, Y: Any) -> None:
         # every layer's and part's gradient of the batch's loss: the per-layer path here, the window

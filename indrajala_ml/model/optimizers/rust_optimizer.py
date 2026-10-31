@@ -5,6 +5,7 @@ layer's parameters.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import cast
@@ -45,8 +46,12 @@ class _Pair:
     decayed: bool
 
 
-def _pairs(layer: TrainedArrayLayer[pa.Array]) -> list[_Pair]:
+def _pairs(layer: TrainedArrayLayer[pa.Array], scale: float | None) -> list[_Pair]:
+    # scale: the clip factor the gradients are read times during a step that clips
+    # (OptimizerBase.step), None otherwise
     parameters, gradients = layer.parameters(), layer.gradients()
+    if scale is not None:
+        gradients = tuple(gradient * scale for gradient in gradients)
     return [
         _Pair(layer, first, parameters[first : first + 2], gradients[first : first + 2], layer.decayed[first])
         for first in range(0, len(parameters), 2)
@@ -78,11 +83,20 @@ class RustOptimizer(ArrayOptimizerBase[pa.Array, _Pair, tuple[pa.Array, pa.Array
         # slower, conv B=32 epochs +11%)
         parameters = [
             parameter
-            for pair in _pairs(trained)
+            for pair in _pairs(trained, self._gradient_scale)
             for parameter in self._apply_rule(index, pair, learning_rate, batch_size)[: len(pair.parameters)]
         ]
         trained.set_parameters(parameters)
         trained.reset_gradient_accum()
+
+    def _squared_gradient(self, layer: ArrayNetworkLayer[pa.Array]) -> float:
+        if not hasattr(layer, "parameters"):
+            return 0.0  # a pool layer
+        squares = 0.0
+        for gradient in cast("TrainedArrayLayer[pa.Array]", layer).gradients():
+            flat = gradient.reshape((1, math.prod(gradient.shape)))
+            squares += (flat @ flat.T)[0, 0]
+        return squares
 
     def step_single(
         self, index: int, layer: ArrayNetworkLayer[pa.Array], input_activation: pa.Array, learning_rate: float

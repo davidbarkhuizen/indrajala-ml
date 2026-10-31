@@ -206,17 +206,23 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         for index, (layer, input_activation) in enumerate(zip(self.layers, activations)):
             optimizer.step_single(index, layer, input_activation, learning_rate)
 
-    def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], object]]) -> None:
+    def learn_batch(
+        self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], object]], clip_norm: float | None = None
+    ) -> None:
         validate_batch(batch)
         X = self.backend.matrix([state for state, _target in batch])
-        self._learn_batch_input(learning_rate, X, [category for _state, category in batch])
+        self._learn_batch_input(learning_rate, X, [category for _state, category in batch], clip_norm)
 
-    def learn_batch_rows(self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int]) -> None:
+    def learn_batch_rows(
+        self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int], clip_norm: float | None = None
+    ) -> None:
         validate_batch(indices)
         X = self.backend.rows(self._prepared_states(prepared), indices)
-        self._learn_batch_input(learning_rate, X, [prepared.labels[i] for i in indices])
+        self._learn_batch_input(learning_rate, X, [prepared.labels[i] for i in indices], clip_norm)
 
-    def _learn_batch_input(self, learning_rate: float, X: A, categories: Sequence[Any]) -> None:
+    def _learn_batch_input(
+        self, learning_rate: float, X: A, categories: Sequence[Any], clip_norm: float | None = None
+    ) -> None:
         batch_size = len(categories)
         if self.batch_norm_index is not None:
             if batch_size == 1:
@@ -238,11 +244,12 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         for i in reversed(range(len(self.layers) - 1)):
             self.layers[i].compute_hidden_delta_batch(self.layers[i + 1])
 
-        optimizer = self.optimizer
-        optimizer.begin_step()
-        for index, (layer, input_activation_batch) in enumerate(zip(self.layers, activations)):
+        # every layer's gradient, then every layer's update (the training-recipe workplan, D10):
+        # clipping by the global norm needs them all first. The deltas are computed above, so the
+        # split keeps every bit
+        for layer, input_activation_batch in zip(self.layers, activations):
             layer.accumulate_gradient_batch(input_activation_batch)
-            optimizer.apply(index, layer, learning_rate, batch_size)
+        self.optimizer.step(self.layers, learning_rate, batch_size, clip_norm)
 
     @classmethod
     def randomized(cls, *args: Any, seed: Any = None, rng: Any = None, **kwargs: Any) -> Self:

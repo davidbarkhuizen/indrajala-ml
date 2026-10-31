@@ -191,8 +191,13 @@ class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[Trainable
             learned_positions=any(isinstance(spec, Position) for spec in expand_specs(self.layer_specs)),
         )
 
-    def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], tuple[int, ...]]]) -> None:
-        self._learn_batch(learning_rate, batch)
+    def learn_batch(
+        self,
+        learning_rate: float,
+        batch: Sequence[tuple[tuple[float, ...], tuple[int, ...]]],
+        clip_norm: float | None = None,
+    ) -> None:
+        self._learn_batch(learning_rate, batch, clip_norm)
 
     def _backward(self, category: Sequence[int]) -> None:
         self._output_deltas(category)

@@ -158,7 +158,7 @@ def test_network_level_methods_dispatch_once_per_layer_not_once_per_node():
     assert fake_hidden.accumulate_calls == 1
     assert fake_output.accumulate_calls == 1
 
-    network._apply_accumulated_gradients(0.1, batch_size=3)
+    network.optimizer.step(network.trainable_layers, 0.1, batch_size=3)
     assert fake_hidden.weight_sets_calls == 1
     assert fake_output.weight_sets_calls == 1
 
