@@ -25,7 +25,7 @@ from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Dense, LayerNorm, LayerSpec, Residual
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.pcg64 import default_rng, generator_state
-from indrajala_ml.training.lr_schedule import Constant, Warmup
+from indrajala_ml.training.lr_schedule import Constant, CosineDecay, LearningRate, LinearDecay, Warmup
 from indrajala_ml.training.run_checkpoint import load_run, run_from_json, run_to_json, save_run
 from indrajala_ml.training.train import train_backprop_network_mini_batch, train_linear_classifier_network
 from indrajala_ml.training.training_data import reachable_reference_and_training_data
@@ -70,13 +70,20 @@ def _problem() -> tuple[Any, list[tuple[tuple[float, ...], float]]]:
     return reachable_reference_and_training_data(1, 2, square_bounds(10.0), 24, rng=default_rng(1), data_rng=Random(1))
 
 
-def _train(student: Any, epochs: int, rng: Random | None, resume_from: Any = None) -> ConvergenceSeries:
+# the production recipe's shape: warmup, then cosine to a tenth over the rest of the run's 30 steps,
+# so a resumed run's rates differ from the steps it stopped at
+SCHEDULE = Warmup(8, CosineDecay(0.5, EPOCHS * 5 - 8, 0.05))
+
+
+def _train(
+    student: Any, epochs: int, rng: Random | None, resume_from: Any = None, learning_rate: LearningRate = SCHEDULE
+) -> ConvergenceSeries:
     reference, training_data = _problem()
     return train_backprop_network_mini_batch(
         student,
         training_data,
         BATCH_SIZE,
-        learning_rate=Warmup(8, Constant(0.5)),
+        learning_rate=learning_rate,
         epochs=epochs,
         reference_classifier=reference,
         rng=rng,
@@ -201,3 +208,58 @@ def test_the_linear_trainer_returns_no_run_checkpoint():
     student = _student("numpy")
     result = train_linear_classifier_network(student, training_data, epochs=1, reference_classifier=reference)
     assert result.run_checkpoint is None
+
+
+def test_a_run_file_records_its_schedule():
+    student = _student("numpy")
+    run = _train(student, 1, Random(7)).run_checkpoint
+    assert run is not None and run.schedule == SCHEDULE
+
+    state = json.loads(json.dumps(run_to_json(run, student)))
+
+    assert state["learning_rate"] == {
+        "schedule": "warmup",
+        "steps": 8,
+        "then": {"schedule": "cosine", "rate": 0.5, "steps": 22, "floor": 0.05},
+    }
+    assert run_from_json(state, student).schedule == SCHEDULE
+
+
+def test_a_float_rate_is_recorded_as_a_constant_schedule():
+    student = _student("numpy")
+    run = _train(student, 1, Random(7), learning_rate=0.25).run_checkpoint
+    assert run is not None and run.schedule == Constant(0.25)
+    _train(student, 2, None, resume_from=run, learning_rate=Constant(0.25))  # the same schedule
+
+
+def test_resuming_under_another_schedule_is_refused_naming_both():
+    student = _student("numpy")
+    run = _train(student, 1, Random(7)).run_checkpoint
+    assert run is not None
+
+    other = Warmup(8, LinearDecay(0.5, 22, 0.05))
+    with pytest.raises(ValueError, match=r"CosineDecay.*LinearDecay"):
+        _train(student, 2, None, resume_from=run, learning_rate=other)
+    with pytest.raises(ValueError, match="a bare callable"):
+        _train(student, 2, None, resume_from=run, learning_rate=lambda step: SCHEDULE(step))
+
+
+def test_a_bare_callable_schedule_trains_but_cannot_be_saved():
+    student = _student("numpy")
+    run = _train(student, 1, Random(7), learning_rate=lambda step: 0.5).run_checkpoint
+    assert run is not None and run.schedule is None
+
+    with pytest.raises(ValueError, match="bare callable"):
+        run_to_json(run, student)
+    _train(student, 2, None, resume_from=run, learning_rate=lambda step: 0.5)  # unrecorded: not checked
+
+
+def test_a_version_1_run_file_loads_with_no_schedule_recorded():
+    student = _student("numpy")
+    run = _train(student, 1, Random(7)).run_checkpoint
+    assert run is not None
+    state = run_to_json(run, student)
+    del state["learning_rate"]
+    state["run_checkpoint"] = 1
+
+    assert run_from_json(state, student).schedule is None

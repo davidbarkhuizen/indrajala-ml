@@ -12,7 +12,7 @@ from indrajala_ml.model.protocols.classifier_protocols import (
 )
 from indrajala_ml.model.specs.single_example import refuse_single_example_groups
 from indrajala_ml.training.evaluate import class_balanced_disagreement_rate
-from indrajala_ml.training.lr_schedule import LearningRate
+from indrajala_ml.training.lr_schedule import LearningRate, schedule_of
 from indrajala_ml.training.run_checkpoint import RunCheckpoint
 from indrajala_ml.training.training_diagnostics import ConvergenceSeries, TrainingDiagnostic
 
@@ -151,6 +151,19 @@ def _rate(learning_rate: LearningRate, iterations: int) -> float:
     return learning_rate(iterations) if callable(learning_rate) else learning_rate
 
 
+def _refuse_another_schedule(learning_rate: LearningRate, resume_from: RunCheckpoint) -> None:
+    # a resumed run takes its steps by bits only at the rates it was taking (D5): a recorded
+    # schedule must be given again; an unrecorded one (a bare callable's, a version 1 file's) isn't
+    # checked
+    recorded = resume_from.schedule
+    if recorded is None:
+        return
+    given = schedule_of(learning_rate)
+    if given != recorded:
+        given_name = "a bare callable" if given is None else repr(given)
+        raise ValueError(f"the run was trained under {recorded!r}; resuming it under {given_name} would not")
+
+
 def _chunk_into_batches[T](data: list[T], batch_size: int, drop_single: bool = False) -> list[list[T]]:
     # a final short batch is kept: learn_batch averages by len(batch). drop_single drops it when
     # it has one example, which a network with batch norm refuses (the batch-norm workplan, D4)
@@ -215,7 +228,9 @@ def train_backprop_network_mini_batch[L](
     student takes its last epoch's checkpoint, rng its shuffle state, and the run its counters, its
     pocket and its series so far, so epochs counts the whole run, the epochs before included. The
     same training_data, batch_size, learning_rate, reference_classifier and reshuffle_each_epoch
-    then take the steps the run would have taken had it never stopped, by bits.
+    then take the steps the run would have taken had it never stopped, by bits. The checkpoint
+    records learning_rate as a Schedule (a float as Constant; a bare callable isn't recorded), and
+    resuming under another schedule is refused, naming both (the training-recipe workplan, D5).
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"
@@ -238,6 +253,7 @@ def train_backprop_network_mini_batch[L](
         epoch_training_accuracies: list[float] = []
     else:
         assert epochs >= resume_from.epochs, f"epochs counts the whole run: {epochs} < {resume_from.epochs} done"
+        _refuse_another_schedule(learning_rate, resume_from)
         first_epoch = resume_from.epochs
         iterations = resume_from.iterations
         convergence = list(resume_from.convergence)
@@ -295,6 +311,7 @@ def train_backprop_network_mini_batch[L](
         best_training_accuracy=best_training_accuracy,
         epoch_training_accuracies=tuple(epoch_training_accuracies),
         convergence=tuple(convergence),
+        schedule=schedule_of(learning_rate),
     )
     student.restore_checkpoint(best_checkpoint)
 

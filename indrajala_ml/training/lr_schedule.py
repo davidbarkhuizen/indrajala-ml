@@ -22,6 +22,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 
 def _check_rate(name: str, value: float) -> None:
@@ -103,3 +104,40 @@ type Schedule = Constant | Warmup | CosineDecay | LinearDecay
 # what the trainer's learning_rate takes (D4): a float means Constant; a bare callable is still
 # accepted but can't be recorded in a run file (D5)
 type LearningRate = float | Schedule | Callable[[int], float]
+
+
+def schedule_of(learning_rate: LearningRate) -> Schedule | None:
+    """learning_rate as a Schedule: a float as Constant, a schedule as itself, a bare callable None."""
+    if isinstance(learning_rate, Constant | Warmup | CosineDecay | LinearDecay):
+        return learning_rate
+    if callable(learning_rate):
+        return None
+    return Constant(learning_rate)
+
+
+def schedule_to_json(schedule: Schedule) -> dict[str, Any]:
+    """schedule as a run file writes it (D5): its form's name and fields, a Warmup's then nested."""
+    match schedule:
+        case Constant(rate):
+            return {"schedule": "constant", "rate": rate}
+        case Warmup(steps, then):
+            return {"schedule": "warmup", "steps": steps, "then": schedule_to_json(then)}
+        case CosineDecay(rate, steps, floor):
+            return {"schedule": "cosine", "rate": rate, "steps": steps, "floor": floor}
+        case LinearDecay(rate, steps, floor):
+            return {"schedule": "linear", "rate": rate, "steps": steps, "floor": floor}
+
+
+def schedule_from_json(state: dict[str, Any]) -> Schedule:
+    form = state.get("schedule")
+    match form:
+        case "constant":
+            return Constant(state["rate"])
+        case "warmup":
+            return Warmup(state["steps"], schedule_from_json(state["then"]))
+        case "cosine":
+            return CosineDecay(state["rate"], state["steps"], state["floor"])
+        case "linear":
+            return LinearDecay(state["rate"], state["steps"], state["floor"])
+        case _:
+            raise ValueError(f"not a schedule: {form!r}")
