@@ -71,6 +71,7 @@ docs cite them by section:
 | An audit of the research programme (2026-10-23) | #953 | indrajala-research #48-#50, #954 | `git show 4ea65cc:docs/workplans/programme-audit-workplan.md`; the four reviews at indrajala-research's top level (`review-2026-10-23-*.md`) |
 | The batch runner (restarts at a cutoff; a controller and a worker on each machine) | #935 | #943, #944, #946, #948, #952, #956 | `git show 53d7fef:docs/workplans/batch-runner-workplan.md` |
 | The snap wall (an asymmetric margin on the snap; P1, C1 refuted) | #787 | #788, #789, #793, #797, #803 | `git show 53d7fef:docs/workplans/snap-wall-workplan.md` |
+| Publishing the crate on PyPI and crates.io, the first release 0.1.0 (D1-D11) | #1118 | crate #78-#84, #1119-#1121, #1127, #1129, this PR | `git show 995f0bd:docs/workplans/infrastructure/release-workplan.md` |
 | The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
 | aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
@@ -89,6 +90,30 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the addition study's in `scripts/studies/addition_study.py`'s.
+
+## From the release (retired 2026-10-31)
+
+Done: 0.1.0 published 2026-10-31, [`indrajala-math`](https://crates.io/crates/indrajala-math)
+(crates.io, docs.rs) and [`indrajala-math-rust`](https://pypi.org/project/indrajala-math-rust/)
+(PyPI: 16 wheels, CPython 3.14 and 3.15 on 8 targets, and the sdist), with the GitHub Release;
+both indexes' copies installed and tested on every shipped platform by the release run, and
+indrajala-ml's tests passing on the PyPI wheel (`tests/` and `rust/tests/`: 12,891 passed, 10 skipped). The workspace split (the core `indrajala-math`, the
+bindings over it), one wheel per interpreter (no abi3), CI building and testing every wheel on each
+PR, and the release workflow with a TestPyPI rehearsal. Both indexes take uploads by trusted
+publishing; no token is stored (crate #84). Later releases follow the crate README's Releasing
+section. Read it with `git show 995f0bd:docs/workplans/infrastructure/release-workplan.md`. Left
+open:
+
+- **A rehearsal tag is never moved.** A failed rehearsal is re-run when its fix is outside the
+  workflow; a fix to `release.yml` itself needs a new tag, and the verify job only accepts
+  `testpypi-v<version>`. Accept a suffix (`testpypi-v0.1.1-2`) if that recurs.
+- **crates.io's trusted publishing is first exercised by 0.1.1.**
+- **Free-threaded wheels** (3.14t): `gil_used = false` and extra wheels (abi3 doesn't cover them),
+  after a thread-safety review of `Array`'s interior mutability.
+- **ndarray interop** in the core (`From` conversions behind a feature), if a Rust user asks.
+- **indrajala-ml on PyPI** (the release plan's D1), after the studies-repo move.
+- `cargo semver-checks` in CI once a second release exists.
+- A benchmark wheel matrix on each platform's runner, only for a clear question.
 
 ## From the crate kernels (retired 2026-10-29)
 
