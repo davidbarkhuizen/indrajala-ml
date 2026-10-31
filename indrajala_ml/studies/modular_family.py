@@ -54,6 +54,7 @@ from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, Merg
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
 from indrajala_ml.model.persistence.format2 import network_to_json
 from indrajala_ml.model.persistence.load_network import load_network, network_from_state
+from indrajala_ml.model.specs import window_presets as wp
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.model.specs.window_recurrence import (
     BEFORE_STATE,
@@ -384,7 +385,7 @@ def network(
     factors: Sequence[tuple[int, int]],
     seed: int,
     reads: str = BEFORE_STATE,
-    width: int = wr.D,
+    width: int = wp.D,
     branches: bool = False,
     answer_branch: bool = False,
     baseline: str | None = None,
@@ -393,15 +394,15 @@ def network(
 ) -> Any:
     """The transformer window (W11) over the encoding's tokens, a factored state (D3), Adam; the
     poolings reading before the first StateInput (D10) or, with reads OUTPUT, the window's output.
-    With branches, the window branches workplan's window (wr.branched_window), each factor's
+    With branches, the window branches workplan's window (wp.branched_window), each factor's
     pooling reading its own branch's end (reads OUTPUT); with answer_branch, the one-code-one-state
-    workplan's R1 (wr.answer_branch_window), every factor reading the shared state branch; with
-    recombine, the post-paper workplan's recombining window (wr.recombined_window, D7), a two-block
+    workplan's R1 (wp.answer_branch_window), every factor reading the shared state branch; with
+    recombine, the post-paper workplan's recombining window (wp.recombined_window, D7), a two-block
     trunk, each factor reading its own branch's end, the ends merged into one more block before the
     output. branch_heads
     is each branch's attention heads with branches (the post-paper workplan, D8; 1 the retired
     design's). A baseline (BASELINES, the paper's T3): "linear", E6's window without its blocks
-    (wr.linear_window); "continuous", every factor's state continuous, no codes (E2's)."""
+    (wp.linear_window); "continuous", every factor's state continuous, no codes (E2's)."""
     assert not (branches or answer_branch or recombine) or reads == OUTPUT, (
         "with branches each factor reads a branch's end: reads OUTPUT"
     )
@@ -419,15 +420,15 @@ def network(
         pooling=AttentionPooling(reads),
     )
     if baseline == LINEAR:
-        specs = wr.linear_window(encoding.tokens, encoding.classes, width)
+        specs = wp.linear_window(encoding.tokens, encoding.classes, width)
     elif branches:
-        specs = wr.branched_window(encoding.tokens, encoding.classes, len(factors), width, branch_heads)
+        specs = wp.branched_window(encoding.tokens, encoding.classes, len(factors), width, branch_heads)
     elif recombine:
-        specs = wr.recombined_window(encoding.tokens, encoding.classes, len(factors), width)
+        specs = wp.recombined_window(encoding.tokens, encoding.classes, len(factors), width)
     elif answer_branch:
-        specs = wr.answer_branch_window(encoding.tokens, encoding.classes, len(factors), width)
+        specs = wp.answer_branch_window(encoding.tokens, encoding.classes, len(factors), width)
     else:
-        specs = wr.transformer_window(encoding.tokens, encoding.classes, width)
+        specs = wp.transformer_window(encoding.tokens, encoding.classes, width)
     return WindowRecurrentRustArrayNetwork.randomized((encoding.width,), specs, recurrence, Adam(), seed=seed)
 
 
@@ -3071,7 +3072,7 @@ class RunConfig:
             **({"consolidate": True} if self.consolidate else {}),
             **({"restore_best": True} if self.restore_best else {}),
             **({"commitment_from": self.commitment_from} if self.commitment_from is not None else {}),
-            **({"width": self.width} if self.width != wr.D else {}),
+            **({"width": self.width} if self.width != wp.D else {}),
             **({"branches": True} if self.branches else {}),
             **({"answer_branch": True} if self.answer_branch else {}),
             **({"thermostat": repr(self.thermostat)} if self.thermostat is not None else {}),
@@ -3936,7 +3937,7 @@ def run(
     consolidate: bool = False,
     restore_best: bool = False,
     commitment_from: int | None = None,
-    width: int = wr.D,
+    width: int = wp.D,
     branches: bool = False,
     answer_branch: bool = False,
     thermostat: Thermostat | None = None,

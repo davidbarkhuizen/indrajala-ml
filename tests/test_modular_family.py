@@ -16,6 +16,8 @@ import numpy as np
 import pytest
 
 from indrajala_ml.data import modular_data as md
+from indrajala_ml.model.specs import window_presets as wp
+from indrajala_ml.model.specs.layer_specs import Attention, Branches, Dense, Residual
 from indrajala_ml.studies import inference
 from indrajala_ml.studies import modular_family as mf
 from indrajala_ml.studies import window_tasks as wt
@@ -1574,10 +1576,9 @@ def test_tuning_the_readout_trains_the_output_layer_alone(tmp_path: Path):
 
 def test_the_window_width_widens_the_stream_and_its_default_is_w11s(tmp_path: Path):
     from indrajala_ml.model.specs.layer_specs import Dense, Embedding, LayerNorm, Residual
-    from indrajala_ml.studies import window_recurrent_study as wr
 
-    assert wr.transformer_window(9, 14) == wr.transformer_window(9, 14, wr.D)
-    wide = wr.transformer_window(9, 14, 32)
+    assert wp.transformer_window(9, 14) == wp.transformer_window(9, 14, wp.D)
+    wide = wp.transformer_window(9, 14, 32)
     assert wide[0] == Embedding(9, 32) and wide[4] == Residual(
         (LayerNorm(), Dense(64, activation="relu"), Dense(32, activation="linear", bias=True))
     )
@@ -1599,7 +1600,7 @@ def test_separability_reads_every_reachable_codes_features_and_fits_them(tmp_pat
     assert result["pairs"] == result["codes"] * len(
         mf.wc.all_windows(1, mf.wt.task_named("modular-division-5").machine.tokens)
     )
-    assert result["features"] == mf.wr.D and len(result["fit_wrong"]) == 1 and result["perceptron"]["passes"] <= 3
+    assert result["features"] == wp.D and len(result["fit_wrong"]) == 1 and result["perceptron"]["passes"] <= 3
     assert all(row["other"] >= 0 for row in result["wrong"])
 
 
@@ -1632,10 +1633,10 @@ def test_an_answer_branch_run_records_it_and_every_factor_reads_the_state_branch
     encoding = mf.Encoding(5, mf.FAMILY)
     net = mf.network(encoding, [(4, 4), (4, 4)], 0, "output", answer_branch=True)
     assert len(net._pooling_reads) == 2 and len(set(net._pooling_reads)) == 1
-    specs = mf.wr.answer_branch_window(encoding.tokens, encoding.classes, 2)
-    plain = mf.wr.transformer_window(encoding.tokens, encoding.classes)
+    specs = wp.answer_branch_window(encoding.tokens, encoding.classes, 2)
+    plain = wp.transformer_window(encoding.tokens, encoding.classes)
     branches = specs[-2]
-    assert isinstance(branches, mf.wr.Branches) and branches.reads == (0, 0)
+    assert isinstance(branches, Branches) and branches.reads == (0, 0)
     assert list(branches.branches[0]) == plain[-5:-1]  # the state branch: W11's last block and LayerNorm
     settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
     mf.run(
@@ -1659,7 +1660,7 @@ def test_an_answer_branch_run_records_it_and_every_factor_reads_the_state_branch
 def _branch_heads(branch: Sequence[Any]) -> int:
     # a branch block's attention heads: its first residual block's Attention (wr's branch blocks)
     block = branch[1]
-    assert isinstance(block, mf.wr.Residual) and isinstance(block.body[1], mf.wr.Attention)
+    assert isinstance(block, Residual) and isinstance(block.body[1], Attention)
     return block.body[1].heads
 
 
@@ -1671,16 +1672,16 @@ def test_a_recombined_run_at_width_32_records_it_and_each_factor_reads_its_own_b
     factors = [(32, 8), (32, 8)]
     net = mf.network(encoding, factors, 0, "output", width=32, recombine=True)
     assert len(net._pooling_reads) == 2 and len(set(net._pooling_reads)) == 2
-    specs = mf.wr.recombined_window(encoding.tokens, encoding.classes, 2, 32)
-    plain = mf.wr.transformer_window(encoding.tokens, encoding.classes, 32)
+    specs = wp.recombined_window(encoding.tokens, encoding.classes, 2, 32)
+    plain = wp.transformer_window(encoding.tokens, encoding.classes, 32)
     branches = specs[8]
-    assert isinstance(branches, mf.wr.Branches) and branches.merge and len(branches.branches) == 2
+    assert isinstance(branches, Branches) and branches.merge and len(branches.branches) == 2
     assert specs[:8] == plain[:8] and specs[9:] == plain[-5:]  # the trunk and the recombining block, W11's
-    assert specs[:8] == mf.wr.branched_window(encoding.tokens, encoding.classes, 2, 32)[:8]  # branches-32's trunk
+    assert specs[:8] == wp.branched_window(encoding.tokens, encoding.classes, 2, 32)[:8]  # branches-32's trunk
     for branch in branches.branches:
-        assert _branch_heads(branch) == mf.wr.HEADS
+        assert _branch_heads(branch) == wp.HEADS
         ffn = branch[2]
-        assert isinstance(ffn, mf.wr.Residual) and isinstance(ffn.body[2], mf.wr.Dense) and ffn.body[2].size == 32
+        assert isinstance(ffn, Residual) and isinstance(ffn.body[2], Dense) and ffn.body[2].size == 32
     settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
     mf.run(
         encoding,
@@ -1706,12 +1707,12 @@ def test_a_recombined_run_at_width_32_records_it_and_each_factor_reads_its_own_b
 def test_a_branched_run_with_two_heads_a_branch_at_width_32_records_them(tmp_path: Path):
     # the post-paper workplan's branches-32 (D8): the retired design at width 32, two heads a branch
     encoding = mf.Encoding(5, mf.FAMILY)
-    specs = mf.wr.branched_window(encoding.tokens, encoding.classes, 2, 32, heads=2)
+    specs = wp.branched_window(encoding.tokens, encoding.classes, 2, 32, heads=2)
     branches = specs[-2]
-    assert isinstance(branches, mf.wr.Branches) and len(branches.branches) == 3
+    assert isinstance(branches, Branches) and len(branches.branches) == 3
     assert all(_branch_heads(branch) == 2 for branch in branches.branches)
-    retired = mf.wr.branched_window(encoding.tokens, encoding.classes, 2, 32)[-2]
-    assert isinstance(retired, mf.wr.Branches)
+    retired = wp.branched_window(encoding.tokens, encoding.classes, 2, 32)[-2]
+    assert isinstance(retired, Branches)
     assert all(_branch_heads(branch) == 1 for branch in retired.branches)  # one by default, the retired design's
     settings = mf.Settings(epoch_examples=32, max_epochs=1, screen=4, cases=4, lengths=(2,), long=(3,))
     mf.run(
@@ -2679,7 +2680,7 @@ class _Profile:
 _PLAIN: dict[str, Any] = {
     "encoding": mf.target_named("random-3-0"), "factors": ((3, 3),), "seed": 7, "budget_seconds": None, "out": Path("x"),
     "settings": mf.PROBE, "cap": 5, "reads": "all", "budget_epochs": 100, "fork": None, "guard": False, "long_tail": None,
-    "consolidate": False, "restore_best": False, "commitment_from": None, "width": mf.wr.D, "branches": False,
+    "consolidate": False, "restore_best": False, "commitment_from": None, "width": wp.D, "branches": False,
     "answer_branch": False, "thermostat": None, "keep_machine": False, "counterexamples": None, "anneal": None, "warm_up": None,
     "whole": False, "crucible": False, "state_bound": None, "coupling_cap": 1.0, "continuous": None, "margin_wait": None,
 }  # fmt: skip

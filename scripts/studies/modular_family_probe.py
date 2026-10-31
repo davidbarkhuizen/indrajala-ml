@@ -1001,6 +1001,7 @@ from pathlib import Path
 from typing import Any
 
 from indrajala_ml.measurement import machine_lock
+from indrajala_ml.model.specs import window_presets as wp
 from indrajala_ml.studies import chow, inference
 from indrajala_ml.studies import machine_reading as mr
 from indrajala_ml.studies import modular_family as mf
@@ -1137,7 +1138,7 @@ def main(argv: list[str]) -> int:
     run.add_argument(
         "--window-width",
         type=int,
-        default=wr.D,
+        default=wp.D,
         metavar="D",
         help="the window's residual stream (W11's 16), its FFN twice it (the window branches workplan's W1)",
     )
