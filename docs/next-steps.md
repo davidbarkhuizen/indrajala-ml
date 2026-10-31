@@ -346,7 +346,7 @@ Decided with the owner, each to become a workplan or a stage:
   approximations exists: the test of whether one approximation helps where no cover does. Later,
   `a = 0` adds resets.
 - **The approximation claim: done, A1-A3 hold** (2026-10-17; the workplan retired:
-  `git show c201622:docs/approximation-claim-workplan.md`; findings in `scripts/studies/modular_family_probe.py`'s docstring).
+  `git show c201622:docs/approximation-claim-workplan.md`; findings in indrajala-studies' `scripts/studies/modular_family_probe.py`'s docstring).
   The sum alone certifies 10 of 20 against the quotient alone's 1 and the product's 0: the sum, an
   approximation, helps where an equally distinguishing non-approximation, which the network doesn't
   learn, doesn't. Whether it helps *because* it is an approximation needs a learnable

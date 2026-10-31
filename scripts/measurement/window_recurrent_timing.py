@@ -84,11 +84,11 @@ DEFAULT_CASES = [
 
 KINDS = ("learn", "forward", "long-test", "study")
 FAMILY_STATE = 16  # s of each factor, the division studies'
-# the window-recurrent adder's column tokens and digits (window_tasks.ADDITION's machine), and the
-# division family's tokens and tokens a column, the sum and difference queried (modular_family.Encoding)
+# the window-recurrent adder's column tokens and digits (indrajala-studies' window_tasks.ADDITION), and the
+# division family's tokens and tokens a column, the sum and difference queried (its modular_family.Encoding)
 ADDITION_TOKENS, ADDITION_CLASSES = 27, 3
 FAMILY_TOKENS, FAMILY_WIDTH = 11, 3
-CHUNK_TOKENS = 1 << 20  # a long test's forward pass at most (window_recurrent_study.CHUNK_TOKENS)
+CHUNK_TOKENS = 1 << 20  # a long test's forward pass at most (indrajala-studies' window_recurrent_study.CHUNK_TOKENS)
 WINDOWS = {"transformer": wp.transformer_window, "linear": wp.linear_window}
 
 # pstats' table: a function (file, line, name) to its calls, primitive calls, own and cumulative time, callers

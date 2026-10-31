@@ -100,11 +100,11 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | Path | Contents |
 | --- | --- |
 | `indrajala_ml/model/` | classifier networks and their layers |
-| `indrajala_ml/` (top level) | `batch.py`, the batch runner's controller and workers (`scripts/runner/batch.py`); `pcg64.py`, numpy's `default_rng` in pure Python; `geometry.py`, the linear classifier's polygon targets |
+| `indrajala_ml/` (top level) | `pcg64.py`, numpy's `default_rng` in pure Python; `geometry.py`, the linear classifier's polygon targets |
 | `indrajala_ml/training/` | training loops (`train.py`), synthetic training data, run checkpoints, evaluation (disagreement rate, accuracy, confusion matrix), one-vs-rest ensemble training over multiprocessing (`ensemble_train.py`) |
-| `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; the text corpora's (`text_data.py`); base-3 addition (`addition_data.py`) and modular arithmetic (`modular_data.py`) for the window-recurrent studies; `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
+| `indrajala_ml/data/` | MNIST, UCI digits and Iris loaders; the text corpora's (`text_data.py`); `prepared_dataset.py`, a dataset as one backend matrix, which the array networks train from |
 | `indrajala_ml/measurement/` | the benchmark machine's profile; multi-seed parameter sweeps over MNIST proxy tasks; the per-op timing (`layer_op_timing.py`) and the conv Rust/numpy comparison (`conv_comparison.py`) the timing scripts build on, and their timing helpers (`timing.py`); the benchmark archive's records (`benchmark_archive.py`); the machine lock, one heavy job at a time (`machine_lock.py`) |
-| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's; `attention_dropout_study.py`, the attention-dropout study's; `rotary_study.py` and `addition_study.py`; the window-recurrent harness (`window_recurrent_study.py`), its tasks (`window_tasks.py`, `modular_family.py`), its certificate (`window_recurrent_certificate.py`, `chow.py`), its readings (`window_diagnostics.py`, `window_drift.py`, `machine_reading.py`, `window_replay.py`), the guard and collapse trigger (`certificate_guard.py`, `collapse.py`) and the claims' statistics (`inference.py`) |
+| `indrajala_ml/studies/` | the batch-size scaling study (linear learning-rate scaling with warmup); `patch_study.py`, the patch-model studies' shared protocol; `sequence_study.py`, the sequence study's; `attention_dropout_study.py`, the attention-dropout study's; `rotary_study.py`; the studies' shared provenance and tables (`common.py`). The window-recurrent research (its harness, tasks, certificate, readings, the batch runner and their data) is in [indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies) |
 | `rust/` | `indrajala_math_rust` submodule (PyO3/maturin) |
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/data/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
@@ -896,7 +896,7 @@ base-3 addition of three `n`-digit operands (two-operand addition is a zero in o
 network passes only when it meets every property of one catalogue, at 100% of its cases, on 4 of 5
 seeds.
 
-- **The catalogue** (`indrajala_ml/data/addition_data.py`) is addition's contract as code. Each
+- **The catalogue** (indrajala-studies' `indrajala_studies/addition_data.py`, moved 2026-10-31) is addition's contract as code. Each
   property has a generator of cases, a verifier (Python's `+`, or a relation among the network's
   own answers) and a coverage, and a failing case shrinks to a minimal one. B1-B3 are the
   definition (adds three, adds two, a hashed tenth never trained on), A1-A3 the algebra
