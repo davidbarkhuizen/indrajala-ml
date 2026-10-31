@@ -23,6 +23,14 @@ where you meet a new trap; delete one that no longer holds.
   checks and every one is `pass` (#829 merged with `tests/` failing when a merge followed a `cat`
   of the checks). `awk`, not `grep -v`: an agent's shell may wrap `grep`.
 - **One watcher per PR.** Check for a running `gh pr checks` before starting another.
+- **A PR in conflict with main gets no `pull_request` CI run,** and `gh pr checks` then says "no
+  checks reported" (#1117): check `gh pr view N --json mergeable`, and merge main into the branch.
+- **A release job without its own `if:` is skipped when any upstream job was** (crate #83): give
+  it an explicit condition.
+- **A new repo's first commit goes straight to `main`** (there is nothing to PR against): commit the
+  licence alone, then the rest by PR.
+- **The permission classifier (for agents) refuses moving a pushed tag** (delete and re-push), even
+  a rehearsal tag, and `gh repo create --public`: give the owner the `!` command.
 - **CI checks out only HEAD** (no fetch depth): a test can't use past commits.
 - **A PR body is limited to 65 KB.** Write PR comments with a quoted heredoc (`cat <<'EOF'`): a `%`
   in `printf` text breaks it; fix one with `gh pr comment --edit-last -F FILE`.
@@ -76,6 +84,8 @@ where you meet a new trap; delete one that no longer holds.
 - **`./cli test` takes 5-10 minutes** (no pytest-xdist): run it in the background and let its own
   completion notify you. Read the summary line (`= N failed, M passed =`), never the exit code of
   `cmd > log; tail log`.
+- **`./cli test` with options and no path (`./cli test -q`) runs pytest on the whole tree,**
+  submodules included: give a path (`./cli test tests/ -q`).
 - **`./cli lint` stops at ruff's formatter** when a file would be reformatted, before pyright: run
   `.venv/bin/ruff format` first. Run pyright through `./cli lint`, not directly (that ignores the
   project config). Lint before pushing, not only the tests' files.
