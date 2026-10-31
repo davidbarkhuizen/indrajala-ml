@@ -1,9 +1,9 @@
 # Workplan: the studies' clean-moving code to indrajala-studies
 
-**Status: planned 2026-10-30; decisions D1-D9 settled. Starts after paper 1's stand-alone
-preprint is published (the paper workplan's R9, in indrajala-research), never before: R9 runs
-`scripts/paper/zenodo_deposit.py` from this repository. The scope is the owner's: the clean moves
-only (2026-10-30).**
+**Status: planned 2026-10-30; decisions D1-D10 settled (D10 and D5's third helper found in stage
+3, 2026-10-31); stage 2 done (indrajala-studies #1). Started after paper 1's stand-alone preprint
+was published (the paper workplan's R9, in indrajala-research, done 2026-10-31). The scope is the
+owner's: the clean moves only (2026-10-30).**
 
 The goal: the research code that nothing left in indrajala-ml needs moves to a new repository,
 [indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies), with its tests, so ml
@@ -35,22 +35,24 @@ Moved code may import ml freely (indrajala-studies depends on ml); only the reve
 | `indrajala_ml/studies/addition_study.py`, `chow.py`, `window_drift.py`, `window_replay.py` | `indrajala_studies/` (same file names) |
 | `scripts/paper/` (all four: `paper_tables.py`, `paper_reading.py`, `datapack.py`, `zenodo_deposit.py`) | `scripts/paper/` |
 | `scripts/studies/addition_study.py`, `window_recurrent_study.py`, `window_program_check.py`, `profile_page.py` and `profile_page.html` | `scripts/studies/` |
-| `scripts/studies/configs/` (28 configs, addition and window-recurrent) | `scripts/studies/configs/` |
+| `scripts/studies/configs/addition_calibration.json` and `addition_sweep.json` (D10) | `scripts/studies/configs/` |
 | `scripts/data/migrate_factored_state.py` | `scripts/data/` |
 | `tests/studies/test_addition_study.py`, `test_chow.py`, `test_window_drift.py`, `test_window_replay.py` | `tests/` |
 | `tests/scripts/test_paper_tables_script.py`, `test_paper_reading.py`, `test_datapack_script.py`, `test_zenodo_deposit_script.py`, `test_window_recurrent_study_script.py`, `test_migrate_factored_state.py` | `tests/scripts/` |
 | `tests/measurement/test_machine_lock.py`'s "addition run" row | a lock test of its own in `tests/` |
 
-About 4,700 lines of code, plus the configs and their tests. Two test helpers are used on both
+About 4,700 lines of code, plus the configs and their tests. Three test helpers are used on both
 sides and are copied, not moved (D5): `tests/data/addition_adders.py` (also used by ml's
-`test_addition_data.py`) and `tests/studies/helpers.py`'s `CarryTable` (also used by ml's
-`test_certificate_guard.py`).
+`test_addition_data.py`), `tests/studies/helpers.py`'s `CarryTable` (also used by ml's
+`test_certificate_guard.py`), and `tests/studies/test_window_recurrent_certificate.py`'s
+`CarryMachine` and `TaskMachine` (used by the moved `test_migrate_factored_state.py`; the
+certificate's test stays).
 
 **Stays in ml:** the 12 modules above and their tests; the batch runner (`indrajala_ml/batch.py`,
 `scripts/runner/`) and `modular_family_probe.py`; the primitive-era studies (batch-size scaling,
 sequence, rotary, patch, residual depth, attention dropout), which validate library features and
 which ml's timing scripts and lock test import; the window-recurrent network and the crate's
-window ops (the architecture).
+window ops (the architecture); the 26 window-recurrent configs (D10).
 
 ## Decisions
 
@@ -65,6 +67,7 @@ window ops (the architecture).
 | D7 | CI | one lint job and one test job, x86_64 only, caching `.venv` and the crate's wheel keyed on `ml/rust`'s commit, as ml's CI does | the crate's cross-architecture parity is ml's and the crate's job; the moved tests need only one architecture |
 | D8 | changes that need new ml code | merge in ml first, then a "Bump ml/" PR in studies | the crate's rule, one level up; no stacked PRs |
 | D9 | paper 1's reproducibility | unchanged: the tags `paper1-v1` and `paper1-v1.1` hold the old paths for good, and the datapack's verify page names them | a published record never moves; a later paper version names studies' paths and tag |
+| D10 | the window-recurrent configs | stay in ml (`scripts/studies/configs/window_recurrent_*.json`, 26); the moved `window_recurrent_study.py` runs them from `ml/scripts/studies/configs/`; the two addition configs move | ml's `tests/studies/test_window_recurrent_study.py` (the harness's `load_config` tests, which stay) reads them by path, so the plan's own rule keeps them; found in stage 3 (2026-10-31) |
 
 ## Stages
 
