@@ -71,6 +71,7 @@ docs cite them by section:
 | An audit of the research programme (2026-10-23) | #953 | indrajala-research #48-#50, #954 | `git show 4ea65cc:docs/workplans/programme-audit-workplan.md`; the four reviews at indrajala-research's top level (`review-2026-10-23-*.md`) |
 | The batch runner (restarts at a cutoff; a controller and a worker on each machine) | #935 | #943, #944, #946, #948, #952, #956 | `git show 53d7fef:docs/workplans/batch-runner-workplan.md` |
 | The snap wall (an asymmetric margin on the snap; P1, C1 refuted) | #787 | #788, #789, #793, #797, #803 | `git show 53d7fef:docs/workplans/snap-wall-workplan.md` |
+| The rest of the research code to indrajala-studies (D1-D9) | #1134 | #1135-#1138, studies #5, #6, research #131, this PR | `git show bbe51b4:docs/workplans/infrastructure/research-separation-workplan.md` |
 | The studies' clean-moving code to indrajala-studies (D1-D11) | #1116 | studies #1-#4, #1131, #1132, research #130, this PR | `git show 6475d18:docs/workplans/infrastructure/studies-repo-workplan.md` |
 | Publishing the crate on PyPI and crates.io, the first release 0.1.0 (D1-D11) | #1118 | crate #78-#84, #1119-#1121, #1127, #1129, this PR | `git show 995f0bd:docs/workplans/infrastructure/release-workplan.md` |
 | The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
@@ -92,6 +93,33 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
 
+## From the research separation (retired 2026-10-31)
+
+Done: every piece of the window-recurrent research is in
+[indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies): the harness and its
+modules, the batch runner, `addition_data` and `modular_data`, the family probe, the 26 configs and
+`window_study_timing.py` (studies #5, from d126315; ml's copies deleted in #1138; 569 tests moved,
+studies' suite 637 in 4 CI shards). Its data moved with it on `pyramidon` (D8: 73,854 files,
+103,333,232,109 bytes, renamed on one disk, counted before and after; `paper_tables.py check` from
+studies with the default `--data` all the same). ml keeps the library and its guards: the window
+builders are the library's presets (`indrajala_ml/model/specs/window_presets.py`, #1135, every
+builder's specs checked equal), and the network test and `window_recurrent_timing.py` build the
+studies' cells from them (#1137). Checked on `jebel` before ml's copies went: a family-probe run
+from both trees gave identical output trees; a one-attempt batch from a studies worktree ran,
+matched its commit and crate, and was pulled; `ab.py` ran `window_study_timing.py` by absolute
+path. `ab.py --script-from each` (#1136) times a benchmark script's own change. Read it with
+`git show bbe51b4:docs/workplans/infrastructure/research-separation-workplan.md`. Left open:
+
+- **`learn linear k1 s16 m16 B64 W19` reads 4.2% slower since #1137** with byte-identical work (the
+  benchmark no longer imports the study modules): archived rows of that case before it aren't
+  comparable; the cause is unmeasured (measurement.md, Gotchas).
+- **`stone`'s and `klip`'s batch preparation from studies is untested:** `prepare` makes the studies
+  clone on `klip` (from GitHub) and on `stone` (from two bundles, studies and ml) on first use; run
+  one short batch on each before a registered one.
+- **The runner's hosts keep ml's venvs** (`/home/david/code/indrajala-ml/.venv`, stone's
+  `wt-branches/.venv`): they hold the same dependencies; a studies-only dependency would need them
+  rebuilt from studies.
+
 ## From the studies repo (retired 2026-10-31)
 
 Done: [indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies) (public, MIT) holds
@@ -106,13 +134,8 @@ window-recurrent configs stay (D10, ml's harness test reads them), `chow` and `w
 `CarryMachine` and `TaskMachine` are copied (D5). Read it with
 `git show 6475d18:docs/workplans/infrastructure/studies-repo-workplan.md`. Left open:
 
-- **The rest of the window-recurrent research code** (the 12 modules, `chow`, `window_replay`, the
-  batch runner and `modular_family_probe.py`) can follow once two ties are cut: a task fixture for
-  `window_recurrent_timing.py` (the `ab.py` benchmark), and the network's test split into core
-  checks and study checks; then the window-recurrent configs go too. The owner's call.
+- **The rest of the window-recurrent research code** followed (the research-separation plan, below).
 - **indrajala-ml on PyPI** (the release plan's D1) is no longer waiting on this move.
-- **Study runs now start from indrajala-studies**; the gitignored study data stays in ml's
-  `data/window-recurrent/` on `pyramidon` (`paper_tables.py --data ../indrajala-ml/data/window-recurrent`).
 
 ## From the release (retired 2026-10-31)
 
