@@ -25,6 +25,11 @@ The Rust math backend lives in a separate repo,
 git submodule at `rust/`. Clone with `git clone --recurse-submodules`, or run
 `git submodule update --init` after a plain clone (`./cli setup` also does this). To bump the
 pinned submodule commit to the latest upstream `main`: `git submodule update --remote rust`.
+The crate is also published: its kernels as a pure-Rust library,
+[`indrajala-math`](https://crates.io/crates/indrajala-math) on crates.io, and its Python bindings as
+[`indrajala-math-rust`](https://pypi.org/project/indrajala-math-rust/) on PyPI (wheels for CPython
+3.14 and 3.15 on Linux, macOS and Windows, x86_64 and arm64). This repository builds the crate from
+the submodule.
 
 ## Usage
 
@@ -965,9 +970,6 @@ test passing, and:
   Ryzen laptop's numbers beside them.
 - [docs/i7-9700k-rust-optimization.md](docs/i7-9700k-rust-optimization.md): where the Rust crate
   lags numpy on the benchmark machine, and what to investigate for each gap.
-- [docs/workplans/infrastructure/release-workplan.md](docs/workplans/infrastructure/release-workplan.md): publishing the Rust crate to
-  PyPI (multi-platform wheels) and crates.io (a pure-Rust core split from the bindings), built and
-  tested on every push, PR and release tag.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
   attention, multi-head attention and a transformer block, and a sequence task with causal

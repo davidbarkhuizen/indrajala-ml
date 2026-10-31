@@ -29,5 +29,4 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 | workplan | state |
 | --- | --- |
-| [release-workplan.md](infrastructure/release-workplan.md) | planned 2026-10-30: PyPI and crates.io, the first release 0.1.0 (replaces the PyPI-only plan) |
 | [studies-repo-workplan.md](infrastructure/studies-repo-workplan.md) | the studies' clean-moving code to indrajala-studies; planned, starts after paper 1's preprint |

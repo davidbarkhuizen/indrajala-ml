@@ -202,10 +202,11 @@ flags. GCC in ISO C mode doesn't contract, but clang contracts within an express
 and arm64 has FMA in its baseline. Linux x86_64 wheels target a baseline without FMA. CI now runs
 the crate's parity tests and every test shard on Linux arm64 as well (the
 aarch64 workplan's multi-platform CI, retired: `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md`), and `litshe` (aarch64)
-holds bit parity, so a contracting numpy build on arm64 would show there; macOS is still
-unchecked (the release plan's stage 4,
-[release-workplan.md](workplans/infrastructure/release-workplan.md)). If a numpy build contracts,
-record it and decide then. Don't pre-emptively add `mul_add`.
+holds bit parity. **Found 2026-10-30** (the release plan's stage 4, retired: `git show
+995f0bd:docs/workplans/infrastructure/release-workplan.md`): numpy's wheels on macOS (both
+architectures) and Windows arm64 do contract `uniform`'s `low + range * u`. The crate stays
+unfused, the same bits everywhere; its parity tests compare against the unfused formula, and
+`test_numpys_own_uniform_where_it_is_unfused` skips on a contracting build. Don't add `mul_add`.
 
 ### `[low, high)` is not strictly guaranteed (informational)
 
