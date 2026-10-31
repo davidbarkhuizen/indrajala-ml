@@ -1,7 +1,7 @@
 """
 The window-recurrent network's certificate against its task's machine
 (indrajala-research/docs/research-notes/window-recurrent-report.md, E1, stage 2; over any target machine, D17, stage 5;
-scripts/studies/window_recurrent_study.py's certify).
+indrajala-studies' scripts/studies/window_recurrent_study.py's certify).
 
 A window's work is a function of the state it receives and its k column tokens, and a snapped state
 is one of the network's m codes, exactly (the codes' forward pass gives the code's own vector), so

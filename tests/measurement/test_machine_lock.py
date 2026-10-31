@@ -16,8 +16,7 @@ from indrajala_ml.studies import attention_dropout_study, sequence_study
 
 REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO / "scripts" / "studies"))
-import addition_study  # scripts/ isn't a package
-import batch_size_scaling_sweep
+import batch_size_scaling_sweep  # scripts/ isn't a package
 import multi_head_attention_study
 import patch_attention_study
 import patch_geometry_study
@@ -108,7 +107,6 @@ COMMAND_LINES: list[tuple[str, Callable[[list[str]], Any], list[str]]] = [
     ("multi-head attention time", multi_head_attention_study.main, ["time"]),
     ("residual depth tune", residual_depth_study.main, ["tune"]),
     ("batch size baseline", batch_size_scaling_sweep.main, ["baseline"]),
-    ("addition run", addition_study.main, ["run", str(REPO / "scripts/studies/configs/addition_sweep.json")]),
 ]
 
 
