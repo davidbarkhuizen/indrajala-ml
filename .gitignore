@@ -191,9 +191,9 @@ data/refactoring/*
 data/residual/
 data/attention/
 
-# the addition study's sweeps (indrajala-studies' scripts/studies/addition_study.py): results and trained models
+# the window-recurrent and addition studies' data, moved to indrajala-studies' data/ on 2026-10-31
+# (the research-separation plan, D8); ignored here still, so a stray old run can't be committed
 data/addition/
-# the window-recurrent adder's (indrajala-studies' scripts/studies/window_recurrent_study.py): results and each run's steps; paper 1's data
 data/window-recurrent/
 
 # the studies' result files, each with its provenance (indrajala_ml/studies/common.py, default_out)

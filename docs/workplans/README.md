@@ -27,6 +27,4 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 ## `infrastructure/`: machines, release and repositories
 
-| workplan | state |
-| --- | --- |
-| [research-separation-workplan.md](infrastructure/research-separation-workplan.md) | the rest of the research code to indrajala-studies; planned 2026-10-31 |
+None open. Retired plans are listed in [next-steps.md](../next-steps.md).
