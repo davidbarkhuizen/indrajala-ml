@@ -889,6 +889,83 @@ closing. It fits faster rather than overfitting less. An epoch costs 3.5% more a
 sequence models default to rotary positions, the sequence example among them (the findings are in
 its docstring).
 
+## Generation
+
+A sequence network samples text through incremental decoding (roadmap step 9): `decoder()`
+returns a `Decoder` holding one cache per token layer, in all three implementations and the crate.
+
+```python
+decoder = network.decoder()
+p = decoder.prefill(ids)  # the prompt; the last token's probabilities over the vocabulary
+p = decoder.step(next_id)  # one token's pass; its probabilities for the next
+```
+
+- **The protocol** (`indrajala_ml/model/protocols/decoding_protocols.py`): each token layer has
+  `start_decoding()`, `prefill(X, cache)` (the prompt's first `T` tokens' rows) and `step(x,
+  cache, position)`. A token-wise layer decodes its rows by its forward's expressions and keeps
+  nothing. Attention keeps its rotated keys and values: a step projects one token, rotates its
+  query and key by its position, appends its key and value, and attends from its query to every
+  cached key. A non-causal attention, `TokenMean` or `Patches` is refused at `decoder()`.
+- **Past the window** each attention's cache drops its oldest key and value, so a rotary model's
+  window slides exactly: scores depend on distances up to `T - 1`, as in training, and context
+  still reaches further back through the layers. A model with no positions slides the same way. A
+  learned `Position` has no row past `T`, so from there each token is a full pass over the last
+  `T` tokens, exact but uncached, with one warning.
+- **Parity** (D7): within the window a decode is its implementation's full pass by bits in pure
+  Python and on Rust (the crate's `attention_step` is one chain per output, as its forward op),
+  and within rounding on numpy (a one-row product and a whole-window one may take different BLAS
+  kernels). Past it, numpy's decode is checked against a sliding-window reference (a longer
+  network with the same parameters whose attentions mask a band of `T` keys), and the other two
+  against numpy's.
+- **Sampling** (`indrajala_ml/generation/sampling.py`): a chain of filters on one position's
+  probabilities, temperature (0 is greedy), top-k (ties by id) and top-p (Holtzman et al. 2019),
+  each renormalized; then one uniform draw from a generator seeded once, and the first id whose
+  cumulative probability exceeds it. One model file and one seed give the same text. numpy's and
+  Rust's probabilities can differ in the last bit, so they may not.
+- **Speed**, on jebel (i7-9700K, one thread; `scripts/measurement/generation_timing.py`): the
+  2-layer model's cached decode samples 3,480 characters per second on numpy against 684 uncached
+  (5.1x), and 12,400 against 1,022 on Rust (12.1x). numpy gains less than the window's 64 because
+  its one-token step is dominated by per-call overhead.
+
+A model's vocabulary is a tokenizer file beside it, `<model>.tokenizer.json`: `{"kind":
+"characters", "corpus", "sha256", "symbols"}`, the symbols in id order. `scripts/generation/sample_text.py`
+trains the sequence study's 2-layer model (rotary, at its tuned rate) and samples from it:
+
+```
+python scripts/generation/sample_text.py train --corpus tinyshakespeare --epochs 10 --seed 0 \
+    --out data/generation/tinyshakespeare-2layer-rotary-e10-s0.json
+python scripts/generation/sample_text.py sample --model data/generation/tinyshakespeare-2layer-rotary-e10-s0.json \
+    --prompt "ROMEO:" --length 300 --temperature 0.8 --seed 1
+```
+
+Two samples, each from a model trained 10 epochs on jebel (numpy, seed 0), at temperature 0.8,
+`--seed 1` (the first seed drawn, not a chosen one), 300 characters after the prompt. Tiny
+Shakespeare, 2.410 bits per character held out:
+
+```text
+ROMEO:
+Were the sign'd me these makes struck'd up them to do as,
+I am the sweet obly. Sell; she see
+He shall most you for most the gain,
+Not sorrous and so with the thus many with in ruis cramy thou say of sings.
+
+QUEEN MAMGARET:
+But I do you.
+Fair me have I say all unbraities great a hast thou caller tha
+```
+
+Euclid (Heath), 1.438 bits per character held out:
+
+```text
+Let the circle ABC be an are equimultiples of EG, L, N, P are in the pyramid of which the circle ABC, and let CO be prime to one another.
+Let B by multiplying B has made H, therefore the antecedent the circle ABC at the circumference CFG; therefore also, as D is to A, so is C to E, so is MM to BQ. simi
+```
+
+The models spell most words and keep each corpus's forms: Shakespeare's speakers' names in
+capitals before a colon, and Euclid's letter-named figures and "therefore also, as D is to A, so
+is C to E". The sense does not hold beyond a few words. These samples are to be replaced when
+step 10's longer training gives better ones.
+
 ## The addition study
 
 Which is the smallest network, built from the package's layers, that reliably adds? The task is
