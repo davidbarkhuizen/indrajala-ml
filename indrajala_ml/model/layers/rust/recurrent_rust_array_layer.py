@@ -29,6 +29,7 @@ from indrajala_ml.model.specs.window_recurrence import (
     commitment_targets,
     set_commitments,
 )
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class StateInputRustArrayLayer:
@@ -65,23 +66,23 @@ class StateInputRustArrayLayer:
         """The batch's states, (N, state_size), which the next forward pass adds."""
         self.state = state
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.state_input_forward(X, self.state, self.P, self.tokens)
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self.forward_batch(x.reshape((1, self.size))).reshape(self.size)
 
-    def compute_output_delta(self, reference: pa.Array) -> None:
+    def compute_output_delta(self, reference: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError("a StateInputRustArrayLayer is hidden, inside a network")
 
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
+    def compute_output_delta_batch(self, reference_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError("a StateInputRustArrayLayer is hidden, inside a network")
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self._backward(next_layer.downstream().reshape((1, self.size)))
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self._backward(next_layer.downstream(context=context).reshape((1, self.size)))
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self._backward(next_layer.downstream_batch())
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self._backward(next_layer.downstream_batch(context=context))
 
     def _backward(self, downstream: pa.Array) -> None:
         # the state's gradient now; P's, which the backward op gives with it, kept for
@@ -91,16 +92,16 @@ class StateInputRustArrayLayer:
             downstream, self.state, self.P, self.grad_P, self.tokens
         )
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self.delta_batch.reshape(self.size)
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self.delta_batch
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_P = self._grad_P
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_P = self._grad_P
 
 
@@ -342,7 +343,7 @@ class RecurrenceRustArrayLayer(RecurrenceSchedule):
             initial = f.initial_state
             initial.grad_c = initial.grad_c + pa.sum_axis0(dH[:, start : start + size])
 
-    def forward_batch(self, X: pa.Array | Sequence[pa.Array], C: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array | Sequence[pa.Array], C: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         """
         The tokens the output layer reads, X (N, T * d), or each factor's, one a factor (the window
         branches workplan), and the state C (N, S), to the next state (N, S).

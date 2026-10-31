@@ -9,16 +9,17 @@ from __future__ import annotations
 
 from typing import Any, NoReturn
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.specs.single_example import refuse_single_example
 
 
 class Hidden[A]:
     """A layer that is never a network's last, so it has no output delta."""
 
-    def compute_output_delta(self, reference: A) -> None:
+    def compute_output_delta(self, reference: A, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
 
-    def compute_output_delta_batch(self, reference_batch: A) -> None:
+    def compute_output_delta_batch(self, reference_batch: A, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
 
 
@@ -31,11 +32,11 @@ class DeltaIsDownstream[A]:
     delta: A
     delta_batch: A
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self.delta = next_layer.downstream()
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.delta = next_layer.downstream(context=context)
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.delta_batch = next_layer.downstream_batch(context=context)
 
 
 class BatchOnly[A]:
@@ -45,18 +46,18 @@ class BatchOnly[A]:
     workplan, D8).
     """
 
-    def compute_hidden_delta(self, next_layer: Any) -> NoReturn:
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> NoReturn:
         refuse_single_example(self)
 
-    def downstream(self) -> NoReturn:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> NoReturn:
         refuse_single_example(self)
 
 
 class ParameterFree[A]:
     """A layer with no parameters: nothing to accumulate, and with no W the optimizer skips it."""
 
-    def accumulate_gradient(self, input_activation: A) -> None:
+    def accumulate_gradient(self, input_activation: A, *, context: ForwardContext = NO_CONTEXT) -> None:
         pass
 
-    def accumulate_gradient_batch(self, input_activation_batch: A) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: A, *, context: ForwardContext = NO_CONTEXT) -> None:
         pass

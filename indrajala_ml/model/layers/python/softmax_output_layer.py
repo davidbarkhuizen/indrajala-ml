@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.backprop_node import BackpropNode
 from indrajala_ml.model.protocols.layer_protocols import InputLayer
@@ -10,14 +11,14 @@ from indrajala_ml.model.protocols.layer_protocols import InputLayer
 
 class SoftmaxOutputNode(BackpropNode):
     """
-    An output node whose activation SoftmaxOutputLayer.forward() computes jointly with its layer and
+    An output node whose activation SoftmaxOutputLayer.forward(context=context) computes jointly with its layer and
     sets through activate(). forward() raises: a per-node sigmoid would be silently wrong.
     """
 
     def forward(self) -> float:
         raise NotImplementedError(
-            "SoftmaxOutputNode.forward() must not be called directly - its activation is "
-            "computed jointly across every node in its layer; see SoftmaxOutputLayer.forward()."
+            "SoftmaxOutputNode.forward(context=context) must not be called directly - its activation is "
+            "computed jointly across every node in its layer; see SoftmaxOutputLayer.forward(context=context)."
         )
 
     def activate(self, value: float) -> None:
@@ -41,7 +42,7 @@ class SoftmaxOutputLayer(BackpropLayer):
         assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
         super().__init__(size, input_layer)
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         nodes: Sequence[SoftmaxOutputNode] = self.nodes  # type: ignore[assignment]
         z_values = [node.z() for node in nodes]
 

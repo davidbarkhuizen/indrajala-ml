@@ -82,7 +82,7 @@ class _Next:
     def __init__(self, downstream: FloatArray) -> None:
         self._downstream = downstream
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: Any = None) -> FloatArray:
         return self._downstream
 
 

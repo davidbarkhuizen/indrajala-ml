@@ -119,7 +119,7 @@ class _Next:
     def __init__(self, downstream: Any) -> None:
         self._downstream = downstream
 
-    def downstream_batch(self) -> Any:
+    def downstream_batch(self, *, context: Any = None) -> Any:
         return self._downstream
 
 

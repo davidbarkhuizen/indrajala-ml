@@ -4,6 +4,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 from indrajala_ml.model.specs.window_geometry import pool_stride, validate_pool_arguments
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class MaxPoolRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
@@ -43,16 +44,16 @@ class MaxPoolRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], Param
         self.input_size = self.geometry.input_size
         self.size = input_channels * self.geometry.positions
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.A, self.argmax_batch = pa.max_pool_forward_batch(X, self.geometry)
         return self.A
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.a, self.argmax = pa.max_pool_forward_batch(x, self.geometry)
         return self.a
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.max_pool_downstream_batch(self.delta_batch, self.argmax_batch, self.geometry)
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.max_pool_downstream_batch(self.delta, self.argmax, self.geometry)

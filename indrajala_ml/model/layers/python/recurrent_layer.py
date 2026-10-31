@@ -24,6 +24,7 @@ import math
 from collections.abc import Sequence
 from typing import ClassVar
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights, fan_in_aware_weights_and_biases
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer
@@ -112,13 +113,13 @@ class StateInputLayer(ParameterFreeLayer[TokenNode]):
         if example == 0:
             self.state_deltas = [[0.0] * self.state_size for _ in self.states]
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         d = self.features
         projected = [_dot(row.weights, self._state) for row in self.rows]
         for i, (node, input_node) in enumerate(zip(self.nodes, self.input_layer.nodes)):
             node.activate(input_node.value() + projected[i % d])
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
         d = self.features
@@ -127,7 +128,7 @@ class StateInputLayer(ParameterFreeLayer[TokenNode]):
             fold([self._token_sum[j] * self.rows[j].weights[k] for j in range(d)]) for k in range(self.state_size)
         ]
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for row, token_sum in zip(self.rows, self._token_sum, strict=True):
             accum = row.weight_gradient_accum
             for k, c_k in enumerate(self._state):
@@ -506,7 +507,7 @@ class RecurrenceLayer:
         for f, dH in zip(self.factors, self._snap_backward(dC, weight), strict=True):
             f.initial_state.backward_batch(dH)
 
-    def forward_batch(self, X: Rows, C: Rows) -> Rows:
+    def forward_batch(self, X: Rows, C: Rows, *, context: ForwardContext = NO_CONTEXT) -> Rows:
         """The tokens the output layer reads, X (T * d per example), and the state C, to the next state."""
         hs: list[Rows] = []
         for g, f in enumerate(self.factors):

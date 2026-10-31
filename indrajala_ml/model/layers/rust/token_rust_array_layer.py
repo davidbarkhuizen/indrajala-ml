@@ -22,6 +22,7 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class PatchesRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
@@ -38,16 +39,16 @@ class PatchesRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], Param
         self.channels = channels
         self.patch_size = patch_size
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.patches_forward(x, self.height, self.width, self.channels, self.patch_size)
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.patches_forward(X, self.height, self.width, self.channels, self.patch_size)
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.patches_downstream(self.delta, self.height, self.width, self.channels, self.patch_size)
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.patches_downstream(self.delta_batch, self.height, self.width, self.channels, self.patch_size)
 
 
@@ -59,16 +60,16 @@ class TokenMeanRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], Par
         self.input_size = tokens * features
         self.tokens = tokens
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.token_mean_forward(x, self.tokens)
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.token_mean_forward(X, self.tokens)
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.token_mean_downstream(self.delta, self.tokens)
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.token_mean_downstream(self.delta_batch, self.tokens)
 
 
@@ -101,15 +102,15 @@ class TokenDropoutRustArrayLayer(
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         if not self.training:
             self._mask = None
             return x
         a, self._mask = pa.token_dropout_forward(x, self._drop_probability, self.rng)
         return a
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
-        return self.forward(X)
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        return self.forward(X, context=context)
 
     def decode_rows(self, R: pa.Array) -> pa.Array:
         # the identity, as in inference
@@ -118,10 +119,10 @@ class TokenDropoutRustArrayLayer(
     def _downstream(self, delta: pa.Array) -> pa.Array:
         return delta if self._mask is None else pa.token_dropout_downstream(delta, self._mask, self._drop_probability)
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self._downstream(self.delta)
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self._downstream(self.delta_batch)
 
 
@@ -154,26 +155,26 @@ class EmbeddingRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], DeltaIsDo
     def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
         (self.E,) = parameters
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.embedding_forward(x, self.E)
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.embedding_forward(X, self.E)
 
     def decode_rows(self, R: pa.Array) -> pa.Array:
         # L ids, an (L,) vector, as their (L, size) rows
         return pa.embedding_forward(R, self.E).reshape((R.shape[0], self.features))
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_E = pa.embedding_accumulate_gradient(self.delta, input_activation, self.grad_E)
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_E = pa.embedding_accumulate_gradient(self.delta_batch, input_activation_batch, self.grad_E)
 
     def reset_gradient_accum(self) -> None:
@@ -206,10 +207,10 @@ class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
     def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
         (self.P,) = parameters
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return x + self.P.reshape(self.size)
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # a new array: X is not written
         return X + self.P.reshape(self.size)
 
@@ -224,16 +225,16 @@ class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
         assert position < self.tokens, f"a learned Position has {self.tokens} rows; got position {position}"
         return x + self.P.take_rows([position])
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self.delta
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self.delta_batch
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_P = self.grad_P + self.delta.reshape((self.tokens, self.features))
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_P = self.grad_P + pa.sum_axis0(self.delta_batch).reshape((self.tokens, self.features))
 
     def reset_gradient_accum(self) -> None:
@@ -266,11 +267,11 @@ class TokenDenseRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], WeightAn
         examples = 1 if len(values.shape) == 1 else values.shape[0]
         return values.reshape((examples * self.tokens, features))
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.a = self._forward_op(self.W, self._rows(x, self.input_size), self.b).reshape(self.tokens * self.size)
         return self.a
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         rows = self._forward_op(self.W, self._rows(X, self.input_size), self.b)
         self.A = rows.reshape((X.shape[0], self.tokens * self.size))
         return self.A
@@ -279,19 +280,19 @@ class TokenDenseRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], WeightAn
         # the new tokens' (L, input_size) rows, the forward op's on its rows
         return self._forward_op(self.W, R, self.b)
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        downstream = next_layer.downstream()
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        downstream = next_layer.downstream(context=context)
         self.delta = pa.array_relu_mask(downstream, self.a) if self.activation == "relu" else downstream
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        downstream = next_layer.downstream_batch()
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        downstream = next_layer.downstream_batch(context=context)
         self.delta_batch = pa.array_relu_mask(downstream, self.A) if self.activation == "relu" else downstream
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         rows = pa.layer_downstream_batch(self.W, self._rows(self.delta, self.size))
         return rows.reshape(self.tokens * self.input_size)
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         rows = pa.layer_downstream_batch(self.W, self._rows(self.delta_batch, self.size))
         return rows.reshape((self.delta_batch.shape[0], self.tokens * self.input_size))
 
@@ -300,10 +301,10 @@ class TokenDenseRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], WeightAn
             self._rows(delta, self.size), self._rows(X, self.input_size), self.grad_W, self.grad_b
         )
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._accumulate(self.delta, input_activation)
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._accumulate(self.delta_batch, input_activation_batch)
 
     def reset_gradient_accum(self) -> None:
@@ -324,8 +325,8 @@ class TokenSoftmaxRustArrayLayer(TokenDenseRustArrayLayer):
         super().__init__(size, input_size, tokens, "linear")
         self._forward_op = pa.layer_softmax_forward_batch
 
-    def compute_output_delta(self, reference: pa.Array) -> None:
+    def compute_output_delta(self, reference: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.delta = (self.a - reference) / self.tokens
 
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
+    def compute_output_delta_batch(self, reference_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.delta_batch = (self.A - reference_batch) / self.tokens

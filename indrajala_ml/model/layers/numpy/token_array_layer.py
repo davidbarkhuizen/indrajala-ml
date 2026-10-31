@@ -24,6 +24,7 @@ from typing import Any, ClassVar, Literal
 import numpy as np
 import numpy.typing as npt
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray, relu
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
@@ -37,38 +38,40 @@ class BatchShaped:
     from the next layer's downstream in _backward; the layer is hidden.
     """
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         raise NotImplementedError
 
     def _backward(self, downstream: FloatArray) -> None:
         raise NotImplementedError
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         raise NotImplementedError
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         raise NotImplementedError
 
-    def forward(self, x: FloatArray) -> FloatArray:
-        return self.forward_batch(x[np.newaxis, :])[0]
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        return self.forward_batch(x[np.newaxis, :], context=context)[0]
 
-    def compute_output_delta(self, reference: FloatArray) -> None:
+    def compute_output_delta(self, reference: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
 
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
+    def compute_output_delta_batch(self, reference_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError(f"a {type(self).__name__} is hidden, inside a network")
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self._backward(next_layer.downstream()[np.newaxis, :])
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self._backward(next_layer.downstream(context=context)[np.newaxis, :])
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self._backward(next_layer.downstream_batch())
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self._backward(next_layer.downstream_batch(context=context))
 
-    def downstream(self) -> FloatArray:
-        return self.downstream_batch()[0]
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        return self.downstream_batch(context=context)[0]
 
-    def accumulate_gradient(self, input_activation: FloatArray) -> None:
-        self.accumulate_gradient_batch(input_activation[np.newaxis, :])
+    def accumulate_gradient(self, input_activation: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.accumulate_gradient_batch(input_activation[np.newaxis, :], context=context)
 
 
 class _ParameterFree(BatchShaped):
@@ -79,7 +82,9 @@ class _ParameterFree(BatchShaped):
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         pass
 
 
@@ -99,13 +104,13 @@ class PatchesArrayLayer(_ParameterFree):
         self.rows = height // patch_size
         self.columns = width // patch_size
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n, p = X.shape[0], self.patch_size
         # (N, C, U, p, V, p) to (N, U, V, C, p, p)
         images = X.reshape(n, self.channels, self.rows, p, self.columns, p)
         return images.transpose(0, 2, 4, 1, 3, 5).reshape(n, self.size)
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n, p = self.delta_batch.shape[0], self.patch_size
         tokens = self.delta_batch.reshape(n, self.rows, self.columns, self.channels, p, p)
         return tokens.transpose(0, 3, 1, 4, 2, 5).reshape(n, self.size)
@@ -122,11 +127,11 @@ class TokenMeanArrayLayer(_ParameterFree):
         self.input_size = tokens * features
         self.tokens = tokens
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = X.shape[0]
         return np.cumsum(X.reshape(n, self.tokens, self.size), axis=1)[:, -1, :] / self.tokens
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = self.delta_batch.shape[0]
         share = (self.delta_batch / self.tokens)[:, np.newaxis, :]
         return np.broadcast_to(share, (n, self.tokens, self.size)).reshape(n, self.input_size)
@@ -159,7 +164,7 @@ class TokenDropoutArrayLayer(RowDecoding[FloatArray], _ParameterFree):
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         if not self.training:
             self._mask_batch = None
             return X
@@ -173,7 +178,7 @@ class TokenDropoutArrayLayer(RowDecoding[FloatArray], _ParameterFree):
         mask = self._mask_batch
         self.delta_batch = downstream if mask is None else downstream * mask / self._keep_probability
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self.delta_batch
 
 
@@ -215,7 +220,7 @@ class EmbeddingArrayLayer(RowDecoding[FloatArray], BatchShaped):
         )
         return ids
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self.E[self._ids(X)].reshape(X.shape[0], self.size)
 
     def decode_rows(self, R: FloatArray) -> FloatArray:
@@ -224,10 +229,12 @@ class EmbeddingArrayLayer(RowDecoding[FloatArray], BatchShaped):
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         ids = self._ids(input_activation_batch).reshape(-1)
         np.add.at(self.grad_E, ids, self.delta_batch.reshape(ids.size, self.features))
 
@@ -261,7 +268,7 @@ class PositionArrayLayer(BatchShaped):
     def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
         (self.P,) = parameters
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return X + self.P.reshape(self.size)
 
     def start_decoding(self) -> None:
@@ -277,10 +284,12 @@ class PositionArrayLayer(BatchShaped):
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self.delta_batch
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         self.grad_P += sum_rows(self.delta_batch).reshape(self.P.shape)
 
     def reset_gradient_accum(self) -> None:
@@ -305,7 +314,7 @@ class TokenDenseArrayLayer(RowDecoding[FloatArray], BatchShaped, ArrayLayer):
         Z = R @ self.W.T + self.b
         return relu(Z) if self.activation == "relu" else Z
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = X.shape[0]
         self.A = self._forward_rows(X.reshape(n * self.tokens, self.input_size)).reshape(n, self.tokens * self.size)
         return self.A
@@ -316,11 +325,13 @@ class TokenDenseArrayLayer(RowDecoding[FloatArray], BatchShaped, ArrayLayer):
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream * (self.A > 0.0) if self.activation == "relu" else downstream
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = self.delta_batch.shape[0]
         return (self._rows(self.delta_batch, self.size) @ self.W).reshape(n, self.tokens * self.input_size)
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         # ArrayLayer.accumulate_gradient_batch on the rows
         delta = self._rows(self.delta_batch, self.size)
         self.grad_W += delta.T @ self._rows(input_activation_batch, self.input_size)
@@ -347,8 +358,8 @@ class TokenSoftmaxArrayLayer(TokenDenseArrayLayer):
         e = exp(Z - Z.max(axis=1, keepdims=True))
         return e / np.cumsum(e, axis=1)[:, -1:]
 
-    def compute_output_delta(self, reference: FloatArray) -> None:
-        self.compute_output_delta_batch(reference[np.newaxis, :])
+    def compute_output_delta(self, reference: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.compute_output_delta_batch(reference[np.newaxis, :], context=context)
 
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
+    def compute_output_delta_batch(self, reference_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.delta_batch = (self.A - reference_batch) / self.tokens

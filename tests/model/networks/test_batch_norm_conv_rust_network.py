@@ -34,7 +34,7 @@ class _Fixed:
     def __init__(self, downstream: Any, rust: bool) -> None:
         self.downstream = _rust(downstream) if rust else downstream
 
-    def downstream_batch(self) -> Any:
+    def downstream_batch(self, *, context: Any = None) -> Any:
         return self.downstream
 
 

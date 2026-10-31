@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, ClassVar
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_layer import NodeLayer
 from indrajala_ml.model.layers.python.backprop_node import BackpropNode
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights
@@ -53,7 +54,7 @@ class LinearLayer(NodeLayer):
 
     _node_cls = LinearNode
 
-    def compute_hidden_deltas(self, next_layer: Any) -> None:
+    def compute_hidden_deltas(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         # the norm layer's downstream_sum is its dl/dx, this node's delta
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)

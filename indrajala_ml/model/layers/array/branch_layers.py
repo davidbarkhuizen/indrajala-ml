@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
@@ -40,33 +41,33 @@ class SplitArrayLayer[A](Hidden[A], ParameterFree[A]):
         self.starts = []
         self.ends = []
 
-    def forward(self, x: A) -> A:
+    def forward(self, x: A, *, context: ForwardContext = NO_CONTEXT) -> A:
         self.x = x
         return x
 
-    def forward_batch(self, X: A) -> A:
+    def forward_batch(self, X: A, *, context: ForwardContext = NO_CONTEXT) -> A:
         self.X = X
         return X
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         # lazy: downstream() sums the branches when the layer before asks for it
         pass
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         pass
 
-    def downstream(self) -> A:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> A:
         first, *later = self.starts
-        total = first.downstream()
+        total = first.downstream(context=context)
         for start in later:
-            total = total + start.downstream()
+            total = total + start.downstream(context=context)
         return total
 
-    def downstream_batch(self) -> A:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> A:
         first, *later = self.starts
-        total = first.downstream_batch()
+        total = first.downstream_batch(context=context)
         for start in later:
-            total = total + start.downstream_batch()
+            total = total + start.downstream_batch(context=context)
         return total
 
 
@@ -89,24 +90,24 @@ class BranchArrayLayer[A](Hidden[A], ParameterFree[A]):
         self.merge = None
         split.ends.append(self)
 
-    def forward(self, x: A) -> A:
+    def forward(self, x: A, *, context: ForwardContext = NO_CONTEXT) -> A:
         self.x = x
         return self.split.x
 
-    def forward_batch(self, X: A) -> A:
+    def forward_batch(self, X: A, *, context: ForwardContext = NO_CONTEXT) -> A:
         self.X = X
         return self.split.X
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         pass
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         pass
 
-    def downstream(self) -> A:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> A:
         raise AssertionError("a branch's end is read by its poolings and its merge (the window branches workplan)")
 
-    def downstream_batch(self) -> A:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> A:
         raise AssertionError("a branch's end is read by its poolings and its merge (the window branches workplan)")
 
 
@@ -124,22 +125,22 @@ class MergeArrayLayer[A](Hidden[A], DeltaIsDownstream[A], ParameterFree[A]):
         for end in split.ends:
             end.merge = self
 
-    def forward(self, x: A) -> A:
+    def forward(self, x: A, *, context: ForwardContext = NO_CONTEXT) -> A:
         first, *later = self.split.ends
         total: Any = first.x
         for end in later:
             total = total + end.x
         return total + x
 
-    def forward_batch(self, X: A) -> A:
+    def forward_batch(self, X: A, *, context: ForwardContext = NO_CONTEXT) -> A:
         first, *later = self.split.ends
         total: Any = first.X
         for end in later:
             total = total + end.X
         return total + X
 
-    def downstream(self) -> A:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> A:
         return self.delta
 
-    def downstream_batch(self) -> A:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> A:
         return self.delta_batch

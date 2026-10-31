@@ -26,6 +26,7 @@ from typing import Any, ClassVar
 import numpy as np
 import numpy.typing as npt
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import (
     FloatArray,
     fan_in_aware_random_layer,
@@ -105,7 +106,7 @@ class StateInputArrayLayer(BatchShaped):
         """The batch's states, (N, state_size), which the next forward pass adds."""
         self.state = state
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = X.shape[0]
         assert self.state.shape == (n, self.state_size), (
             f"a StateInput needs the batch's states, ({n}, {self.state_size}); got {self.state.shape}"
@@ -120,10 +121,12 @@ class StateInputArrayLayer(BatchShaped):
         self._token_sum = _fold(downstream.reshape(n, self.tokens, self.features), axis=1)
         self.state_delta = self._token_sum @ self.P
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self.delta_batch
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         self.grad_P += self._token_sum.T @ self.state
 
 
@@ -154,7 +157,7 @@ class AttentionPoolingArrayLayer:
     def reset_gradient_accum(self) -> None:
         self.grad_q = np.zeros(self.q.shape)
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         """X (N, T * d), the tokens, to u (N, d)."""
         self._X = X.reshape(X.shape[0], self.tokens, self.features)
         S = self._X @ self.q
@@ -217,7 +220,7 @@ class GRUArrayLayer:
         self.b = np.concatenate([b for _, b in gates])
         self.b[s : 2 * s] = self.update_bias
 
-    def forward_batch(self, U_in: FloatArray, C: FloatArray) -> FloatArray:
+    def forward_batch(self, U_in: FloatArray, C: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         """u (N, d) and c (N, s) to h (N, s)."""
         s = self.state_size
         self._u, self._c = U_in, C
@@ -316,7 +319,9 @@ class CodesArrayLayer:
         distances = _fold(differences * differences, axis=2)
         return np.argmin(distances, axis=1)
 
-    def forward_batch(self, H: FloatArray, temperature: float | None = None) -> FloatArray:
+    def forward_batch(
+        self, H: FloatArray, temperature: float | None = None, *, context: ForwardContext = NO_CONTEXT
+    ) -> FloatArray:
         """h (N, size) to its nearest code (N, size), a new array; with a temperature, to its soft state."""
         self._H = H
         self.indices = self.nearest(H)
@@ -440,7 +445,7 @@ class InitialStateArrayLayer:
     def reset_gradient_accum(self) -> None:
         self.grad_c = np.zeros(self.c.shape)
 
-    def forward_batch(self, examples: int) -> FloatArray:
+    def forward_batch(self, examples: int, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         """c for each of examples examples, (examples, state_size), a new array."""
         return np.tile(self.c, (examples, 1))
 
@@ -615,7 +620,9 @@ class RecurrenceArrayLayer(RecurrenceSchedule):
         for f, dH in zip(self.factors, self._snap_backward(dC, weight), strict=True):
             f.initial_state.backward_batch(dH)
 
-    def forward_batch(self, X: FloatArray | Sequence[FloatArray], C: FloatArray) -> FloatArray:
+    def forward_batch(
+        self, X: FloatArray | Sequence[FloatArray], C: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> FloatArray:
         """
         The tokens the output layer reads, X (N, T * d), or each factor's, one a factor (the window
         branches workplan), and the state C (N, S), to the next state (N, S).
@@ -624,9 +631,9 @@ class RecurrenceArrayLayer(RecurrenceSchedule):
         tokens = list(X) if not isinstance(X, np.ndarray) else [X] * len(self.factors)
         hs: list[FloatArray] = []
         for g, f in enumerate(self.factors):
-            u = f.pooling.forward_batch(tokens[g])
+            u = f.pooling.forward_batch(tokens[g], context=context)
             inputs = np.concatenate([u, self._others(C, g)], axis=1) if self.cross else u
-            hs.append(f.cell.forward_batch(inputs, self._block(C, g)))
+            hs.append(f.cell.forward_batch(inputs, self._block(C, g), context=context))
         return self._snapped(hs, self.soft, self.reading)
 
     def backward_batch(self, dQ: FloatArray, weight: float) -> tuple[FloatArray | list[FloatArray], FloatArray]:

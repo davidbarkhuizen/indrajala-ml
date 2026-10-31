@@ -47,7 +47,7 @@ class _Next:
         self.W, self.delta_batch = _rust(W), _rust(delta_batch)
         self.rust = rust
 
-    def downstream_batch(self) -> Any:
+    def downstream_batch(self, *, context: Any = None) -> Any:
         downstream = pa.layer_downstream_batch(self.W, self.delta_batch)
         return downstream if self.rust else to_numpy(downstream)
 
@@ -55,7 +55,7 @@ class _Next:
     def fixed(downstream: pa.Array) -> Any:
         # a next layer whose downstream is given
         class Fixed:
-            def downstream_batch(self) -> pa.Array:
+            def downstream_batch(self, *, context: Any = None) -> pa.Array:
                 return downstream
 
         return Fixed()

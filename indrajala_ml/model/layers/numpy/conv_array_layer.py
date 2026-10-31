@@ -9,6 +9,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray, relu
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.specs.hidden_layers import BatchOnly, DeltaIsDownstream, Hidden
@@ -125,40 +126,44 @@ class ConvArrayLayer(WeightAndBias[FloatArray], ConvGeometryArrayLayer):
         self.b: FloatArray = np.zeros(channel_count)
         self.grad_b: FloatArray = np.zeros(channel_count)
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = X.shape[0]
         Z = self._products(X) + self.b  # (N, P, channel_count)
         self.Z = Z.transpose(0, 2, 1).reshape(n, self.size)  # channel-major
         self.A = relu(self.Z)
         return self.A
 
-    def forward(self, x: FloatArray) -> FloatArray:
-        self.a = self.forward_batch(x[np.newaxis, :])[0]
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        self.a = self.forward_batch(x[np.newaxis, :], context=context)[0]
         self.z = self.Z[0]
         return self.a
 
-    def compute_output_delta(self, reference: FloatArray) -> None:
+    def compute_output_delta(self, reference: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError(
             "ConvArrayLayer is a hidden layer, not an output one - see ConvUnit's identical "
             "guard: an unbounded ReLU activation isn't suited to any of this codebase's "
             "output-layer contracts."
         )
 
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
-        self.compute_output_delta(reference_batch)
+    def compute_output_delta_batch(self, reference_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.compute_output_delta(reference_batch, context=context)
 
-    def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[FloatArray]) -> None:
+    def compute_hidden_delta_batch(
+        self, next_layer: ArrayNetworkLayer[FloatArray], *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         # relu_delta's own convention: derivative 1 where the activation is > 0, 0 otherwise
         # (including exactly z == 0), read off the cached activation
-        self.delta_batch = next_layer.downstream_batch() * (self.A > 0.0)
+        self.delta_batch = next_layer.downstream_batch(context=context) * (self.A > 0.0)
 
-    def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[FloatArray]) -> None:
-        self.delta = next_layer.downstream() * (self.a > 0.0)
+    def compute_hidden_delta(
+        self, next_layer: ArrayNetworkLayer[FloatArray], *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
+        self.delta = next_layer.downstream(context=context) * (self.a > 0.0)
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self._downstream(self.delta_batch)
 
-    def downstream(self) -> FloatArray:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self._downstream(self.delta[np.newaxis, :])[0]
 
     def _accumulate(self, delta_batch: FloatArray) -> None:
@@ -169,10 +174,12 @@ class ConvArrayLayer(WeightAndBias[FloatArray], ConvGeometryArrayLayer):
         self._accumulate_W(D)
         self.grad_b += D.sum(axis=(0, 2))
 
-    def accumulate_gradient_batch(self, _input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, _input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         self._accumulate(self.delta_batch)
 
-    def accumulate_gradient(self, _input_activation: FloatArray) -> None:
+    def accumulate_gradient(self, _input_activation: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._accumulate(self.delta[np.newaxis, :])
 
     def reset_gradient_accum(self) -> None:
@@ -201,23 +208,25 @@ class LinearConvArrayLayer(
     def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
         (self.W,) = parameters
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = X.shape[0]
         self.A = self._products(X).transpose(0, 2, 1).reshape(n, self.size)  # channel-major
         return self.A
 
-    def forward(self, x: FloatArray) -> FloatArray:
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # classify_state's single-example forward pass
-        self.a = self.forward_batch(x[np.newaxis, :])[0]
+        self.a = self.forward_batch(x[np.newaxis, :], context=context)[0]
         return self.a
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self._downstream(self.delta_batch)
 
-    def accumulate_gradient(self, input_activation: FloatArray) -> None:
+    def accumulate_gradient(self, input_activation: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         refuse_single_example(self)
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         n = self.delta_batch.shape[0]
         self._accumulate_W(self.delta_batch.reshape(n, self.channel_count, self.positions))
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_node import BackpropNode
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
@@ -28,7 +29,7 @@ class NodeLayer:
 
         self.nodes: Sequence[BackpropNode] = [self._node_cls(input_nodes=self.input_layer.nodes) for _ in range(size)]
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for node in self.nodes:
             node.forward()
 
@@ -44,7 +45,7 @@ class NodeLayer:
 
     # the network calls these per layer, not per node, so a layer whose weights aren't one set
     # per node (ConvLayer's shared kernels) can override them
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for node in self.nodes:
             node.accumulate_gradient()
 
@@ -57,7 +58,7 @@ class BackpropLayer(NodeLayer):
     A layer of BackpropNodes, each with its weights and bias, fully connected to the input layer.
     """
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         # each node's downstream is the next layer's downstream_sum at its index, whatever that
         # layer is (a dense layer, or a residual block's fork, residual_layer.py)
         for own_index, node in enumerate(self.nodes):

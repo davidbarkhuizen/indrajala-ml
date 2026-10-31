@@ -6,6 +6,7 @@ import numpy as np
 import numpy.typing as npt
 
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 # the numpy backend's array: every numpy layer's weights, activations and gradients
 FloatArray = npt.NDArray[np.float64]
@@ -69,47 +70,49 @@ class ArrayLayer(WeightAndBias[FloatArray]):
         self.grad_W: FloatArray = np.zeros((size, input_size))
         self.grad_b: FloatArray = np.zeros(size)
 
-    def forward(self, x: FloatArray) -> FloatArray:
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.z = self.W @ x + self.b
         self.a = sigmoid(self.z)
         return self.a
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # X is (batch_size, input_size); self.b broadcasts across rows
         self.Z = X @ self.W.T + self.b
         self.A = sigmoid(self.Z)
         return self.A
 
-    def compute_output_delta(self, reference: FloatArray) -> None:
+    def compute_output_delta(self, reference: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.delta = (self.a - reference) * self.a * (1.0 - self.a)
 
-    def downstream(self) -> FloatArray:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # the gradient this layer sends back to its input, computed by the layer that owns the
         # weights (as BackpropLayer.downstream_sum), so a conv or pool layer can sit on either
         # side of any layer
         return self.W.T @ self.delta
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # downstream() for every row: (batch_size, size) @ (size, input_size)
         return self.delta_batch @ self.W
 
-    def compute_hidden_delta(self, next_layer: ArrayLayer) -> None:
-        downstream = next_layer.downstream()
+    def compute_hidden_delta(self, next_layer: ArrayLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
+        downstream = next_layer.downstream(context=context)
         self.delta = downstream * self.a * (1.0 - self.a)
 
-    def compute_output_delta_batch(self, reference_batch: FloatArray) -> None:
+    def compute_output_delta_batch(self, reference_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.delta_batch = (self.A - reference_batch) * self.A * (1.0 - self.A)
 
-    def compute_hidden_delta_batch(self, next_layer: ArrayLayer) -> None:
-        downstream = next_layer.downstream_batch()
+    def compute_hidden_delta_batch(self, next_layer: ArrayLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
+        downstream = next_layer.downstream_batch(context=context)
         self.delta_batch = downstream * self.A * (1.0 - self.A)
 
-    def accumulate_gradient(self, input_activation: FloatArray) -> None:
+    def accumulate_gradient(self, input_activation: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         # one example's gradient; callable once per example before any weight is written
         self.grad_W += np.outer(self.delta, input_activation)
         self.grad_b += self.delta
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         # the sum of every row's outer product, in one matrix multiply
         self.grad_W += self.delta_batch.T @ input_activation_batch
         self.grad_b += self.delta_batch.sum(axis=0)

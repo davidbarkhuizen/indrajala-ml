@@ -4,6 +4,7 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar, Self, cast
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
 from indrajala_ml.model.layers.python.python_layer_builder import build_python_layers
@@ -140,10 +141,10 @@ class BackpropNetworkBase[
     def randomize(self) -> None:
         raise NotImplementedError
 
-    def _forward(self, state: tuple[float, ...]) -> Any:
+    def _forward(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> Any:
         raise NotImplementedError
 
-    def _backward(self, target: Any, /) -> None:
+    def _backward(self, target: Any, /, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError
 
     def _output_deltas(self, target: Any, /) -> None:
@@ -153,16 +154,26 @@ class BackpropNetworkBase[
     def update_state_layer(self, state: tuple[float, ...]) -> None:
         self.input_layer.update_state(state)
 
-    def _forward_outputs(self, state: tuple[float, ...]) -> list[float]:
+    def _forward_context(self, states: Sequence[Sequence[float]]) -> ForwardContext:
+        """
+        The batch's forward context, built once from its states (the segments workplan, D3) and
+        passed to every layer's passes. Empty until the segments workplan's stage 7.
+        """
+        return NO_CONTEXT
+
+    def _forward_outputs(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> list[float]:
+        # an inference call gives no context: the example's own is built here
+        if context is None:
+            context = self._forward_context([state])
         self.update_state_layer(state)
         for layer in self.trainable_layers:
-            layer.forward()
+            layer.forward(context=context)
         return [node.value() for node in self.output_layer.nodes]
 
-    def _backward_hidden_layers(self) -> None:
+    def _backward_hidden_layers(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for layer_index in reversed(range(len(self.hidden_layers))):
             next_layer = self.trainable_layers[layer_index + 1]
-            self.hidden_layers[layer_index].compute_hidden_deltas(next_layer)
+            self.hidden_layers[layer_index].compute_hidden_deltas(next_layer, context=context)
 
     def _set_training_mode(self, training: bool) -> None:
         # on for one training call only: the trainers classify with the same network between
@@ -180,13 +191,14 @@ class BackpropNetworkBase[
         # Training mode for the forward pass only: a no-op but for dropout layers. A network with
         # batch norm refuses (D4).
         self._refuse_single_example()
+        context = self._forward_context([state])
         self._set_training_mode(True)
         try:
-            self._forward(state)
+            self._forward(state, context=context)
         finally:
             self._set_training_mode(False)
-        self._backward(category)
-        self._apply_gradients(learning_rate)
+        self._backward(category, context=context)
+        self._apply_gradients(learning_rate, context=context)
 
     def _learn_batch(
         self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]], clip_norm: float | None = None
@@ -202,12 +214,13 @@ class BackpropNetworkBase[
             refuse_single_example_groups(self.layer_specs, len(batch))
             self._learn_batch_layer_major(learning_rate, batch, clip_norm)
             return
+        context = self._forward_context([state for state, _target in batch])
         self._set_training_mode(True)
         try:
             for state, target in batch:
-                self._forward(state)
-                self._backward(target)
-                self._accumulate_gradients()
+                self._forward(state, context=context)
+                self._backward(target, context=context)
+                self._accumulate_gradients(context=context)
             self.optimizer.step(self.trainable_layers, learning_rate, len(batch), clip_norm)
         finally:
             self._set_training_mode(False)
@@ -216,12 +229,13 @@ class BackpropNetworkBase[
         self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]], clip_norm: float | None
     ) -> None:
         # the batch forward, then backward, layer by layer (layer_major.py), then one averaged update
+        context = self._forward_context([state for state, _target in batch])
         self._set_training_mode(True)
         try:
             pass_ = LayerMajorBatch(self.input_layer, self.trainable_layers, [state for state, _target in batch])
-            pass_.forward()
-            pass_.backward(lambda example: self._output_deltas(batch[example][1]))
-            pass_.accumulate_gradients()
+            pass_.forward(context=context)
+            pass_.backward(lambda example: self._output_deltas(batch[example][1]), context=context)
+            pass_.accumulate_gradients(context=context)
             self.optimizer.step(self.trainable_layers, learning_rate, len(batch), clip_norm)
         finally:
             self._set_training_mode(False)
@@ -229,21 +243,22 @@ class BackpropNetworkBase[
     def _forward_batch_outputs(self, states: Sequence[tuple[float, ...]]) -> list[list[float]]:
         # the output rows of the forward pass learn_batch runs over states, in the training mode
         # the caller set: per example, or layer-major for a network with batch norm or dropout
+        context = self._forward_context(states)
         if not self._layer_major:
-            return [self._forward_outputs(state) for state in states]
+            return [self._forward_outputs(state, context=context) for state in states]
         pass_ = LayerMajorBatch(self.input_layer, self.trainable_layers, states)
-        pass_.forward()
+        pass_.forward(context=context)
         return pass_.outputs()
 
-    def _apply_gradients(self, learning_rate: float) -> None:
+    def _apply_gradients(self, learning_rate: float, *, context: ForwardContext = NO_CONTEXT) -> None:
         optimizer = self.optimizer
         optimizer.begin_step()
         for index, layer in enumerate(self.trainable_layers):
-            optimizer.step_single(index, layer, learning_rate)
+            optimizer.step_single(index, layer, learning_rate, context=context)
 
-    def _accumulate_gradients(self) -> None:
+    def _accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for layer in self.trainable_layers:
-            layer.accumulate_gradients()
+            layer.accumulate_gradients(context=context)
 
     def snapshot(self) -> list[list[Any]]:
         return [layer.snapshot_state() for layer in self.trainable_layers]

@@ -6,6 +6,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.rust.residual_rust_array_layer import ForkRustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer, before_layer_norm
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class DropoutRustArrayLayer(RustArrayLayer):
@@ -31,24 +32,24 @@ class DropoutRustArrayLayer(RustArrayLayer):
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.a, self._mask, self._base_activation = pa.layer_dropout_forward(
             self.W, x, self.b, self._drop_probability, self.training, self.rng
         )
         self._was_training = self.training
         return self.a
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.A, self._mask_batch, self._base_activation_batch = pa.layer_dropout_forward_batch(
             self.W, X, self.b, self._drop_probability, self.training, self.rng
         )
         self._was_training = self.training
         return self.A
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         if before_layer_norm(next_layer):
             self.delta = pa.array_dropout_mask(
-                next_layer.downstream(), self._base_activation, self._mask, self._keep_probability, self._was_training
+                next_layer.downstream(context=context), self._base_activation, self._mask, self._keep_probability, self._was_training
             )
             return
         if isinstance(next_layer, ForkRustArrayLayer):
@@ -73,10 +74,10 @@ class DropoutRustArrayLayer(RustArrayLayer):
             self._was_training,
         )
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         if before_layer_norm(next_layer):
             self.delta_batch = pa.array_dropout_mask(
-                next_layer.downstream_batch(),
+                next_layer.downstream_batch(context=context),
                 self._base_activation_batch,
                 self._mask_batch,
                 self._keep_probability,

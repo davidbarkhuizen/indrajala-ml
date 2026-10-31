@@ -12,6 +12,7 @@ from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.specs.hidden_layers import BatchOnly, DeltaIsDownstream, Hidden
 from indrajala_ml.model.specs.single_example import refuse_single_example
 from indrajala_ml.model.specs.window_geometry import validate_conv_arguments
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class ConvGeometryRustArrayLayer:
@@ -54,7 +55,7 @@ class ConvGeometryRustArrayLayer:
         self.W = pa.Array.zeros((channel_count, self.fan_in))
         self.grad_W = pa.Array.zeros((channel_count, self.fan_in))
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.conv_downstream_batch(self.W, self.delta_batch, self.geometry)
 
 
@@ -83,41 +84,41 @@ class ConvRustArrayLayer(WeightAndBias[pa.Array], ConvGeometryRustArrayLayer):
         self.b = pa.Array.zeros(channel_count)
         self.grad_b = pa.Array.zeros(channel_count)
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.A, self._cols = pa.conv_forward_batch(self.W, X, self.b, self.geometry)
         return self.A
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.a, self._cols = pa.conv_forward_batch(self.W, x, self.b, self.geometry)
         return self.a
 
-    def compute_output_delta(self, reference: pa.Array) -> None:
+    def compute_output_delta(self, reference: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError(
             "ConvRustArrayLayer is a hidden layer, not an output one - see ConvUnit's identical "
             "guard: an unbounded ReLU activation isn't suited to any of this codebase's "
             "output-layer contracts."
         )
 
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
-        self.compute_output_delta(reference_batch)
+    def compute_output_delta_batch(self, reference_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.compute_output_delta(reference_batch, context=context)
 
-    def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[pa.Array]) -> None:
+    def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[pa.Array], *, context: ForwardContext = NO_CONTEXT) -> None:
         # array_relu_mask: derivative 0 at exactly z == 0, the same convention as ConvArrayLayer
-        self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(), self.A)
+        self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(context=context), self.A)
 
-    def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[pa.Array]) -> None:
-        self.delta = pa.array_relu_mask(next_layer.downstream(), self.a)
+    def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[pa.Array], *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.delta = pa.array_relu_mask(next_layer.downstream(context=context), self.a)
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.conv_downstream_batch(self.W, self.delta, self.geometry)
 
-    def accumulate_gradient_batch(self, _input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, _input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         # reads the im2col columns forward cached, as ConvArrayLayer._accumulate does
         self.grad_W, self.grad_b = pa.conv_accumulate_gradient_batch(
             self.delta_batch, self._cols, self.grad_W, self.grad_b, self.geometry
         )
 
-    def accumulate_gradient(self, _input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, _input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_W, self.grad_b = pa.conv_accumulate_gradient_batch(
             self.delta, self._cols, self.grad_W, self.grad_b, self.geometry
         )
@@ -145,19 +146,19 @@ class LinearConvRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], DeltaIsDow
     def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
         (self.W,) = parameters
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.A, self._cols = pa.conv_linear_forward_batch(self.W, X, self.geometry)
         return self.A
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # classify_state's single-example forward pass
         self.a, self._cols = pa.conv_linear_forward_batch(self.W, x, self.geometry)
         return self.a
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         refuse_single_example(self)
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         # reads the im2col columns forward cached
         self.grad_W = pa.conv_linear_accumulate_gradient_batch(self.delta_batch, self._cols, self.grad_W, self.geometry)
 

@@ -9,6 +9,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.specs.hidden_layers import BatchOnly, DeltaIsDownstream, Hidden
 from indrajala_ml.model.specs.single_example import refuse_single_example
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class LinearRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], DeltaIsDownstream[pa.Array]):
@@ -36,23 +37,23 @@ class LinearRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], DeltaIsDownstr
     def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
         (self.W,) = parameters
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # classify_state's single-example forward pass
         self.a = pa.linear_forward(self.W, x)
         return self.a
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.A = pa.linear_forward_batch(self.W, X)
         return self.A
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # RustArrayLayer.downstream_batch: the gradient into a conv or pool layer before this one
         return pa.layer_downstream_batch(self.W, self.delta_batch)
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         refuse_single_example(self)
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_W = pa.linear_accumulate_gradient_batch(self.delta_batch, input_activation_batch, self.grad_W)
 
     def reset_gradient_accum(self) -> None:

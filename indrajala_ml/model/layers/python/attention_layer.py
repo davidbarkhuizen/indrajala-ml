@@ -50,6 +50,7 @@ import math
 from collections.abc import Sequence
 from typing import ClassVar
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer
 from indrajala_ml.model.layers.python.token_layer import (
@@ -276,7 +277,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         # one product over all heads' columns
         return _affine(H, self.outputs)
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._Q, self._K, self._V = self._project(self._inputs())
         self._P, self._H, self._M = self._attend(self._Q, self._K, self._V)
         out = self._combine(self._H)
@@ -342,7 +343,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         dXq, dXk, dXv = _times_rows(dQ, self.queries), _times_rows(dK, self.keys), _times_rows(dV, self.values)
         return [(q + k) + v for q_row, k_row, v_row in zip(dXq, dXk, dXv) for q, k, v in zip(q_row, k_row, v_row)]
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
         dH = self._combine_backward(self._deltas())
@@ -355,7 +356,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     def downstream_sum(self, own_index: int) -> float:
         return self._dX[own_index]
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         # each projection's rows over this example's tokens in order, after the examples before it
         X = self._inputs()
         for rows, gradient, inputs in (

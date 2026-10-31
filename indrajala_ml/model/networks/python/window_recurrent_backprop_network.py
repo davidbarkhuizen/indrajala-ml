@@ -33,6 +33,7 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar, Self
 
+from indrajala_ml.model.layers.forward_context import ForwardContext
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
 from indrajala_ml.model.layers.python.recurrent_layer import RecurrenceLayer, Rows, StateInputLayer
@@ -152,8 +153,10 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
         for state_input in self._state_inputs:
             state_input.states = C
         batch = LayerMajorBatch(self.input_layer, self.trainable_layers, window)
-        batch.forward()
-        return batch, self.recurrence_layer.forward_batch(batch.values(self._pooling_reads - 1), C)
+        # the window's forward context (the segments workplan, D3), kept for its backward pass
+        context = self._window_context = self._forward_context(window)
+        batch.forward(context=context)
+        return batch, self.recurrence_layer.forward_batch(batch.values(self._pooling_reads - 1), C, context=context)
 
     def forward_windows(self, states: Sequence[Sequence[float]]) -> list[list[float]]:
         """The inference forward pass: each column's digit probabilities, W * k * classes per example."""
@@ -165,7 +168,8 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
                 row.extend(output)
         return outputs
 
-    def _forward(self, state: tuple[float, ...]) -> list[float]:
+    def _forward(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> list[float]:
+        # forward_windows builds each window's own context
         return self.forward_windows([state])[0]
 
     def predict_probabilities(self, state: tuple[float, ...]) -> list[list[float]]:
@@ -225,6 +229,7 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
         # one window's backward pass after its forward pass: its gradients accumulated, and its
         # state's gradient returned, from the next state's dC_next and its digits' labels
         pooled, dC = self.recurrence_layer.backward_batch(dC_next, weight)
+        context = self._window_context
 
         width = self.class_count
 
@@ -237,8 +242,8 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
                 node.compute_output_delta(1.0 if c == label[t] else 0.0)
                 node.delta = node.delta * weight
 
-        batch.backward(output_deltas, (self._pooling_reads, pooled))
-        batch.accumulate_gradients()
+        batch.backward(output_deltas, (self._pooling_reads, pooled), context=context)
+        batch.accumulate_gradients(context=context)
 
         for state_input in self._state_inputs:
             dC = [[a + b for a, b in zip(row, delta, strict=True)] for row, delta in zip(dC, state_input.state_deltas)]

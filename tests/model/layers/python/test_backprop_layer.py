@@ -129,7 +129,7 @@ class _CallCountingLayer:
         self.restore_calls = 0
         self.last_restored: object = None
 
-    def accumulate_gradients(self):
+    def accumulate_gradients(self, *, context: object = None):
         self.accumulate_calls += 1
 
     def weight_sets(self) -> list[object]:

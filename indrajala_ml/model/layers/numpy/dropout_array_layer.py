@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray, sigmoid
 
 
@@ -35,7 +36,7 @@ class DropoutArrayLayer(ArrayLayer):
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
-    def forward(self, x: FloatArray) -> FloatArray:
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.z = self.W @ x + self.b
         base = sigmoid(self.z)
         if self.training:
@@ -48,7 +49,7 @@ class DropoutArrayLayer(ArrayLayer):
         self._was_training = self.training
         return self.a
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # an independent mask row per example, as batch_size single forward passes would draw
         batch_size = X.shape[0]
         self.Z = X @ self.W.T + self.b
@@ -63,14 +64,14 @@ class DropoutArrayLayer(ArrayLayer):
         self._was_training = self.training
         return self.A
 
-    def compute_hidden_delta(self, next_layer: ArrayLayer) -> None:
-        downstream = next_layer.downstream()
+    def compute_hidden_delta(self, next_layer: ArrayLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
+        downstream = next_layer.downstream(context=context)
         sigmoid_derivative = self._base_activation * (1.0 - self._base_activation)
         scale = (self._mask / self._keep_probability) if self._was_training else 1.0
         self.delta = downstream * sigmoid_derivative * scale
 
-    def compute_hidden_delta_batch(self, next_layer: ArrayLayer) -> None:
-        downstream = next_layer.downstream_batch()
+    def compute_hidden_delta_batch(self, next_layer: ArrayLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
+        downstream = next_layer.downstream_batch(context=context)
         sigmoid_derivative = self._base_activation_batch * (1.0 - self._base_activation_batch)
         scale = (self._mask_batch / self._keep_probability) if self._was_training else 1.0
         self.delta_batch = downstream * sigmoid_derivative * scale

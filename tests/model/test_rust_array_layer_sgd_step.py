@@ -110,7 +110,9 @@ def _random_layer_state(layer: RustArrayLayer, rng: np.random.Generator) -> pa.A
 
 def _unfused_step_single(optimizer: RustOptimizer) -> Callable[[int, Any, pa.Array, float], None]:
     # the step before it was fused: accumulate, then apply at batch_size=1
-    def step_single(index: int, layer: Any, input_activation: pa.Array, learning_rate: float) -> None:
+    def step_single(
+        index: int, layer: Any, input_activation: pa.Array, learning_rate: float, *, context: Any = None
+    ) -> None:
         layer.accumulate_gradient(input_activation)
         optimizer.apply(index, layer, learning_rate, 1)
 

@@ -47,6 +47,7 @@ import math
 import numpy as np
 
 from indrajala_ml.model.layers.array.array_parameters import AttentionProjections
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
@@ -205,7 +206,7 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         # H as (N * T, h * d_k) rows: one product over all heads' columns
         return H @ self.Wo.T + self.bo
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         Q, K, V = self._project(self._rows(X, self.features))
         self._Q, self._K, self._V = self._heads(Q), self._heads(K), self._heads(V)
         self._P, H = self._attend(self._Q, self._K, self._V)
@@ -270,10 +271,12 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
             self._dQ, self._dK = self._rotated(self._dQ, inverse=True), self._rotated(self._dK, inverse=True)
         self._dX = self._project_backward(self._dQ, self._dK, self._dV).reshape(downstream.shape)
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self._dX
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         X = self._rows(input_activation_batch, self.features)
         delta = self._rows(self.delta_batch, self.features)
         self.grad_Wq += self._dQ.T @ X
