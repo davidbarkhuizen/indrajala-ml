@@ -117,8 +117,8 @@ path. `ab.py --script-from each` (#1136) times a benchmark script's own change. 
   default paths: four short s3 attempts all ended and were pulled, with each worker's commit and crate
   matched. It found three faults, fixed in #7: each host's `wt-batch` is an ml worktree (the runner's
   is now `wt-studies`), stone's `~/labour/bundles` was gone, and klip has no GitHub ssh key (studies
-  is cloned over https). The old ml worktrees are deletable: `~/code/wt-batch` on `klip` and `jebel`,
-  `~/labour/code/wt-batch` on `stone`.
+  is cloned over https). The old ml worktrees (`~/code/wt-batch` on `klip` and `jebel`,
+  `~/labour/code/wt-batch` on `stone`) were removed the same day.
 - **The runner's hosts keep ml's venvs** (`/home/david/code/indrajala-ml/.venv`, stone's
   `wt-branches/.venv`): they hold the same dependencies; a studies-only dependency would need them
   rebuilt from studies.
