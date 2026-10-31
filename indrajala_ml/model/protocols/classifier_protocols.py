@@ -45,7 +45,10 @@ class TrainableClassifier[L](StateClassifier[L], Protocol):
 class BatchTrainableClassifier[L](TrainableClassifier[L], Protocol):
     """A student train_backprop_network_mini_batch can train: a gradient-based network."""
 
-    def learn_batch(self, learning_rate: float, batch: Sequence[Example[L]]) -> None: ...
+    # clip_norm: clip the batch gradient's global L2 norm to it (optimizer_base.OptimizerBase.step)
+    def learn_batch(
+        self, learning_rate: float, batch: Sequence[Example[L]], clip_norm: float | None = None
+    ) -> None: ...
 
 
 @runtime_checkable
@@ -56,7 +59,9 @@ class PreparedTrainableClassifier[L](BatchTrainableClassifier[L], Protocol):
 
     def learn_row(self, learning_rate: float, prepared: PreparedDataset, index: int) -> None: ...
 
-    def learn_batch_rows(self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int]) -> None: ...
+    def learn_batch_rows(
+        self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int], clip_norm: float | None = None
+    ) -> None: ...
 
     def classify_rows(self, prepared: PreparedDataset) -> list[L]: ...
 

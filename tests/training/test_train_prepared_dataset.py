@@ -38,7 +38,7 @@ class _TupleRecorder:
     def learn(self, learning_rate: float, state: State, category: int) -> None:
         self.learned.append((state, category))
 
-    def learn_batch(self, learning_rate: float, batch: Sequence[Example[int]]) -> None:
+    def learn_batch(self, learning_rate: float, batch: Sequence[Example[int]], clip_norm: float | None = None) -> None:
         self.batches.append(list(batch))
 
     def classify_state(self, state: State) -> int:
@@ -60,7 +60,7 @@ class _RowRecorder(_TupleRecorder):
     def learn(self, learning_rate: float, state: State, category: int) -> None:
         raise AssertionError("an array student must be trained through learn_row")
 
-    def learn_batch(self, learning_rate: float, batch: Sequence[Example[int]]) -> None:
+    def learn_batch(self, learning_rate: float, batch: Sequence[Example[int]], clip_norm: float | None = None) -> None:
         raise AssertionError("an array student must be trained through learn_batch_rows")
 
     def classify_state(self, state: State) -> int:
@@ -73,7 +73,9 @@ class _RowRecorder(_TupleRecorder):
     def learn_row(self, learning_rate: float, prepared: PreparedDataset, index: int) -> None:
         self.learned.append(self._row(prepared, index))
 
-    def learn_batch_rows(self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int]) -> None:
+    def learn_batch_rows(
+        self, learning_rate: float, prepared: PreparedDataset, indices: Sequence[int], clip_norm: float | None = None
+    ) -> None:
         self.batches.append([self._row(prepared, index) for index in indices])
 
     def classify_row(self, prepared: PreparedDataset, index: int) -> int:

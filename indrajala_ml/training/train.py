@@ -1,3 +1,4 @@
+import math
 from collections.abc import Sequence
 from random import Random
 
@@ -204,6 +205,7 @@ def train_backprop_network_mini_batch[L](
     reshuffle_each_epoch: bool = True,
     rng: Random | None = None,
     resume_from: RunCheckpoint | None = None,
+    clip_norm: float | None = None,
 ) -> ConvergenceSeries:
     """
     train_linear_classifier_network with mini-batches, for gradient-based students (any network with
@@ -231,10 +233,19 @@ def train_backprop_network_mini_batch[L](
     then take the steps the run would have taken had it never stopped, by bits. The checkpoint
     records learning_rate as a Schedule (a float as Constant; a bare callable isn't recorded), and
     resuming under another schedule is refused, naming both (the training-recipe workplan, D5).
+
+    clip_norm clips each batch gradient's global L2 norm, over every parameter, to it before the
+    update rule reads it (Pascanu et al. 2013; the training-recipe workplan, D10;
+    optimizer_base.OptimizerBase.step). None, the default, doesn't clip; a student is asked to clip
+    only when it is set.
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"
+    if clip_norm is not None and not (math.isfinite(clip_norm) and clip_norm > 0.0):
+        raise ValueError(f"clip_norm must be finite and above 0; got {clip_norm!r}")
     rng = Random() if rng is None else rng
+    # the clip passes to the student only when set, so a student that can't clip still trains
+    clip: dict[str, float] = {} if clip_norm is None else {"clip_norm": clip_norm}
     drop_single = _has_batch_norm(student)
     if drop_single:
         _refuse_single_example_groups(student, len(training_data), batch_size)
@@ -281,13 +292,13 @@ def train_backprop_network_mini_batch[L](
         if prepared is not None:
             assert isinstance(student, PreparedTrainableClassifier)  # _prepared_for's contract
             for indices in _chunk_into_batches(epoch_order(range(len(prepared))), batch_size, drop_single):
-                student.learn_batch_rows(_rate(learning_rate, iterations), prepared, indices)
+                student.learn_batch_rows(_rate(learning_rate, iterations), prepared, indices, **clip)
                 iterations += 1
                 record_disagreement()
         else:
             assert not isinstance(training_data, PreparedDataset)  # a PreparedDataset always has prepared
             for batch in _chunk_into_batches(epoch_order(training_data), batch_size, drop_single):
-                student.learn_batch(_rate(learning_rate, iterations), batch)
+                student.learn_batch(_rate(learning_rate, iterations), batch, **clip)
                 iterations += 1
                 record_disagreement()
 

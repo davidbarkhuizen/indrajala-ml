@@ -173,6 +173,15 @@ class ArrayOptimizer[A: BackendArray](Protocol):
 
     def apply(self, index: int, layer: ArrayNetworkLayer[A], learning_rate: float, batch_size: int) -> None: ...
 
+    # every layer's update after a batch, clipping by the global norm when asked (optimizer_base.py)
+    def step(
+        self,
+        layers: Sequence[ArrayNetworkLayer[A]],
+        learning_rate: float,
+        batch_size: int,
+        clip_norm: float | None = None,
+    ) -> None: ...
+
     def step_single(
         self, index: int, layer: ArrayNetworkLayer[A], input_activation: A, learning_rate: float
     ) -> None: ...

@@ -107,6 +107,10 @@ class _RecordingOptimizer:
     def begin_step(self) -> None:
         pass
 
+    def step(self, layers: Any, learning_rate: float, batch_size: int, clip_norm: float | None = None) -> None:
+        for index, layer in enumerate(layers):
+            self.apply(index, layer, learning_rate, batch_size)
+
     def apply(self, index: int, layer: Any, _learning_rate: float, _batch_size: int) -> None:
         if self.python:
             # a dense layer's nodes, a conv layer's kernels or a batch-norm layer's features ([gamma]

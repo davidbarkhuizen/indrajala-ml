@@ -282,7 +282,7 @@ def test_the_layer_major_path_is_the_example_major_loop_by_bits(name: str, rule:
     for size in (3, 5, 4):
         batch = rows(specs, size, seed=size)
         example_major.learn_batch(0.3, batch)
-        layer_major._learn_batch_layer_major(0.3, batch)  # pyright: ignore[reportPrivateUsage]
+        layer_major._learn_batch_layer_major(0.3, batch, None)  # pyright: ignore[reportPrivateUsage]
     assert bits(layer_major.snapshot()) == bits(example_major.snapshot())
 
 

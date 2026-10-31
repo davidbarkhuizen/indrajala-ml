@@ -7,8 +7,9 @@ rule's state per layer, keyed by the layer's index in network.layers, and one st
 whole network. The layers keep their weights and gradient accumulators; the formulas are here, with
 the source's grouping (README, Update rules).
 
-ArrayNetworkBase calls begin_step() once per learn* call, then per layer in forward order either
-apply() after accumulating a batch or step_single() for one example. Every layer is stepped alike:
+ArrayNetworkBase calls step() once per batch, after accumulating every layer's gradient (it
+advances t, then applies each layer in forward order, clipping by the global norm when asked), or
+begin_step() and then step_single() per layer for one example. Every layer is stepped alike:
 the numpy optimizer steps each of its parameters (array_protocols.TrainedArrayLayer), and every
 rule's formula, and every fused Rust op, takes arrays of any matching shapes. A pool layer has
 nothing to step.
@@ -24,7 +25,12 @@ from typing import Any
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.optimizers.optimizer_base import OptimizerBase
 from indrajala_ml.model.persistence.checkpoint import OptimizerState
-from indrajala_ml.model.protocols.array_protocols import ArrayBackend, BackendArray, TrainedArrayLayer
+from indrajala_ml.model.protocols.array_protocols import (
+    ArrayBackend,
+    ArrayNetworkLayer,
+    BackendArray,
+    TrainedArrayLayer,
+)
 from indrajala_ml.model.specs.update_rules import UpdateRule
 
 
@@ -46,7 +52,7 @@ def momentum_update(
     return velocity
 
 
-class ArrayOptimizerBase[A: BackendArray, T, R](OptimizerBase[list[A], T, R]):
+class ArrayOptimizerBase[A: BackendArray, T, R](OptimizerBase[list[A], T, R, ArrayNetworkLayer[A]]):
     """
     What NumpyOptimizer and RustOptimizer share: their state per layer, the rule's state arrays per
     parameter in parameters() order (momentum's velocity; Adam's m, then v), copied out and in

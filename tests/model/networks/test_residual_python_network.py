@@ -83,7 +83,7 @@ def test_the_layer_major_path_is_the_example_major_loop_by_bits(name: str, rule:
     for size in (3, 5, 4):
         batch = [(tuple(rng.uniform(-1.0, 1.0) for _ in range(INPUT)), i % 3) for i in range(size)]
         example_major.learn_batch(0.3, batch)
-        layer_major._learn_batch_layer_major(0.3, batch)
+        layer_major._learn_batch_layer_major(0.3, batch, None)
 
     assert bits(layer_major.snapshot()) == bits(example_major.snapshot())
     assert bits(list(layer_major.optimizer.state().layers.values())) == bits(

@@ -188,7 +188,9 @@ class BackpropNetworkBase[
         self._backward(category)
         self._apply_gradients(learning_rate)
 
-    def _learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]]) -> None:
+    def _learn_batch(
+        self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]], clip_norm: float | None = None
+    ) -> None:
         # forward, backward and accumulate per example, then one averaged update. A one-example
         # batch matches learn() bit for bit (tests/model/layers/python/test_gradient_accumulation.py). The target is
         # a float or a class index; _forward/_backward abstract over which. A network with batch
@@ -198,7 +200,7 @@ class BackpropNetworkBase[
             if len(batch) == 1:
                 self._refuse_single_example()
             refuse_single_example_groups(self.layer_specs, len(batch))
-            self._learn_batch_layer_major(learning_rate, batch)
+            self._learn_batch_layer_major(learning_rate, batch, clip_norm)
             return
         self._set_training_mode(True)
         try:
@@ -206,11 +208,13 @@ class BackpropNetworkBase[
                 self._forward(state)
                 self._backward(target)
                 self._accumulate_gradients()
-            self._apply_accumulated_gradients(learning_rate, len(batch))
+            self.optimizer.step(self.trainable_layers, learning_rate, len(batch), clip_norm)
         finally:
             self._set_training_mode(False)
 
-    def _learn_batch_layer_major(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]]) -> None:
+    def _learn_batch_layer_major(
+        self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], Any]], clip_norm: float | None
+    ) -> None:
         # the batch forward, then backward, layer by layer (layer_major.py), then one averaged update
         self._set_training_mode(True)
         try:
@@ -218,7 +222,7 @@ class BackpropNetworkBase[
             pass_.forward()
             pass_.backward(lambda example: self._output_deltas(batch[example][1]))
             pass_.accumulate_gradients()
-            self._apply_accumulated_gradients(learning_rate, len(batch))
+            self.optimizer.step(self.trainable_layers, learning_rate, len(batch), clip_norm)
         finally:
             self._set_training_mode(False)
 
@@ -240,12 +244,6 @@ class BackpropNetworkBase[
     def _accumulate_gradients(self) -> None:
         for layer in self.trainable_layers:
             layer.accumulate_gradients()
-
-    def _apply_accumulated_gradients(self, learning_rate: float, batch_size: int) -> None:
-        optimizer = self.optimizer
-        optimizer.begin_step()
-        for index, layer in enumerate(self.trainable_layers):
-            optimizer.apply(index, layer, learning_rate, batch_size)
 
     def snapshot(self) -> list[list[Any]]:
         return [layer.snapshot_state() for layer in self.trainable_layers]

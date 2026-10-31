@@ -8,8 +8,9 @@ are here, in Python floats with the source's grouping (README, Update rules), as
 optimizers' (numpy_optimizer.py, rust_optimizer.py) are on arrays. A module of its own so the
 pure-Python networks import neither numpy nor the Rust extension.
 
-BackpropNetworkBase calls begin_step() once per learn* call, then per layer in forward order
-either apply() after accumulating a batch or step_single() for one example. state() and
+BackpropNetworkBase calls step() once per batch, after accumulating every layer's gradients (it
+advances t, then applies each layer in forward order, clipping by the global norm when asked), or
+begin_step() and then step_single() per layer for one example. state() and
 load_state() copy t and the state out and back in (checkpoint.py).
 """
 
@@ -38,7 +39,7 @@ def _copy_layers(layers: dict[int, list[WeightSetState]]) -> dict[int, list[Weig
     }
 
 
-class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], None]):
+class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], None, TrainableLayer]):
     """
     The optimizer of the pure-Python networks: each rule's formulas per weight, in Python floats.
     Its state per layer: each weight set's, in the layer's weight_sets() order.
@@ -56,6 +57,27 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
         self._apply_rule(index, weight_sets, learning_rate, batch_size)
         for weight_set in weight_sets:
             weight_set.reset_gradient_accum()
+
+    def _squared_gradient(self, layer: TrainableLayer) -> float:
+        # weight set by weight set: its weights' accumulators, then its bias's
+        squares = 0.0
+        for weight_set in layer.weight_sets():
+            for accum in weight_set.weight_gradient_accum:
+                squares += accum * accum
+            if weight_set.has_bias:
+                squares += weight_set.bias_gradient_accum * weight_set.bias_gradient_accum
+        return squares
+
+    def _weight_accum(self, weight_set: WeightSet) -> list[float]:
+        # a weight set's accumulators as a rule reads them: times the clip factor during a step
+        # that clips (OptimizerBase.step)
+        scale = self._gradient_scale
+        accum = weight_set.weight_gradient_accum
+        return accum if scale is None else [value * scale for value in accum]
+
+    def _bias_accum(self, weight_set: WeightSet) -> float:
+        scale = self._gradient_scale
+        return weight_set.bias_gradient_accum if scale is None else weight_set.bias_gradient_accum * scale
 
     def step_single(self, index: int, layer: TrainableLayer, learning_rate: float) -> None:
         # accumulate, then apply at batch_size=1
@@ -78,11 +100,11 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
             weight_set.set_weights(
                 [
                     weight - learning_rate * (accum / batch_size)
-                    for weight, accum in zip(weight_set.weights, weight_set.weight_gradient_accum)
+                    for weight, accum in zip(weight_set.weights, self._weight_accum(weight_set))
                 ]
             )
             if weight_set.has_bias:
-                weight_set.bias = weight_set.bias - learning_rate * (weight_set.bias_gradient_accum / batch_size)
+                weight_set.bias = weight_set.bias - learning_rate * (self._bias_accum(weight_set) / batch_size)
 
     def _apply_weight_decay(
         self, _index: int, weight_sets: Sequence[WeightSet], learning_rate: float, batch_size: int
@@ -98,12 +120,12 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
             weight_set.set_weights(
                 [
                     weight - learning_rate * (accum / batch_size + l2_lambda * weight)
-                    for weight, accum in zip(weight_set.weights, weight_set.weight_gradient_accum)
+                    for weight, accum in zip(weight_set.weights, self._weight_accum(weight_set))
                 ]
             )
             # bias unregularized
             if weight_set.has_bias:
-                weight_set.bias = weight_set.bias - learning_rate * (weight_set.bias_gradient_accum / batch_size)
+                weight_set.bias = weight_set.bias - learning_rate * (self._bias_accum(weight_set) / batch_size)
 
     def _apply_momentum(
         self, index: int, weight_sets: Sequence[WeightSet], learning_rate: float, batch_size: int
@@ -113,13 +135,13 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
         for weight_set, (weight_state, bias_state) in zip(weight_sets, self._zeros(index, weight_sets, 1)):
             weight_state[0] = [
                 momentum * velocity + accum / batch_size
-                for velocity, accum in zip(weight_state[0], weight_set.weight_gradient_accum)
+                for velocity, accum in zip(weight_state[0], self._weight_accum(weight_set))
             ]
             weight_set.set_weights(
                 [weight - learning_rate * velocity for weight, velocity in zip(weight_set.weights, weight_state[0])]
             )
             if weight_set.has_bias:
-                bias_state[0] = momentum * bias_state[0] + weight_set.bias_gradient_accum / batch_size
+                bias_state[0] = momentum * bias_state[0] + self._bias_accum(weight_set) / batch_size
                 weight_set.bias = weight_set.bias - learning_rate * bias_state[0]
 
     def _apply_adam(self, index: int, weight_sets: Sequence[WeightSet], learning_rate: float, batch_size: int) -> None:
@@ -133,7 +155,7 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
             new_m: list[float] = []
             new_v: list[float] = []
             for weight, accum, m, v in zip(
-                weight_set.weights, weight_set.weight_gradient_accum, weight_state[0], weight_state[1]
+                weight_set.weights, self._weight_accum(weight_set), weight_state[0], weight_state[1]
             ):
                 g = accum / batch_size
                 m = beta1 * m + (1 - beta1) * g
@@ -149,7 +171,7 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
 
             if not weight_set.has_bias:
                 continue
-            g_bias = weight_set.bias_gradient_accum / batch_size
+            g_bias = self._bias_accum(weight_set) / batch_size
             bias_state[0] = beta1 * bias_state[0] + (1 - beta1) * g_bias
             bias_state[1] = beta2 * bias_state[1] + (1 - beta2) * g_bias * g_bias
             bias_m_hat = bias_state[0] / bias_correction1

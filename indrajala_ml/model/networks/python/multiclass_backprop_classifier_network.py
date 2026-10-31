@@ -47,8 +47,10 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
     def classify_state(self, state: tuple[float, ...]) -> int:
         return argmax_first_occurrence(self.predict_probabilities(state))
 
-    def learn_batch(self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], int]]) -> None:
-        self._learn_batch(learning_rate, batch)
+    def learn_batch(
+        self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], int]], clip_norm: float | None = None
+    ) -> None:
+        self._learn_batch(learning_rate, batch, clip_norm)
 
     def _backward(self, category: int) -> None:
         self._output_deltas(category)

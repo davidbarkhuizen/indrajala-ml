@@ -182,13 +182,10 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
     def learn(self, learning_rate: float, state: tuple[float, ...], category: Sequence[int]) -> None:
         self.learn_batch(learning_rate, [(state, category)])
 
-    def learn_batch(self, learning_rate: float, batch: Batch) -> None:
+    def learn_batch(self, learning_rate: float, batch: Batch, clip_norm: float | None = None) -> None:
         validate_batch(batch)
         self._accumulate_batch_gradients([state for state, _ in batch], [label for _, label in batch])
-        optimizer = self.optimizer
-        optimizer.begin_step()
-        for index, layer in enumerate([*self.trainable_layers, *self.parts]):
-            optimizer.apply(index, layer, learning_rate, len(batch))
+        self.optimizer.step([*self.trainable_layers, *self.parts], learning_rate, len(batch), clip_norm)
 
     def _accumulate_batch_gradients(self, states: Sequence[Sequence[float]], labels: Sequence[Sequence[int]]) -> None:
         # every layer's and part's gradient of the batch's loss, accumulated (W14, W20)
