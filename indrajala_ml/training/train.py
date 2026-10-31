@@ -1,4 +1,4 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from random import Random
 
 from indrajala_ml.data.prepared_dataset import PreparedDataset
@@ -12,6 +12,7 @@ from indrajala_ml.model.protocols.classifier_protocols import (
 )
 from indrajala_ml.model.specs.single_example import refuse_single_example_groups
 from indrajala_ml.training.evaluate import class_balanced_disagreement_rate
+from indrajala_ml.training.lr_schedule import LearningRate
 from indrajala_ml.training.run_checkpoint import RunCheckpoint
 from indrajala_ml.training.training_diagnostics import ConvergenceSeries, TrainingDiagnostic
 
@@ -63,7 +64,7 @@ def _correct(predicted: object, category: object) -> float:
 def train_linear_classifier_network[L](
     student: TrainableClassifier[L],
     training_data: Sequence[Example[L]] | PreparedDataset,
-    learning_rate: float | Callable[[int], float] = 0.25,
+    learning_rate: LearningRate = 0.25,
     epochs: int = 1,
     reference_classifier: TargetClassifier[float] | None = None,
     rng: Random | None = None,
@@ -74,9 +75,9 @@ def train_linear_classifier_network[L](
     training_data is a list of (state, category) tuples, or a PreparedDataset for an array network,
     which is prepared from the tuples once per run when not passed in (see _prepared_for).
 
-    learning_rate is a float or a schedule from the iteration index to a rate (e.g.
-    lr_schedule.linear_warmup), read once per learn() call. Iterations, not epochs, since a schedule
-    targets per-step instability.
+    learning_rate is a float or a schedule from the iteration index to a rate (lr_schedule.py's
+    Constant, Warmup, CosineDecay, LinearDecay, composed; a bare callable is accepted too), read once
+    per learn() call. Iterations, not epochs, since a schedule targets per-step instability.
 
     For a sequence network, whose label is one class per token, the accuracy is per token.
 
@@ -146,7 +147,7 @@ def train_linear_classifier_network[L](
     return result
 
 
-def _rate(learning_rate: float | Callable[[int], float], iterations: int) -> float:
+def _rate(learning_rate: LearningRate, iterations: int) -> float:
     return learning_rate(iterations) if callable(learning_rate) else learning_rate
 
 
@@ -184,7 +185,7 @@ def train_backprop_network_mini_batch[L](
     student: BatchTrainableClassifier[L],
     training_data: Sequence[Example[L]] | PreparedDataset,
     batch_size: int,
-    learning_rate: float | Callable[[int], float] = 0.25,
+    learning_rate: LearningRate = 0.25,
     epochs: int = 1,
     reference_classifier: TargetClassifier[float] | None = None,
     reshuffle_each_epoch: bool = True,

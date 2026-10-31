@@ -25,7 +25,7 @@ from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Dense, LayerNorm, LayerSpec, Residual
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.pcg64 import default_rng, generator_state
-from indrajala_ml.training.lr_schedule import linear_warmup
+from indrajala_ml.training.lr_schedule import Constant, Warmup
 from indrajala_ml.training.run_checkpoint import load_run, run_from_json, run_to_json, save_run
 from indrajala_ml.training.train import train_backprop_network_mini_batch, train_linear_classifier_network
 from indrajala_ml.training.training_data import reachable_reference_and_training_data
@@ -76,7 +76,7 @@ def _train(student: Any, epochs: int, rng: Random | None, resume_from: Any = Non
         student,
         training_data,
         BATCH_SIZE,
-        learning_rate=linear_warmup(0.5, 8),
+        learning_rate=Warmup(8, Constant(0.5)),
         epochs=epochs,
         reference_classifier=reference,
         rng=rng,

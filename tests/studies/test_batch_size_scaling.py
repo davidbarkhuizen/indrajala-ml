@@ -23,6 +23,7 @@ from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense
 from indrajala_ml.model.specs.update_rules import SGD, Momentum
 from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.training.lr_schedule import Constant, Warmup
 from indrajala_ml.training.train import train_backprop_network_mini_batch
 
 
@@ -47,7 +48,8 @@ def test_warmup_steps_is_warmup_epochs_in_batches_rounded_up():
 def test_learning_rate_schedule_is_constant_without_warmup_and_ramps_with_it():
     assert bss.learning_rate_schedule(2.0, 0) == 2.0
     schedule = bss.learning_rate_schedule(2.0, 4)
-    assert callable(schedule)
+    assert isinstance(schedule, Warmup)
+    assert schedule == Warmup(4, Constant(2.0))
     assert [schedule(step) for step in range(6)] == [0.5, 1.0, 1.5, 2.0, 2.0, 2.0]
 
 

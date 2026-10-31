@@ -47,6 +47,7 @@ from indrajala_ml.measurement.conv_comparison import (
 )
 from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.studies import batch_size_scaling as bss
+from indrajala_ml.training.lr_schedule import LearningRate
 from indrajala_ml.training.train import (
     _training_accuracy,  # pyright: ignore[reportPrivateUsage]  (the trainer's own pass, timed alone)
     train_backprop_network_mini_batch,
@@ -61,7 +62,7 @@ SEED = 0
 MEASURES = ["epoch", "steps", "accuracy pass", "batch conversion", "row conversion"]
 
 
-def _schedule(train_size: int, batch_size: int) -> float | Callable[[int], float]:
+def _schedule(train_size: int, batch_size: int) -> LearningRate:
     rate = bss.scaled_learning_rate(BASE_RATE, batch_size)
     return bss.learning_rate_schedule(rate, bss.warmup_steps(WARMUP_EPOCHS, train_size, batch_size))
 
