@@ -201,3 +201,6 @@ data/studies/
 
 # the session handover: the owner's untracked note, never committed
 docs/handover.md
+
+# trained models and their tokenizer files (scripts/generation/sample_text.py train) - not committed
+data/generation/

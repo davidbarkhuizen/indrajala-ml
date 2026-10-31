@@ -9,6 +9,7 @@ directory is on `sys.path` when run); no script imports another group's.
 | `measurement/` | timing and its protocol ([docs/measurement.md](../docs/measurement.md)): `ab.py`, the benchmarks it runs, the machine profile and setup, parity, thermal and thread-cost probes, the builds' machine code compared (`kernel_code_diff.py`), the golden run, the DRY audit's clone scan (`duplicates.py`) |
 | `runner/` | the batch runner (`batch.py`) and the thermal guard it wraps `klip`'s attempts in |
 | `studies/` | one script per study and the modular family's probe; `configs/` holds the window-recurrent run configurations |
+| `generation/` | sampling text from a trained sequence model (`sample_text.py`: `train`, then `sample`) |
 | `data/` | datasets fetched and checked |
 
 Grouped 2026-10-29. A commit before then has every script flat in `scripts/`; `ab.py` runs either
