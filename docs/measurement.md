@@ -94,8 +94,8 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   the busy processes; `--allow-load` runs anyway and records the load in the manifest. Nothing else runs on `jebel` during a run: no tests,
   lint or builds there. A background IDE once spoiled a whole measurement.
 - **Studies and A/Bs take turns.** A study's training stages (every `*_study.py` and
-  `batch_size_scaling_sweep.py` stage that trains, and the `run` of `addition_study.py` and
-  `window_recurrent_study.py`) hold the same machine lock as `ab.py run` and `extend`
+  `batch_size_scaling_sweep.py` stage that trains, and the `run` of indrajala-studies' `addition_study.py`
+  and `window_recurrent_study.py`) hold the same machine lock as `ab.py run` and `extend`
   (`indrajala_ml/measurement/machine_lock.py`), so an A/B started during a study is refused, naming
   it, and a study started during an A/B exits before it trains. The lock also keeps `remote run`
   from fast-forwarding the checkout and rebuilding the crate under a running study. Schedule A/Bs
@@ -113,7 +113,7 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   long-test workers swapped `jebel` (31 GB) into unreachability. Start with fewer workers, check
   `free -m` after the first minutes, and stop the pool's process group at once if swap grows. On
   `pyramidon`, `certify` at `k` 4 uses at most 3 workers.
-- **A study's budget comes from its probe, kept in the repo.** `window_recurrent_study.py probe
+- **A study's budget comes from its probe, kept in the repo.** indrajala-studies' `window_recurrent_study.py probe
   CONFIG` times the first run's network at chosen curriculum steps (training, screen, the whole
   check at the longest length, a certificate) with the process's peak memory after each, and
   `--json` keeps the figures for the workplan. Every window-recurrent result records `peak_mb`,
