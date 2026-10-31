@@ -113,9 +113,12 @@ path. `ab.py --script-from each` (#1136) times a benchmark script's own change. 
 - **`learn linear k1 s16 m16 B64 W19` reads 4.2% slower since #1137** with byte-identical work (the
   benchmark no longer imports the study modules): archived rows of that case before it aren't
   comparable; the cause is unmeasured (measurement.md, Gotchas).
-- **`stone`'s and `klip`'s batch preparation from studies is untested:** `prepare` makes the studies
-  clone on `klip` (from GitHub) and on `stone` (from two bundles, studies and ml) on first use; run
-  one short batch on each before a registered one.
+- **Done 2026-10-31: the reference batch on `klip` and `stone`** (studies #7, 57eb97b), untagged on the
+  default paths: four short s3 attempts all ended and were pulled, with each worker's commit and crate
+  matched. It found three faults, fixed in #7: each host's `wt-batch` is an ml worktree (the runner's
+  is now `wt-studies`), stone's `~/labour/bundles` was gone, and klip has no GitHub ssh key (studies
+  is cloned over https). The old ml worktrees are deletable: `~/code/wt-batch` on `klip` and `jebel`,
+  `~/labour/code/wt-batch` on `stone`.
 - **The runner's hosts keep ml's venvs** (`/home/david/code/indrajala-ml/.venv`, stone's
   `wt-branches/.venv`): they hold the same dependencies; a studies-only dependency would need them
   rebuilt from studies.
