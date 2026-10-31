@@ -92,6 +92,14 @@ networks with CONTINUOUS_RECURRENCE, no codes, added after the window-recurrent 
 output is the next state, and the parts' weights are the pooling's, the cell's and the initial
 state's. No earlier entry moved when they were recorded.
 
+The training-recipe entries (the training-recipe workplan, stage 6, D6) are added after the
+continuous-state ones: "numpy cosine sequence model", SEQUENCE_SPECS under Adam with its ten learn
+calls' rates read from COSINE_SCHEDULE (warmup over 2 steps, then cosine to a tenth over 8; the
+trainer reads a schedule in shared Python, so one implementation covers it), and the recipe models
+in all three implementations: ROTARY_SPECS under Adam(weight_decay=RECIPE_WEIGHT_DECAY), that
+schedule, and each batch call's gradient clipped to RECIPE_CLIP_NORM, which binds on some of
+them. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -347,6 +355,7 @@ from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
 from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
 from indrajala_ml.pcg64 import default_rng
+from indrajala_ml.training.lr_schedule import CosineDecay, LearningRate, Warmup
 
 # A network is typed Any here: the script drives the network classes, dense, conv, single-output
 # and ensemble, of all three implementations, through the methods they share by name. Recorded
@@ -553,6 +562,13 @@ ROTARY_SPECS: list[LayerSpec] = [
     Dense(len(SEQUENCE_VOCABULARY), output=True, activation="softmax", loss="cross_entropy"),
 ]
 ROTARY_NETWORKS = ["numpy rotary model", "rust rotary model", "python rotary model"]
+# the training recipe (the training-recipe workplan, D6): warmup, then cosine to a tenth over the
+# ten learn calls _train makes; the recipe adds AdamW and clipping by the global norm
+COSINE_SCHEDULE = Warmup(2, CosineDecay(LEARNING_RATE, 8, LEARNING_RATE / 10))
+COSINE_NETWORKS = ["numpy cosine sequence model"]
+RECIPE_WEIGHT_DECAY = 0.1
+RECIPE_CLIP_NORM = 0.6  # binds on 2, 1 and 1 of the 4 batch calls (numpy, Rust, Python)
+RECIPE_NETWORKS = ["numpy recipe model", "rust recipe model", "python recipe model"]
 # SEQUENCE_SPECS as a window of 2 columns, a dropout after the Position and the state entering
 # before each block, beside a state of 3 features snapped to 4 codes (the window-recurrent adder
 # workplan, stage 7); each sequence row is 3 windows
@@ -642,33 +658,48 @@ def _inject(network: Any, backend: str, rng: random.Random) -> None:
     )
 
 
-def _train(network: Any, rows: Sequence[Example[Any]], backend: str) -> tuple[dict[str, Any], PreparedDataset | None]:
+def _train(
+    network: Any,
+    rows: Sequence[Example[Any]],
+    backend: str,
+    learning_rate: LearningRate = LEARNING_RATE,
+    clip_norm: float | None = None,
+) -> tuple[dict[str, Any], PreparedDataset | None]:
+    # learning_rate is read per learn call, at the count of calls before it, as the trainer reads
+    # a schedule; clip_norm reaches the batch calls only, and only when set
+    steps = iter(range(1_000))
+    clip: dict[str, float] = {} if clip_norm is None else {"clip_norm": clip_norm}
+
+    def rate() -> float:
+        step = next(steps)
+        return learning_rate(step) if callable(learning_rate) else learning_rate
+
     checkpoints: dict[str, Any] = {}
     if backend == "python":
         # no prepared-dataset paths: learn and learn_batch over the rows the array networks'
         # four paths see, in the same order
         for state, category in rows[:6]:
-            network.learn(LEARNING_RATE, state, category)
+            network.learn(rate(), state, category)
         checkpoints["learn"] = _bits(network.snapshot())
         for batch in BATCHES:
-            network.learn_batch(LEARNING_RATE, [rows[i] for i in batch])
+            network.learn_batch(rate(), [rows[i] for i in batch], **clip)
         for batch in BATCHES:
-            network.learn_batch(LEARNING_RATE, [rows[i + 4] for i in batch])
+            network.learn_batch(rate(), [rows[i + 4] for i in batch], **clip)
         checkpoints["learn_batch"] = _bits(network.snapshot())
         return checkpoints, None
 
     prepared: PreparedDataset = network.prepare_dataset(rows)
     for state, category in rows[:3]:
-        network.learn(LEARNING_RATE, state, category)
+        network.learn(rate(), state, category)
     checkpoints["learn"] = _bits(network.snapshot())
     for index in range(3, 6):
-        network.learn_row(LEARNING_RATE, prepared, index)
+        network.learn_row(rate(), prepared, index)
     checkpoints["learn_row"] = _bits(network.snapshot())
     for batch in BATCHES:
-        network.learn_batch(LEARNING_RATE, [rows[i] for i in batch])
+        network.learn_batch(rate(), [rows[i] for i in batch], **clip)
     checkpoints["learn_batch"] = _bits(network.snapshot())
     for batch in BATCHES:
-        network.learn_batch_rows(LEARNING_RATE, prepared, [i + 4 for i in batch])
+        network.learn_batch_rows(rate(), prepared, [i + 4 for i in batch], **clip)
     checkpoints["learn_batch_rows"] = _bits(network.snapshot())
     return checkpoints, prepared
 
@@ -702,11 +733,18 @@ def _round_trip(network: Any, rows: Sequence[Example[Any]], predict: str) -> dic
     }
 
 
-def _run_network(name: str, build: Callable[[], Any], rows: Sequence[Example[Any]], predict: str) -> dict[str, Any]:
+def _run_network(
+    name: str,
+    build: Callable[[], Any],
+    rows: Sequence[Example[Any]],
+    predict: str,
+    learning_rate: LearningRate = LEARNING_RATE,
+    clip_norm: float | None = None,
+) -> dict[str, Any]:
     network = build()
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
     network.rng = default_rng(SEED) if _backend(name) == "python" else network.backend.default_rng(SEED)
-    checkpoints, prepared = _train(network, rows, _backend(name))
+    checkpoints, prepared = _train(network, rows, _backend(name), learning_rate, clip_norm)
     result = {
         "snapshots": checkpoints,
         "predictions": _predictions(network, rows, prepared, predict),
@@ -900,6 +938,37 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                     "predict_probabilities",
                 ),
             )
+    for name in COSINE_NETWORKS:
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(_sequential_network, name, (SEQUENCE_CONTEXT,), SEQUENCE_SPECS, Adam()),
+                sequence_rows,
+                "predict_probabilities",
+                COSINE_SCHEDULE,
+            ),
+        )
+    for name in RECIPE_NETWORKS:
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(
+                    _sequential_network,
+                    name,
+                    (SEQUENCE_CONTEXT,),
+                    ROTARY_SPECS,
+                    Adam(weight_decay=RECIPE_WEIGHT_DECAY),
+                ),
+                sequence_rows,
+                "predict_probabilities",
+                COSINE_SCHEDULE,
+                RECIPE_CLIP_NORM,
+            ),
+        )
 
 
 def run_all(backends: Collection[str] = BACKENDS) -> dict[str, Any]:
