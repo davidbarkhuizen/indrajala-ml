@@ -394,6 +394,12 @@ What to do next:
   to time two commits from before such a fix, take the script from a third commit:
   `ab.py run --script-from COMMIT`. To time a change to the benchmark script itself (the same work
   built another way), `--script-from each`: each side runs its own tree's script.
+- **A benchmark script's own imports can move a row whose work is unchanged.** When
+  `window_recurrent_timing.py` stopped importing the study modules (built from the library's window
+  presets, the research-separation plan's stage 3), `learn linear k1 s16 m16 B64 W19` read 4.2%
+  slower over six passes (`--script-from each`), its network and rows byte-identical; the other rows
+  within noise. Archived rows from before the change are not comparable with later ones for that
+  case; an A/B within one script is unaffected. The cause is unmeasured.
 - **A new `ab.py` option fails on the host's first `remote run` after it merges.** The host's own
   `ab.py` parses the command before `--sync` brings its checkout to main. Bring the host's
   checkout to main first (`git fetch origin && git merge --ff-only origin/main` there, what
