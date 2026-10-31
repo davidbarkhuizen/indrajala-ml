@@ -258,12 +258,15 @@ def train_epoch[L](
     learning_rate: LearningRate,
     first_step: int,
     rng: random.Random | None = None,
+    clip_norm: float | None = None,
 ) -> tuple[int, float]:
     """
     One epoch of the trainer's loop: reshuffle (from rng, seeded from OS entropy if None), then one
-    learn_batch per batch. Returns (steps taken, seconds spent in learn_batch calls); the
-    shuffle and batch slicing are outside the timed span.
+    learn_batch per batch, clipping each batch gradient's global norm to clip_norm when set (as the
+    trainer does). Returns (steps taken, seconds spent in learn_batch calls); the shuffle and batch
+    slicing are outside the timed span.
     """
+    clip: dict[str, float] = {} if clip_norm is None else {"clip_norm": clip_norm}
     epoch_data = list(train_data)
     (random.Random() if rng is None else rng).shuffle(epoch_data)
     batches = [epoch_data[i : i + batch_size] for i in range(0, len(epoch_data), batch_size)]
@@ -272,7 +275,7 @@ def train_epoch[L](
     for step, batch in enumerate(batches, start=first_step):
         rate = learning_rate(step) if callable(learning_rate) else learning_rate
         start = time.perf_counter()
-        network.learn_batch(rate, batch)
+        network.learn_batch(rate, batch, **clip)
         step_seconds += time.perf_counter() - start
     return len(batches), step_seconds
 
