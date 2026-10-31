@@ -71,6 +71,7 @@ docs cite them by section:
 | An audit of the research programme (2026-10-23) | #953 | indrajala-research #48-#50, #954 | `git show 4ea65cc:docs/workplans/programme-audit-workplan.md`; the four reviews at indrajala-research's top level (`review-2026-10-23-*.md`) |
 | The batch runner (restarts at a cutoff; a controller and a worker on each machine) | #935 | #943, #944, #946, #948, #952, #956 | `git show 53d7fef:docs/workplans/batch-runner-workplan.md` |
 | The snap wall (an asymmetric margin on the snap; P1, C1 refuted) | #787 | #788, #789, #793, #797, #803 | `git show 53d7fef:docs/workplans/snap-wall-workplan.md` |
+| The studies' clean-moving code to indrajala-studies (D1-D11) | #1116 | studies #1-#4, #1131, #1132, research #130, this PR | `git show 6475d18:docs/workplans/infrastructure/studies-repo-workplan.md` |
 | Publishing the crate on PyPI and crates.io, the first release 0.1.0 (D1-D11) | #1118 | crate #78-#84, #1119-#1121, #1127, #1129, this PR | `git show 995f0bd:docs/workplans/infrastructure/release-workplan.md` |
 | The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
 | aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
@@ -90,6 +91,28 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From the studies repo (retired 2026-10-31)
+
+Done: [indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies) (public, MIT) holds
+`addition_study` and `window_drift`, paper 1's scripts (`scripts/paper/`), the addition and
+window-recurrent study scripts, `window_program_check.py`, `profile_page.py`, the addition configs
+and `migrate_factored_state.py`, with their tests (67), ml as its submodule at `ml/`. The moved
+tests passed there before ml's copies were deleted; `paper_tables.py check` from studies reports
+the manuscript all the same; a tiny window-recurrent run from both trees gave the same network
+bytes on `jebel`. Three gaps in the stage 1 survey were found and settled in the moves: the
+window-recurrent configs stay (D10, ml's harness test reads them), `chow` and `window_replay` stay
+(D11, the family probe and the certificate guard's test import them), and the certificate test's
+`CarryMachine` and `TaskMachine` are copied (D5). Read it with
+`git show 6475d18:docs/workplans/infrastructure/studies-repo-workplan.md`. Left open:
+
+- **The rest of the window-recurrent research code** (the 12 modules, `chow`, `window_replay`, the
+  batch runner and `modular_family_probe.py`) can follow once two ties are cut: a task fixture for
+  `window_recurrent_timing.py` (the `ab.py` benchmark), and the network's test split into core
+  checks and study checks; then the window-recurrent configs go too. The owner's call.
+- **indrajala-ml on PyPI** (the release plan's D1) is no longer waiting on this move.
+- **Study runs now start from indrajala-studies**; the gitignored study data stays in ml's
+  `data/window-recurrent/` on `pyramidon` (`paper_tables.py --data ../indrajala-ml/data/window-recurrent`).
 
 ## From the release (retired 2026-10-31)
 
@@ -111,7 +134,7 @@ open:
 - **Free-threaded wheels** (3.14t): `gil_used = false` and extra wheels (abi3 doesn't cover them),
   after a thread-safety review of `Array`'s interior mutability.
 - **ndarray interop** in the core (`From` conversions behind a feature), if a Rust user asks.
-- **indrajala-ml on PyPI** (the release plan's D1), after the studies-repo move.
+- **indrajala-ml on PyPI** (the release plan's D1); the studies-repo move it waited on is done.
 - `cargo semver-checks` in CI once a second release exists.
 - A benchmark wheel matrix on each platform's runner, only for a clear question.
 

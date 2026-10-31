@@ -27,6 +27,4 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 ## `infrastructure/`: machines, release and repositories
 
-| workplan | state |
-| --- | --- |
-| [studies-repo-workplan.md](infrastructure/studies-repo-workplan.md) | the studies' clean-moving code to indrajala-studies; planned, starts after paper 1's preprint |
+None open. Retired plans are listed in [next-steps.md](../next-steps.md).
