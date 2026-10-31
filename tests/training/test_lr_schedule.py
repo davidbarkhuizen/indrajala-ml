@@ -1,8 +1,17 @@
+import json
 import math
 
 import pytest
 
-from indrajala_ml.training.lr_schedule import Constant, CosineDecay, LinearDecay, Warmup
+from indrajala_ml.training.lr_schedule import (
+    Constant,
+    CosineDecay,
+    LinearDecay,
+    Warmup,
+    schedule_from_json,
+    schedule_of,
+    schedule_to_json,
+)
 
 
 def _old_linear_warmup(target_rate: float, warmup_steps: int, step: int) -> float:
@@ -73,3 +82,25 @@ def test_schedules_are_data():
 def test_a_schedule_that_cannot_be_trained_is_refused(make: object):
     with pytest.raises(ValueError):
         make()  # pyright: ignore[reportCallIssue]
+
+
+@pytest.mark.parametrize(
+    "schedule",
+    [Constant(0.1), Warmup(3, Constant(0.3)), Warmup(7, CosineDecay(1e-3, 93, 1e-4)), LinearDecay(2.0, 9, 0.0)],
+)
+def test_a_schedule_round_trips_through_json_by_bits(schedule: object):
+    assert isinstance(schedule, Constant | Warmup | CosineDecay | LinearDecay)
+    loaded = schedule_from_json(json.loads(json.dumps(schedule_to_json(schedule))))
+    assert loaded == schedule
+    assert [loaded(step).hex() for step in range(120)] == [schedule(step).hex() for step in range(120)]
+
+
+def test_an_unknown_schedule_is_refused():
+    with pytest.raises(ValueError, match="'step'"):
+        schedule_from_json({"schedule": "step"})
+
+
+def test_schedule_of_takes_a_float_as_constant_and_leaves_a_callable_unrecorded():
+    assert schedule_of(0.5) == Constant(0.5)
+    assert schedule_of(Warmup(2, Constant(0.5))) == Warmup(2, Constant(0.5))
+    assert schedule_of(lambda step: 0.5) is None

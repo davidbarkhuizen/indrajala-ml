@@ -31,6 +31,7 @@ from indrajala_ml.model.specs.window_recurrence import (
     WindowRecurrence,
 )
 from indrajala_ml.training.ensemble_train import _picklable_checkpoint  # pyright: ignore[reportPrivateUsage]
+from indrajala_ml.training.lr_schedule import Constant
 from indrajala_ml.training.run_checkpoint import RunCheckpoint, run_from_json, run_to_json
 from tests.helpers import bits
 from tests.model.persistence.test_checkpoint import IMPLEMENTATIONS, RULES, _seeded, _state_bits, _train
@@ -162,6 +163,7 @@ def _run(network: Any) -> RunCheckpoint:
         best_training_accuracy=0.25,
         epoch_training_accuracies=(0.25, 0.125),
         convergence=((1, 0.5), (2, 0.25)),
+        schedule=Constant(0.1),
     )
 
 
