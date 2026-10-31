@@ -12,10 +12,13 @@ from __future__ import annotations
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden
 
 
-class LayerNormRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], GammaAndBeta[pa.Array]):
+class LayerNormRustArrayLayer(
+    RowDecoding[pa.Array], Hidden[pa.Array], DeltaIsDownstream[pa.Array], GammaAndBeta[pa.Array]
+):
     """
     LayerNormArrayLayer on the Rust backend: y = gamma * xhat + beta over each of tokens tokens of
     features features (a flat layer is one token), gamma and beta (features,), starting at 1 and 0
@@ -44,6 +47,10 @@ class LayerNormRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], Gam
     def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A, self._xhat, self._std = pa.layer_norm_forward_batch(X, self.gamma, self.beta, self.epsilon)
         return self.A
+
+    def decode_rows(self, R: pa.Array) -> pa.Array:
+        # the new tokens' (L, d) rows, each a batch row of one token: each token's statistics as in training
+        return pa.layer_norm_forward_batch(R, self.gamma, self.beta, self.epsilon)[0]
 
     def downstream(self) -> pa.Array:
         return pa.layer_norm_downstream_batch(self.delta, self.gamma, self._xhat, self._std)

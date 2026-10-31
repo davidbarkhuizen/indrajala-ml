@@ -6,6 +6,12 @@ the crate's attention.rs per pass, each composed there of the blocks project, at
 The crate computes the README's expressions (Layer norm and attention) with its own products, a
 dense layer's for the projections and `@` between activations, so it matches AttentionArrayLayer
 by bits only where no product is involved, as the dense layers do (the parity tests explain the gap).
+
+A causal layer decodes (the generation workplan, D2, D3, D8): prefill is attention_forward on the
+prompt's L <= T tokens, with the table's first L rows, keeping its rotated keys and values in an
+AttentionRustCache; step is the crate's attention_step, one token on the cache with its position's
+row of the table (extended past T), its key and value appended and the oldest dropped past T. Each
+of the crate's outputs is one fixed chain, so a decode's bits are the full pass's within the window.
 """
 
 from __future__ import annotations
@@ -15,8 +21,17 @@ from typing import Any
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.array.array_parameters import AttentionProjections
+from indrajala_ml.model.protocols.decoding_protocols import refuse_non_causal_decoding
 from indrajala_ml.model.specs.hidden_layers import Hidden
 from indrajala_ml.model.specs.rotary_table import rotary_table
+
+
+class AttentionRustCache:
+    """One decode's rotated keys K and values V, (c, h * d_k) each, the last c <= T tokens', oldest first."""
+
+    def __init__(self, width: int) -> None:
+        self.K = pa.Array.zeros((0, width))
+        self.V = pa.Array.zeros((0, width))
 
 
 class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
@@ -69,9 +84,11 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         self.rotary_base = rotary_base
         # the ops' cos and sin keywords: none for an unrotated layer
         self._table: dict[str, pa.Array] = {}
+        # rotary_table's rows as lists, which a decode extends past T
+        self._angles: tuple[list[list[float]], list[list[float]]] = ([], [])
         if positions == "rotary":
-            cos, sin = rotary_table(tokens, self.key_size, rotary_base)
-            self._table = {"cos": pa.Array(cos), "sin": pa.Array(sin)}
+            self._angles = rotary_table(tokens, self.key_size, rotary_base)
+            self._table = {"cos": pa.Array(self._angles[0]), "sin": pa.Array(self._angles[1])}
 
     @property
     def rotary_table(self) -> tuple[pa.Array, pa.Array] | tuple[None, None]:
@@ -116,6 +133,43 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             **self._table,
         )
         return self.A
+
+    # decoding (the generation workplan, D2, D3)
+
+    def _rows_table(self, start: int, tokens: int) -> dict[str, pa.Array]:
+        # the ops' cos and sin for positions start to start + tokens - 1, the lists extended (doubled)
+        # past their rows, which don't change; none for an unrotated layer
+        if not self._table:
+            return {}
+        if start + tokens > len(self._angles[0]):
+            positions = max(start + tokens, 2 * len(self._angles[0]))
+            self._angles = rotary_table(positions, self.key_size, self.rotary_base)
+        cos, sin = self._angles
+        return {"cos": pa.Array(cos[start : start + tokens]), "sin": pa.Array(sin[start : start + tokens])}
+
+    def start_decoding(self) -> AttentionRustCache:
+        refuse_non_causal_decoding(self.causal)
+        return AttentionRustCache(self.width)
+
+    def prefill(self, X: pa.Array, cache: AttentionRustCache) -> pa.Array:
+        # the prompt's (L, d) rows, L <= T, at positions 0 to L - 1: the forward op on L tokens
+        L = X.shape[0]
+        a, _Q, cache.K, cache.V, _P, _H, _M = pa.attention_forward(
+            X.reshape(L * self.features), *self.parameters(), heads=self.heads, causal=True, **self._rows_table(0, L)
+        )
+        return a.reshape((L, self.features))
+
+    def step(self, x: pa.Array, cache: AttentionRustCache, position: int) -> pa.Array:
+        a, cache.K, cache.V = pa.attention_step(
+            x.reshape(self.features),
+            *self.parameters(),
+            k_cache=cache.K,
+            v_cache=cache.V,
+            heads=self.heads,
+            window=self.tokens,
+            **self._rows_table(position, 1),
+        )
+        return a.reshape((1, self.features))
 
     def _backward(self, delta: pa.Array) -> None:
         self._dX, self._dQ, self._dK, self._dV = pa.attention_downstream_batch(
