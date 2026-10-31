@@ -113,7 +113,7 @@ def test_the_spread_split_holds_out_its_fraction_with_few_paragraphs_a_block():
     # five long paragraphs a block, as the Muqaddimah's 540 over 100 blocks: rounding each block
     # alone held out 4% of 10%; carried, the split holds out its fraction
     pieces = [chr(65 + i % 26) * (900 + 37 * (i % 11)) for i in range(500)]
-    train, held_out = spread_split_paragraphs(pieces, 0.9)
+    _train, held_out = spread_split_paragraphs(pieces, 0.9)
     held = sum(len(piece) + 1 for block in held_out for piece in block)
     total = sum(len(piece) + 1 for piece in pieces)
     assert 0.095 < held / total < 0.105
