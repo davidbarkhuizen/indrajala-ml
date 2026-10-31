@@ -20,6 +20,7 @@ from typing import Any, ClassVar, Literal
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
@@ -71,7 +72,9 @@ class TokenMeanRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], Par
         return pa.token_mean_downstream(self.delta_batch, self.tokens)
 
 
-class TokenDropoutRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
+class TokenDropoutRustArrayLayer(
+    RowDecoding[pa.Array], Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]
+):
     """
     TokenDropoutArrayLayer on the Rust backend: in training each forward pass draws its mask from
     rng, the network's crate Generator (token_dropout_forward), numpy's default_rng, so from
@@ -108,6 +111,10 @@ class TokenDropoutRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], 
     def forward_batch(self, X: pa.Array) -> pa.Array:
         return self.forward(X)
 
+    def decode_rows(self, R: pa.Array) -> pa.Array:
+        # the identity, as in inference
+        return R
+
     def _downstream(self, delta: pa.Array) -> pa.Array:
         return delta if self._mask is None else pa.token_dropout_downstream(delta, self._mask, self._drop_probability)
 
@@ -118,7 +125,7 @@ class TokenDropoutRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], 
         return self._downstream(self.delta_batch)
 
 
-class EmbeddingRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
+class EmbeddingRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
     """
     EmbeddingArrayLayer on the Rust backend: T token ids as T tokens of size features, token t row
     x_t of a learned (vocabulary, size) table E (embedding_forward), which refuses any id that isn't
@@ -152,6 +159,10 @@ class EmbeddingRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
 
     def forward_batch(self, X: pa.Array) -> pa.Array:
         return pa.embedding_forward(X, self.E)
+
+    def decode_rows(self, R: pa.Array) -> pa.Array:
+        # L ids, an (L,) vector, as their (L, size) rows
+        return pa.embedding_forward(R, self.E).reshape((R.shape[0], self.features))
 
     def downstream(self) -> pa.Array:
         raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
@@ -202,6 +213,17 @@ class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
         # a new array: X is not written
         return X + self.P.reshape(self.size)
 
+    def start_decoding(self) -> None:
+        return None
+
+    def prefill(self, X: pa.Array, cache: Any) -> pa.Array:
+        # the prompt's L rows plus P's first L
+        return X + self.P.take_rows(list(range(X.shape[0])))
+
+    def step(self, x: pa.Array, cache: Any, position: int) -> pa.Array:
+        assert position < self.tokens, f"a learned Position has {self.tokens} rows; got position {position}"
+        return x + self.P.take_rows([position])
+
     def downstream(self) -> pa.Array:
         return self.delta
 
@@ -218,7 +240,7 @@ class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
         self.grad_P = pa.Array.zeros((self.tokens, self.features))
 
 
-class TokenDenseRustArrayLayer(Hidden[pa.Array], WeightAndBias[pa.Array]):
+class TokenDenseRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], WeightAndBias[pa.Array]):
     """
     TokenDenseArrayLayer on the Rust backend: a dense layer acting on each token, its W (size,
     input_size) and b shared over the tokens (D4), as the existing dense ops (layer_relu_forward_batch,
@@ -252,6 +274,10 @@ class TokenDenseRustArrayLayer(Hidden[pa.Array], WeightAndBias[pa.Array]):
         rows = self._forward_op(self.W, self._rows(X, self.input_size), self.b)
         self.A = rows.reshape((X.shape[0], self.tokens * self.size))
         return self.A
+
+    def decode_rows(self, R: pa.Array) -> pa.Array:
+        # the new tokens' (L, input_size) rows, the forward op's on its rows
+        return self._forward_op(self.W, R, self.b)
 
     def compute_hidden_delta(self, next_layer: Any) -> None:
         downstream = next_layer.downstream()

@@ -18,10 +18,11 @@ from typing import Any
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 
 
-class ForkRustArrayLayer(Hidden[pa.Array], ParameterFree[pa.Array]):
+class ForkRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], ParameterFree[pa.Array]):
     """
     ForkArrayLayer on the Rust backend: forward passes its input on and keeps it. Its delta, the
     body's downstream plus the add's delta, is computed when downstream*() asks for it: a dense
@@ -44,6 +45,11 @@ class ForkRustArrayLayer(Hidden[pa.Array], ParameterFree[pa.Array]):
         self.X = X
         return X
 
+    def decode_rows(self, R: pa.Array) -> pa.Array:
+        # kept for the add, as forward keeps x (the generation workplan, D2)
+        self.decoded = R
+        return R
+
     def compute_hidden_delta(self, next_layer: Any) -> None:
         # lazy: downstream() sums the paths when a layer before asks for it
         pass
@@ -58,7 +64,9 @@ class ForkRustArrayLayer(Hidden[pa.Array], ParameterFree[pa.Array]):
         return self.body_first.downstream_batch() + self.add.delta_batch
 
 
-class AddRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]):
+class AddRustArrayLayer(
+    RowDecoding[pa.Array], Hidden[pa.Array], DeltaIsDownstream[pa.Array], ParameterFree[pa.Array]
+):
     """AddArrayLayer on the Rust backend: y + x, its delta the next layer's downstream and its own downstream."""
 
     def __init__(self, fork: ForkRustArrayLayer) -> None:
@@ -73,6 +81,9 @@ class AddRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array], Parameter
     def forward_batch(self, X: pa.Array) -> pa.Array:
         self.A = X + self.fork.X
         return self.A
+
+    def decode_rows(self, R: pa.Array) -> pa.Array:
+        return R + self.fork.decoded
 
     def downstream(self) -> pa.Array:
         return self.delta
