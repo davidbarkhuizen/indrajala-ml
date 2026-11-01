@@ -9,7 +9,7 @@ puts the heads side by side again and projects. One code path for every head cou
 layer is the same blocks with h = 1. Every sum but a product is a left fold through np.cumsum
 along the last axis (tests/model/layers/test_summation_order.py).
 
-Attend is tiled (the context-length workplan, D3): the keys in blocks of block (BLOCK, 64), and per
+Attend is tiled (the context-length workplan, D3): the keys in blocks of block (BLOCK, 16), and per
 query row a running max m, sum l and unnormalized output H; for each key block in order, m' =
 max(m, the block's row max), e = exp(S - m'), l = l exp(m - m') + the fold of e, H = H exp(m - m')
 + e V, and at the end H / l (tiled_forward). The forward keeps m and l, (N, h, T, 1), never the
@@ -81,7 +81,7 @@ def _transpose(stack: FloatArray) -> FloatArray:
 
 # the tiled attention (the context-length workplan, D3, D12): the keys in blocks of BLOCK, an online
 # softmax per query row, nothing (N, h, T, T) kept
-BLOCK = 64
+BLOCK = 16
 
 Segments = npt.NDArray[np.intp]
 Draw = Callable[[tuple[int, ...]], FloatArray]
@@ -138,6 +138,16 @@ class Masking:
         return r0, r1, allowed
 
 
+def key_blocks(keys: int, block: int, origin: int = 0) -> list[tuple[int, int]]:
+    """
+    The key blocks k0:k1 of keys keys whose first is at column origin: their bounds at the columns
+    that are multiples of block, so a decode's cache (from the first column it holds) is cut where
+    the full pass over every column is, and its online softmax is the full pass's, block for block.
+    """
+    bounds = [0, *range((block - origin % block) % block or block, keys, block), keys]
+    return [(k0, k1) for k0, k1 in zip(bounds, bounds[1:], strict=False) if k0 < k1]
+
+
 def _scores(Q: FloatArray, K: FloatArray, scale: float, mask: npt.NDArray[np.bool_] | None) -> FloatArray:
     S = (Q @ _transpose(K)) / scale
     return S if mask is None else np.where(mask, S, -np.inf)
@@ -152,20 +162,21 @@ def tiled_forward(
     block: int,
     draw: Draw | None,
     keep: float,
+    origin: int = 0,
 ) -> tuple[FloatArray, FloatArray, FloatArray]:
     """
     H, (N, h, T_q, d_k), and the rows' max m and sum l, (N, h, T_q, 1), from Q (N, h, T_q, d_k) and
     K and V (N, h, T_k, d_k): per key block, in order, m' = max(m, the block's row max), e = exp(S -
     m') (0 in place of an all-masked row's m'), l = l exp(m - m') + the fold of e, H = H exp(m - m')
     + e V (e dropped: e M / keep, M drawn by draw for the block's every query and key), then H / l.
+    The key blocks are key_blocks(T_k, block, origin): origin is key 0's column.
     """
     N, h, queries, d_k = Q.shape
     keys = K.shape[2]
     m = np.full((N, h, queries, 1), -np.inf)
     l = np.zeros((N, h, queries, 1))
     H = np.zeros((N, h, queries, d_k))
-    for k0 in range(0, keys, block):
-        k1 = min(keys, k0 + block)
+    for k0, k1 in key_blocks(keys, block, origin):
         M = None if draw is None else draw((N, h, queries, k1 - k0))
         tile = masking.tile(queries, k0, k1)
         if tile is None:
@@ -192,6 +203,7 @@ def tiled_backward(
     block: int,
     draw: Draw | None,
     keep: float,
+    origin: int = 0,
 ) -> tuple[FloatArray, FloatArray, FloatArray]:
     """
     dQ, dK and dV from dH and the forward's Q, K, V, H, m and l: per key block, P = exp(S - m) / l
@@ -204,8 +216,7 @@ def tiled_backward(
     keys = K.shape[2]
     D = np.cumsum(dH * H, axis=-1)[..., -1:]
     dQ, dK, dV = np.zeros_like(Q), np.zeros_like(K), np.zeros_like(V)
-    for k0 in range(0, keys, block):
-        k1 = min(keys, k0 + block)
+    for k0, k1 in key_blocks(keys, block, origin):
         M = None if draw is None else draw((N, h, queries, k1 - k0))
         tile = masking.tile(queries, k0, k1)
         if tile is None:
@@ -461,8 +472,18 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         query_segments = None if cache.segments is None else cache.segments[:, -1:]
         masking = self._masking(query_segments, cache.segments, offset=c - 1)
         K, V = cache.K.reshape(N * c, self.width), cache.V.reshape(N * c, self.width)
+        # the cache's first key is at column context.column - (c - 1): the blocks cut where the
+        # full pass's do
         H, _m, _l = tiled_forward(
-            self._heads(q, 1), self._heads(K, c), self._heads(V, c), self.scale, masking, self.block, None, self._keep
+            self._heads(q, 1),
+            self._heads(K, c),
+            self._heads(V, c),
+            self.scale,
+            masking,
+            self.block,
+            None,
+            self._keep,
+            origin=context.column - (c - 1),
         )
         return self._combine(self._side_by_side(H))
 

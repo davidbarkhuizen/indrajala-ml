@@ -27,6 +27,7 @@ from indrajala_ml.model.layers.numpy import attention_array_layer
 from indrajala_ml.model.layers.numpy.attention_array_layer import (
     AttentionArrayLayer,
     Masking,
+    key_blocks,
     _scores,  # pyright: ignore[reportPrivateUsage]
     tiled_backward,
     tiled_forward,
@@ -252,3 +253,21 @@ def test_memory_is_linear_in_t_at_a_fixed_token_budget():
     # quadratic attention's peak would grow 4x from T = 256 to 1,024 at the same tokens; tiled, the
     # tiles are (N, h, T, b), so the peak stays about level
     assert _peak_mb(1024) < 1.5 * _peak_mb(256)
+
+
+def test_key_blocks_cut_at_multiples_of_the_block_from_key_zeros_column():
+    assert key_blocks(11, 4) == [(0, 4), (4, 8), (8, 11)]
+    # a cache whose first key is column 2: cut at columns 4 and 8 (indices 2 and 6)
+    assert key_blocks(11, 4, origin=2) == [(0, 2), (2, 6), (6, 10), (10, 11)]
+    assert key_blocks(8, 4, origin=4) == [(0, 4), (4, 8)]
+    assert key_blocks(3, 4, origin=5) == [(0, 3)]
+
+
+def test_a_cache_cut_from_its_first_column_is_the_full_pass_over_every_column():
+    # the last query against keys 3.. (origin 3) is the full pass's last row with keys 0..2 masked
+    Q, K, V = _qkv(12)
+    band = Masking(causal=True, band=T - 3)
+    full, _, _ = tiled_forward(Q, K, V, SCALE, band, 4, None, 1.0)
+    one = Masking(causal=True, offset=T - 4)
+    last, _, _ = tiled_forward(Q[:, :, -1:], K[:, :, 3:], V[:, :, 3:], SCALE, one, 4, None, 1.0, origin=3)
+    np.testing.assert_allclose(last[:, :, 0], full[:, :, -1], rtol=1e-13, atol=1e-15)

@@ -67,6 +67,12 @@ Each lists the options considered, with pros and cons, and the choice.
 
   **Refinements (2026-11-01), against steps 10 and 11 as built:**
 
+  - *The block size: 16, not 64* (stage 4). Measured on numpy's layer at the study's shapes (`d =
+    64`, 4 heads, the token budget), `b` in {8, 16, 32, 64, 128}: 16 was fastest at every `T`
+    (forward and backward 20-25% below 64 at `T` 64 to 1,024 on pyramidon), finer blocks skipping
+    more of the causal triangle until per-block overhead wins at 8. The same default in every
+    implementation, since the blocks group the sums.
+
   - *The masks.* A tile's mask is the causal one (`u > t`) and step 11's segment one (another
     segment, or a pad's key, never the diagonal; numpy's `attention_blocked`, the crate's
     `segments=` on `attention_forward(_batch)`), built per tile from the segment ids, never as an
