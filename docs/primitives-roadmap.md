@@ -45,7 +45,9 @@ bits.
    (2026-10-31), in all three implementations and the crate (README, Generation; next-steps,
    From generation).
 10. **The training recipe**: learning-rate schedules as data, AdamW and gradient clipping, with
-    longer training; planned (2026-10-10, [training-recipe-workplan.md](workplans/library/training-recipe-workplan.md)).
+    longer training; done (2026-11-01), in all three implementations and the crate, and the
+    default for new sequence models (README, Schedules and clipping; next-steps, From the
+    training recipe).
 11. **Segments: packing, document masks and padding**: one segment id per token, for packed
     training windows and padded inference batches; planned (2026-10-10,
     [segments-workplan.md](workplans/library/segments-workplan.md)).

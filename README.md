@@ -302,6 +302,7 @@ gradient summed over a batch of `B` examples, so `g / B` is the mean gradient.
 | L2 weight decay (`WeightDecay`) | `w - lr * (g / B + λ * w)`; the bias is plain SGD | Goyal et al. 2017, eq. (8) |
 | `Adam` | Algorithm 1, on `g / B` | Kingma & Ba 2014 |
 | `Momentum` | `u = m * u + g / B; w - lr * u` | Goyal et al. 2017, eq. (9) |
+| AdamW (`Adam(weight_decay=λ)`) | Adam's step, the weight first shrunk: `w * (1 - lr * λ) - lr * m̂ / (√v̂ + ε)`; biases, `gamma`, `beta`, `P` and `E` not decayed | Loshchilov & Hutter 2019, Algorithm 2, in PyTorch's grouping |
 
 For momentum the literature has competing forms. Rumelhart et al. 1986's, Goyal et al.'s eq. (10),
 folds the rate into the velocity, `v = lr * g / B + m * v; w - v`, and so needs a correction
@@ -311,6 +312,50 @@ momentum against its form bit for bit. A new rule cites its source here, and whe
 has competing forms (as for momentum), the choice is made explicitly. Consistency comes before
 speed: every rule divides, `g / B`, and none multiplies by a precomputed `1 / B` or `lr / B`, which
 rounds differently when `B` isn't a power of two.
+
+AdamW's grouping is PyTorch's: the weight shrinks by `lr * λ`, then the Adam step is taken from
+it. At `λ = 0`, the default, the factor is exactly `1.0`, so `Adam()` keeps its bits; the paper's
+`w - lr * (step + λ * w)` would change them unless it branched.
+
+## Schedules and clipping
+
+The production recipe (GPT-3, Brown et al. 2020, appendix B: AdamW 0.1, the gradient's global
+norm clipped to 1.0, linear warmup then cosine decay; roadmap step 10) in the trainer and every
+network:
+
+```python
+from indrajala_ml.training.lr_schedule import CosineDecay, Warmup
+
+epoch_steps, epochs = 469, 30
+schedule = Warmup(epoch_steps, CosineDecay(0.002, (epochs - 1) * epoch_steps, 0.0002))
+network = SequentialArrayNetwork((64,), specs, Adam(weight_decay=0.1), "sequence")
+train_backprop_network_mini_batch(network, windows, 32, learning_rate=schedule, epochs=epochs, clip_norm=1.0)
+```
+
+- **Schedules are data** (`indrajala_ml/training/lr_schedule.py`), frozen dataclasses called with
+  the step (the trainer's batch count) for its rate:
+  - `Constant(rate)`;
+  - `Warmup(steps, then)`: linear from `then(0) / steps` at step 0 to `then(0)`, then `then`
+    counted from warmup's end (Goyal et al. 2017's warmup);
+  - `CosineDecay(rate, steps, floor)`: `floor + (rate - floor) * (1 + cos(π s / steps)) / 2`, then
+    `floor` (SGDR's form without restarts, Loshchilov & Hutter 2017);
+  - `LinearDecay(rate, steps, floor)`.
+
+  `learning_rate` takes a float (a `Constant`), a schedule, or a bare callable. The trainer reads
+  the rate in shared Python, so all three implementations train at the same rate bits.
+- **A run file records its schedule** (`run_checkpoint.py`, version 2): resuming under another
+  schedule is refused, naming both. A bare callable can't be recorded, so `save_run` refuses its
+  run.
+- **Clipping by the global norm** (Pascanu et al. 2013): `clip_norm` on the trainer and on
+  `learn_batch` / `learn_batch_rows`. Every network accumulates every layer's gradient, then
+  `optimizer.step(layers, rate, B, clip_norm)` applies them. When the batch gradient's L2 norm over
+  every parameter (a left fold over the layers in order) is above `clip_norm`, the rule reads
+  every gradient times `clip_norm / ‖g‖`. Only a step that clips pays the extra pass.
+- **The study** (`scripts/studies/lr_schedule_study.py`, its findings in the docstring): the
+  2-layer rotary model, 30 epochs on all four corpora and both held-out splits, 5 seeds. Warmup
+  then cosine to a tenth ended lower held out than the constant rate on 36 of 40 paired runs (by
+  0.029 bits a character on the mean), and the full recipe lower than the cosine alone on all 40
+  (0.021 more). The recipe is the default for new sequence models.
 
 ## Batch normalization
 
@@ -938,33 +983,35 @@ python scripts/generation/sample_text.py sample --model data/generation/tinyshak
     --prompt "ROMEO:" --length 300 --temperature 0.8 --seed 1
 ```
 
-Two samples, each from a model trained 10 epochs on jebel (numpy, seed 0), at temperature 0.8,
-`--seed 1` (the first seed drawn, not a chosen one), 300 characters after the prompt. Tiny
-Shakespeare, 2.410 bits per character held out:
+Two samples, each from the training-recipe study's seed-0 model of its recipe arm (30 epochs,
+warmup then cosine, AdamW 0.1, clipping at 1.0; numpy, on stone; the contiguous split), at
+temperature 0.8, `--seed 1` (the first seed drawn, not a chosen one), 300 characters after the
+prompt. Tiny Shakespeare, 2.304 bits per character held out (2.410 at step 9's 10 epochs):
 
 ```text
 ROMEO:
-Were the sign'd me these makes struck'd up them to do as,
-I am the sweet obly. Sell; she see
-He shall most you for most the gain,
-Not sorrous and so with the thus many with in ruis cramy thou say of sings.
+Welcome, that is children have prove me to the course
+As unfallike to lose to the duke in encliness,
+Which you have is not me death? they say 'twere where be thy place!'
 
-QUEEN MAMGARET:
-But I do you.
-Fair me have I say all unbraities great a hast thou caller tha
+LEONTES:
+I wast thou say see my true, as thine off meance dies;
+Or I have deny and if his father, and lay I leave,
+Which whom a 
 ```
 
-Euclid (Heath), 1.438 bits per character held out:
+Euclid (Heath), 1.420 bits per character held out (1.438):
 
 ```text
-Let the circle ABC be an are equimultiples of EG, L, N, P are in the pyramid of which the circle ABC, and let CO be prime to one another.
-Let B by multiplying B has made H, therefore the antecedent the circle ABC at the circumference CFG; therefore also, as D is to A, so is C to E, so is MM to BQ. simi
+Let the circle ABCD be the two and two are in the same ratio, and on the same multiple of A that DE is of DE, the greater ratio than a straight line DE be subtracted from equal and similar to the three has been described on the same parts of A that B is also a fifth has to a square number, neither has 
 ```
 
 The models spell most words and keep each corpus's forms: Shakespeare's speakers' names in
-capitals before a colon, and Euclid's letter-named figures and "therefore also, as D is to A, so
-is C to E". The sense does not hold beyond a few words. These samples are to be replaced when
-step 10's longer training gives better ones.
+capitals before a colon and its verse lines, and Euclid's letter-named figures and its "in the
+same ratio", "the same multiple of A that DE is of DE". The sense does not hold beyond a few
+words: at this size (2 layers, 64 characters of context) three times the training under the
+recipe gained 0.106 bits on Tiny Shakespeare and 0.018 on Euclid. The models are in pyramidon's gitignored
+`data/studies/lr-schedule/sweep/models/`.
 
 ## The addition study
 

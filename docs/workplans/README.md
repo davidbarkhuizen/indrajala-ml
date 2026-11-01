@@ -17,7 +17,6 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 | workplan | roadmap |
 | --- | --- |
-| [training-recipe-workplan.md](library/training-recipe-workplan.md) | step 10: schedules, AdamW and gradient clipping |
 | [segments-workplan.md](library/segments-workplan.md) | step 11: packing, document masks and padding |
 | [context-length-workplan.md](library/context-length-workplan.md) | step 12: context length |
 | [ffn-activations-workplan.md](library/ffn-activations-workplan.md) | step 13: GELU and SwiGLU |
