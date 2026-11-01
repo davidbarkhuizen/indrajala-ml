@@ -58,6 +58,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from itertools import pairwise
 from typing import Any
 
 import numpy as np
@@ -145,7 +146,7 @@ def key_blocks(keys: int, block: int, origin: int = 0) -> list[tuple[int, int]]:
     the full pass over every column is, and its online softmax is the full pass's, block for block.
     """
     bounds = [0, *range((block - origin % block) % block or block, keys, block), keys]
-    return [(k0, k1) for k0, k1 in zip(bounds, bounds[1:], strict=False) if k0 < k1]
+    return [(k0, k1) for k0, k1 in pairwise(bounds) if k0 < k1]
 
 
 def _scores(Q: FloatArray, K: FloatArray, scale: float, mask: npt.NDArray[np.bool_] | None) -> FloatArray:

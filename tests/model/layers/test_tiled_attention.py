@@ -27,8 +27,8 @@ from indrajala_ml.model.layers.numpy import attention_array_layer
 from indrajala_ml.model.layers.numpy.attention_array_layer import (
     AttentionArrayLayer,
     Masking,
-    key_blocks,
     _scores,  # pyright: ignore[reportPrivateUsage]
+    key_blocks,
     tiled_backward,
     tiled_forward,
 )
