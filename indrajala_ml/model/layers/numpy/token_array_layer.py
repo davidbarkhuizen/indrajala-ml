@@ -194,9 +194,11 @@ class EmbeddingArrayLayer(RowDecoding[FloatArray], BatchShaped):
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
 
-    def __init__(self, tokens: int, vocabulary: int, size: int) -> None:
+    def __init__(self, tokens: int, vocabulary: int, size: int, pad: int | None = None) -> None:
         self.tokens = tokens
         self.vocabulary = vocabulary
+        # the pad's id when the Embedding has segments: its row stays zero (the segments workplan, D2)
+        self.pad = pad
         self.features = size
         self.size = tokens * size
         self.input_size = tokens
@@ -237,6 +239,8 @@ class EmbeddingArrayLayer(RowDecoding[FloatArray], BatchShaped):
     ) -> None:
         ids = self._ids(input_activation_batch).reshape(-1)
         np.add.at(self.grad_E, ids, self.delta_batch.reshape(ids.size, self.features))
+        if self.pad is not None:
+            self.grad_E[self.pad] = 0.0  # the pad's row is never updated
 
     def reset_gradient_accum(self) -> None:
         self.grad_E = np.zeros(self.E.shape)
@@ -269,6 +273,9 @@ class PositionArrayLayer(BatchShaped):
         (self.P,) = parameters
 
     def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        if context.positions is not None:
+            # each token's row by its position within its segment (the segments workplan, D5)
+            return X + self.P[context.positions].reshape(X.shape[0], self.size)
         return X + self.P.reshape(self.size)
 
     def start_decoding(self) -> None:
@@ -290,6 +297,11 @@ class PositionArrayLayer(BatchShaped):
     def accumulate_gradient_batch(
         self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
     ) -> None:
+        if context.positions is not None:
+            # a scatter-add into the rows the tokens read, as the Embedding's
+            positions = context.positions.reshape(-1)
+            np.add.at(self.grad_P, positions, self.delta_batch.reshape(positions.size, -1))
+            return
         self.grad_P += sum_rows(self.delta_batch).reshape(self.P.shape)
 
     def reset_gradient_accum(self) -> None:
@@ -362,4 +374,12 @@ class TokenSoftmaxArrayLayer(TokenDenseArrayLayer):
         self.compute_output_delta_batch(reference[np.newaxis, :], context=context)
 
     def compute_output_delta_batch(self, reference_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
+        if context.counted is not None:
+            # the mean over the batch's counted targets (the segments workplan, D6): per example
+            # (P - Y) * B / C, zero at a target that doesn't count
+            N = reference_batch.shape[0]
+            delta = (self.A - reference_batch) * N / context.count
+            weights = np.repeat(context.counted, self.size, axis=1)
+            self.delta_batch = delta * weights
+            return
         self.delta_batch = (self.A - reference_batch) / self.tokens

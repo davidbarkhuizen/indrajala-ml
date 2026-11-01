@@ -45,11 +45,13 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import numpy.typing as npt
 
 from indrajala_ml.model.layers.array.array_parameters import AttentionProjections
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
+from indrajala_ml.model.layers.numpy.segments import attention_blocked
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
 from indrajala_ml.model.protocols.decoding_protocols import refuse_non_causal_decoding
 from indrajala_ml.model.specs.rotary_table import rotary_table
@@ -184,14 +186,22 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         return Q, K, V
 
     def _attend(
-        self, Q: FloatArray, K: FloatArray, V: FloatArray, masked: bool = True
+        self,
+        Q: FloatArray,
+        K: FloatArray,
+        V: FloatArray,
+        masked: bool = True,
+        blocked: npt.NDArray[np.bool_] | None = None,
     ) -> tuple[FloatArray, FloatArray]:
         # per example and head, on (N, h, T, d_k) views: the weights P (N, h, T, T) and H; a causal
-        # layer masks unless the keys are all at or before the queries (a decode's step)
+        # layer masks unless the keys are all at or before the queries (a decode's step); blocked,
+        # (N, T, T), masks across segments and pads (the segments workplan, D4), every head alike
         S = (Q @ _transpose(K)) / self.scale
         if self.causal and masked:
             T = S.shape[-1]
             S = np.where(self._future[:T, :T], -np.inf, S)
+        if blocked is not None:
+            S = np.where(blocked[:, np.newaxis], -np.inf, S)
         m = S.max(axis=-1, keepdims=True)
         e = exp(S - m)
         P = e / np.cumsum(e, axis=-1)[..., -1:]
@@ -209,7 +219,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         Q, K, V = self._project(self._rows(X, self.features))
         self._Q, self._K, self._V = self._heads(Q), self._heads(K), self._heads(V)
-        self._P, H = self._attend(self._Q, self._K, self._V)
+        blocked = None if context.segments is None else attention_blocked(context.segments)
+        self._P, H = self._attend(self._Q, self._K, self._V, blocked=blocked)
         self._H = self._side_by_side(H)
         self.A = self._combine(self._H).reshape(X.shape)
         return self.A

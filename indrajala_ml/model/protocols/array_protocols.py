@@ -199,6 +199,9 @@ class ArrayOptimizer[A: BackendArray](Protocol):
 class ArrayBackend[A: BackendArray](Protocol):
     """The array operations ArrayNetworkBase needs from a backend (array_backend.py)."""
 
+    # a batch's segments from its token ids (the segments workplan, D4-D6)
+    def segment_context(self, X: A, separator: int, pad: int, /) -> ForwardContext: ...
+
     @property
     def name(self) -> str: ...
 

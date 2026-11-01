@@ -95,6 +95,6 @@ def test_every_layer_pass_gets_the_networks_context(implementation: str):
 
 
 def test_the_empty_context_is_one_frozen_value():
-    assert ForwardContext() == NO_CONTEXT
+    assert (NO_CONTEXT.segments, NO_CONTEXT.positions, NO_CONTEXT.counted, NO_CONTEXT.count) == (None, None, None, 0)
     with pytest.raises(AttributeError):
         NO_CONTEXT.segments = None  # pyright: ignore[reportAttributeAccessIssue]
