@@ -43,8 +43,8 @@ def _masks(built: Any) -> list[Any]:
             masks.append(layer._mask_batch)  # pyright: ignore[reportPrivateUsage]
         elif isinstance(layer, TokenDropoutRustArrayLayer):
             masks.append(to_numpy(layer._mask))  # pyright: ignore[reportPrivateUsage, reportArgumentType]
-        elif isinstance(layer, AttentionArrayLayer) and layer._M is not None:  # pyright: ignore[reportPrivateUsage]
-            masks.append(layer._M)  # pyright: ignore[reportPrivateUsage]
+        elif isinstance(layer, AttentionArrayLayer) and (mask := layer.dropout_mask()) is not None:
+            masks.append(mask)
         elif isinstance(layer, AttentionRustArrayLayer) and layer._M is not None:  # pyright: ignore[reportPrivateUsage]
             packed = to_numpy(layer._M)  # pyright: ignore[reportPrivateUsage]
             n, h, t = packed.shape[0] // layer.tokens, layer.heads, layer.tokens

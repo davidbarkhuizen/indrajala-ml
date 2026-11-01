@@ -70,11 +70,14 @@ Each lists the options considered, with pros and cons, and the choice.
   - *The masks.* A tile's mask is the causal one (`u > t`) and step 11's segment one (another
     segment, or a pad's key, never the diagonal; numpy's `attention_blocked`, the crate's
     `segments=` on `attention_forward(_batch)`), built per tile from the segment ids, never as an
-    `(N, T, T)` array. A tile is skipped when it is wholly masked. Skipping is exact: a wholly
-    masked tile gives `m' = m`, `exp(m - m') = 1` and `e = 0`, so `l` and `H` keep their bits, and
-    implementations may skip at different granularities (numpy's batched form skips a tile only
-    when it is wholly masked for every example of the batch; the crate and pure Python, which
-    loop over examples, per example) and still agree by bits. Options for the granularity:
+    `(N, T, T)` array. A tile is skipped when it is wholly masked. Skipping is exact where the
+    sums are sequential folds: a wholly masked tile gives `m' = m`, `exp(m - m') = 1` and `e = 0`,
+    so `l` and `H` keep their bits, and the crate and pure Python, which loop over examples, may
+    skip per example by bits. numpy's batched form skips a tile only when it is wholly masked for
+    every example of the batch, and computes each key block over the range of rows that reach it;
+    its products are BLAS's, whose order of summation may follow a product's shape, so there
+    skipping is within rounding (stage 4 found it; numpy's products were never the others' bits).
+    Options for the granularity:
     (i) per example everywhere: pros, the most skipped; cons, numpy loses its batched products
     over `(N, h)`. (ii) per batch in numpy, per example elsewhere (*chosen*): pros, each
     implementation skips what its loop shape allows at no cost to parity; cons, numpy skips less
@@ -212,11 +215,13 @@ Each lists the options considered, with pros and cons, and the choice.
   `(N, h, T, T)` mask per forward batch, every entry drawn in row-major order, and keeps it for the
   backward pass: quadratic memory again, which D3 doesn't address.
   - (a) *Chosen.* The forward saves the dropout generator's state before its draws and draws the
-    mask a query block at a time; the backward restores a copy of that state and draws the same
+    mask a key block at a time; the backward restores a copy of that state and draws the same
     blocks again in the same order. Every entry is still drawn (the masked ones included, as
     today), so the draw count, and the generator's state after the batch, are today's. The order
-    changes to query-block-major, `(query block, example, head, query in block, key)`, so numpy
-    draws an `(N, h, b, T)` block in one call; memory `N h b T`, linear in `T`. Pros: memory
+    changes to key-block-major, `(key block, example, head, query, key in block)`, so numpy
+    draws an `(N, h, T, b)` block in one call, the shape the key-block loop of the forward and
+    backward passes reads (refined in stage 4 from query-block-major, which no pass's loop
+    matches); memory `N h T b`, linear in `T`. Pros: memory
     linear; no new RNG; the network's generator advances as before, so nothing after the
     attention's draws shifts. Cons: the mask's bits change (the order), which D9's re-record covers;
     the draws are made twice (once in the backward), a cost linear in the work already done.

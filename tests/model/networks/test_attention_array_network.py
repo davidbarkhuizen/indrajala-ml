@@ -19,7 +19,7 @@ from indrajala_ml.data.mnist_data import load_mnist_dataset
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.layers.numpy import attention_array_layer
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
-from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
+from indrajala_ml.model.layers.numpy.attention_array_layer import BLOCK, AttentionArrayLayer, Masking, tiled_forward
 from indrajala_ml.model.layers.numpy.token_array_layer import (
     PatchesArrayLayer,
     PositionArrayLayer,
@@ -122,19 +122,6 @@ def test_the_token_mean_is_a_left_fold_over_the_tokens_divided_by_their_count():
     assert bits(layer.downstream_batch()) == bits(np.array([[1.0, -0.5] * 3]))
 
 
-def _softmax_rows(S: list[list[float]]) -> list[list[float]]:
-    # the README's softmax, max-shifted, a left fold for the sum
-    P: list[list[float]] = []
-    for row in S:
-        m = max(row)
-        e = [math.exp(s - m) for s in row]
-        total = 0.0
-        for value in e:
-            total += value
-        P.append([value / total for value in e])
-    return P
-
-
 # (heads, key_size) over 6 features: one head as step 4's, heads splitting the width, and key sizes
 # that make h * d_k differ from d both ways (the defaults hide d against h * d_k mix-ups)
 HEADS = [(1, None), (2, None), (3, None), (2, 4), (4, 1)]
@@ -164,33 +151,47 @@ def test_attentions_softmax_and_its_backward_follow_the_readme_per_head_by_bits(
 
     Wo = attention.Wo.copy()  # the optimizer steps it in place after the backward pass
     built.learn_batch(0.5, batch)  # the forward and backward passes to compare against
-    # the caches: Q, K, V as (N, h, T, d_k) views, P (N, h, T, T), H and dQ, dK, dV as (N * T, h * d_k)
-    Q, K, V, P = attention._Q, attention._K, attention._V, attention._P
-    assert (Q.shape, P.shape, attention._H.shape, attention._dQ.shape) == (
+    # the caches: Q, K, V as (N, h, T, d_k) views, m and l (N, h, T, 1), H and dQ, dK, dV as
+    # (N * T, h * d_k); T = 4 is one key block (the context-length workplan, D3)
+    Q, K, V, m, l = attention._Q, attention._K, attention._V, attention._m, attention._l
+    assert (Q.shape, m.shape, l.shape, attention._H.shape, attention._dQ.shape) == (
         (3, heads, 4, d_k),
-        (3, heads, 4, 4),
+        (3, heads, 4, 1),
+        (3, heads, 4, 1),
         (12, width),
         (12, width),
     )
     dH = (attention.delta_batch.reshape(-1, 6) @ Wo).reshape(3, 4, width)
+    H = attention._H.reshape(3, 4, width)
     for i in range(heads):
-        Qi, Ki, Vi, Pi = Q[:, i], K[:, i], V[:, i], P[:, i]
+        Qi, Ki, Vi = Q[:, i], K[:, i], V[:, i]
         S = (Qi @ Ki.transpose(0, 2, 1)) / math.sqrt(d_k)
+        # one block's online softmax: m the row max, e = exp(S - m), l its left fold, H = (e V) / l
+        e = np.empty_like(S)
         for n in range(3):
-            assert bits(Pi[n]) == bits(np.array(_softmax_rows(S[n].tolist())))
-        H = attention._H.reshape(3, 4, width)
-        assert bits(_block(H, i, d_k)) == bits(Pi @ Vi)
+            for t in range(4):
+                row_max = max(S[n, t].tolist())
+                assert m[n, i, t, 0] == row_max
+                e[n, t] = [math.exp(s - row_max) for s in S[n, t].tolist()]
+                fold = 0.0
+                for u in range(4):
+                    fold += e[n, t, u]
+                assert l[n, i, t, 0] == fold
+        assert bits(_block(H, i, d_k)) == bits((e @ Vi) / l[:, i])
 
-        # dS from dP: r_t = sum_u(dP_tu * P_tu), a left fold, then P_tu * (dP_tu - r_t)
+        # the backward: P = exp(S - m) / l recomputed, D_t = sum_j(dH_tj * H_tj) a left fold over
+        # d_k (FlashAttention-2's), then dS = P * (dP - D)
+        Pi = attention_array_layer.exp(S - m[:, i]) / l[:, i]
         dHi = _block(dH, i, d_k)
+        Hi = _block(H, i, d_k)
         dP = dHi @ Vi.transpose(0, 2, 1)
         dS = np.empty_like(dP)
         for n in range(3):
             for t in range(4):
-                r = 0.0
-                for u in range(4):
-                    r += dP[n, t, u] * Pi[n, t, u]
-                dS[n, t] = [Pi[n, t, u] * (dP[n, t, u] - r) for u in range(4)]
+                row_term = 0.0
+                for j in range(d_k):
+                    row_term += dHi[n, t, j] * Hi[n, t, j]
+                dS[n, t] = [Pi[n, t, u] * (dP[n, t, u] - row_term) for u in range(4)]
         dQ, dK, dV = (
             attention._dQ.reshape(3, 4, width),
             attention._dK.reshape(3, 4, width),
@@ -236,7 +237,7 @@ def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bit
     X = np.random.default_rng(2).uniform(-1.0, 1.0, (4, 6))
 
     out = layer.forward_batch(X)
-    assert bits(layer._P) == bits(np.ones((4, heads, 1, 1)))
+    assert bits(layer.weights()) == bits(np.ones((4, heads, 1, 1)))
     assert bits(out) == bits((X @ Wv.T + bv) @ Wo.T + bo)
 
 
@@ -255,7 +256,7 @@ def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth(heads: in
     X = np.random.default_rng(4).uniform(-1.0, 1.0, (3, 16 * 8))
 
     layer.forward_batch(X)
-    assert bits(layer._P) == bits(np.full((3, heads, 16, 16), 1 / 16))
+    assert bits(layer.weights()) == bits(np.full((3, heads, 16, 16), 1 / 16))
     width = layer.width
     V = layer._V.transpose(0, 2, 1, 3).reshape(3, 16 * width)
     mean = TokenMeanArrayLayer(16, width).forward_batch(V)
@@ -276,8 +277,9 @@ def test_identical_heads_weigh_and_mix_alike_by_bits(heads: int, key_size: int |
 
     layer.forward_batch(X)
     H = layer._H.reshape(3, 4, layer.width)
+    P = layer.weights()
     for i in range(1, heads):
-        assert bits(layer._P[:, i]) == bits(layer._P[:, 0])
+        assert bits(P[:, i]) == bits(P[:, 0])
         assert bits(_block(H, i, d_k)) == bits(_block(H, 0, d_k))
 
 
@@ -310,7 +312,8 @@ def test_the_blocks_called_in_turn_are_the_layers_passes_by_bits(heads: int, key
     X, delta = rng.uniform(-1.0, 1.0, (3, 4 * 6)), rng.uniform(-0.5, 0.5, (3, 4 * 6))
 
     Q, K, V = layer._project(X.reshape(-1, 6))
-    P, H = layer._attend(layer._heads(Q), layer._heads(K), layer._heads(V))
+    masking = Masking(causal=False)
+    H, m, l = tiled_forward(layer._heads(Q), layer._heads(K), layer._heads(V), layer.scale, masking, BLOCK, None, 1.0)
     out = layer._combine(layer._side_by_side(H))
     assert bits(layer.forward_batch(X)) == bits(out.reshape(3, -1))
 
@@ -318,7 +321,7 @@ def test_the_blocks_called_in_turn_are_the_layers_passes_by_bits(heads: int, key
     dX = layer._project_backward(layer._side_by_side(dQ), layer._side_by_side(dK), layer._side_by_side(dV))
     layer._backward(delta)
     assert bits(layer.downstream_batch()) == bits(dX.reshape(3, -1))
-    assert bits(layer._P) == bits(P)
+    assert (bits(layer._m), bits(layer._l)) == (bits(m), bits(l))
 
 
 def test_an_identity_attention_block_changes_no_output_and_no_other_layers_gradient_by_bits():

@@ -99,10 +99,9 @@ def _sliding_reference(specs: list[LayerSpec], network: Any, ids: list[int]) -> 
     n = len(ids)
     long = _network(specs, window=n)
     long.restore(network.snapshot())
-    band = np.triu(np.ones((n, n), dtype=np.bool_), k=1) | np.tril(np.ones((n, n), dtype=np.bool_), k=-WINDOW)
     for layer in long.layers:
         if isinstance(layer, AttentionArrayLayer):
-            layer._future = band  # pyright: ignore[reportPrivateUsage]
+            layer._band = WINDOW  # pyright: ignore[reportPrivateUsage]
     return _full(long, ids)
 
 

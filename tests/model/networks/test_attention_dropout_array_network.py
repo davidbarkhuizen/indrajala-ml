@@ -78,14 +78,21 @@ def test_without_drawing_an_attention_with_dropout_is_the_one_without_by_bits(tr
     assert _state(dropping.rng) == before
 
 
+@pytest.mark.parametrize("block", [64, 3], ids=["one key block", "blocks of 3"])
 @pytest.mark.parametrize("causal", [False, True], ids=["unmasked", "causal"])
-def test_the_mask_is_one_draw_per_weight_row_major_the_causally_masked_ones_included(causal: bool):
+def test_the_mask_is_one_draw_per_weight_key_block_major_the_causally_masked_ones_included(causal: bool, block: int):
+    # key block by key block, each block's (N, h, T, b) row-major (the context-length workplan, D12)
     layer = _attention(0.3, causal)
+    layer.block = block
     layer.set_rng(np.random.default_rng(5))
     layer.set_training_mode(True)
     layer.forward_batch(_X())
-    expected = np.random.default_rng(5).random((N, H, T, T)) >= 0.3
-    assert bits(layer._M) == bits(expected.astype(np.float64))  # pyright: ignore[reportPrivateUsage]
+    rng = np.random.default_rng(5)
+    expected = np.concatenate(
+        [rng.random((N, H, T, min(T, k0 + block) - k0)) >= 0.3 for k0 in range(0, T, block)], axis=-1
+    )
+    mask = layer.dropout_mask()
+    assert mask is not None and bits(mask) == bits(expected.astype(np.float64))
     # exactly that many draws: the generator is where one (N, h, T, T) draw leaves it
     after = np.random.default_rng(5)
     after.random((N, H, T, T))
@@ -98,13 +105,17 @@ def test_attend_drops_the_weights_and_scales_the_kept_ones_and_the_undropped_p_i
     layer.set_training_mode(True)
     layer.forward_batch(_X())
     plain.forward_batch(_X())
-    P, M = plain._P, layer._M  # pyright: ignore[reportPrivateUsage]
+    P, M = plain.weights(), layer.dropout_mask()
     assert M is not None and 0.0 < M.mean() < 1.0
-    # the softmax's P as without dropout, then P~ = P * M / keep and H = P~ V
-    assert bits(layer._P) == bits(P)  # pyright: ignore[reportPrivateUsage]
-    dropped = P * M / 0.7
-    assert bits(layer._H) == bits(plain._side_by_side(dropped @ plain._V))  # pyright: ignore[reportPrivateUsage]
-    # a kept row no longer sums to 1, and a dropped weight is exactly 0
+    # the softmax's P as without dropout; one key block (T = 4): e = exp(S - m) dropped, e M / keep,
+    # then H = (e M / keep) V / l (the context-length workplan, D3, D12)
+    assert bits(layer.weights()) == bits(P)
+    m, l = layer._m, layer._l  # pyright: ignore[reportPrivateUsage]
+    S = (layer._Q @ layer._K.swapaxes(-1, -2)) / layer.scale  # pyright: ignore[reportPrivateUsage]
+    e = np.exp(S - m)
+    dropped = e * M / 0.7
+    assert bits(layer._H) == bits(plain._side_by_side((dropped @ layer._V) / l))  # pyright: ignore[reportPrivateUsage]
+    # a dropped weight is exactly 0
     assert (dropped[M == 0.0] == 0.0).all()
 
 
@@ -116,12 +127,14 @@ def test_the_backward_pass_takes_p_tilde_for_dv_and_the_mask_for_dp_by_bits():
     layer.set_training_mode(False)  # as the network does before its backward pass
     delta = _X(2)
     layer._backward(delta)  # pyright: ignore[reportPrivateUsage]
-    Q, K, V, P, M = layer._Q, layer._K, layer._V, layer._P, layer._M  # pyright: ignore[reportPrivateUsage]
+    Q, K, V = layer._Q, layer._K, layer._V  # pyright: ignore[reportPrivateUsage]
+    P, M = layer.weights(), layer.dropout_mask()
     assert M is not None
     dH = layer._heads(layer._rows(delta, D) @ layer.Wo)  # pyright: ignore[reportPrivateUsage]
-    dV = (P * M / 0.7).swapaxes(-1, -2) @ dH
-    dP = (dH @ V.swapaxes(-1, -2)) * M / 0.7
-    r = np.cumsum(dP * P, axis=-1)[..., -1:]
+    dV = (P * (M / 0.7)).swapaxes(-1, -2) @ dH
+    dP = (dH @ V.swapaxes(-1, -2)) * (M / 0.7)
+    # D = the fold of dH H over d_k (FlashAttention-2's), the forward's dropped H
+    r = np.cumsum(dH * layer._H_heads, axis=-1)[..., -1:]  # pyright: ignore[reportPrivateUsage]
     dS = P * (dP - r)
     assert bits(layer._dV) == bits(layer._side_by_side(dV))  # pyright: ignore[reportPrivateUsage]
     assert bits(layer._dQ) == bits(layer._side_by_side((dS @ K) / layer.scale))  # pyright: ignore[reportPrivateUsage]
@@ -175,7 +188,7 @@ def test_the_networks_layers_draw_their_masks_in_forward_order_from_its_one_gene
     built.learn_batch(0.5, data)
     # the embedding's dropout, the attention's weights, the attention block's dropout, the FFN's
     masks = [
-        layer._mask_batch if isinstance(layer, TokenDropoutArrayLayer) else layer._M  # pyright: ignore[reportPrivateUsage]
+        layer._mask_batch if isinstance(layer, TokenDropoutArrayLayer) else layer.dropout_mask()  # pyright: ignore[reportPrivateUsage]
         for layer in built.layers
         if isinstance(layer, TokenDropoutArrayLayer | AttentionArrayLayer)
     ]
