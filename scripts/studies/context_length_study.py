@@ -5,9 +5,9 @@ document mask, on every corpus and both held-out splits, 5 seeds, at the token b
 2,048), the training windows cut anew every epoch. Under
 indrajala_ml/studies/context_length_study.py's protocol and the workplan's registered claims.
 
-    python scripts/studies/context_length_study.py time --arm 1024 --backend rust --epochs E
-    python scripts/studies/context_length_study.py sweep --corpora herodotus-rawlinson --epochs E --workers 8
-    python scripts/studies/context_length_study.py report --results A.json B.json --epochs E
+    python scripts/studies/context_length_study.py time --arm 1024 --backend rust --epochs 30
+    python scripts/studies/context_length_study.py sweep --corpora herodotus-rawlinson muqaddimah --backend rust --epochs 30 --workers 8
+    python scripts/studies/context_length_study.py report --results A.json B.json --epochs 30
 
 Findings: none yet (the study hasn't run).
 """
