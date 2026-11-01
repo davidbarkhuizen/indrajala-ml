@@ -137,7 +137,8 @@ class Embedding:
     separator (vocabulary - 2) ending each paragraph and the pad (vocabulary - 1), whose row is zero
     and never updated. The network reads every batch's segments from its ids: a token attends only
     within its paragraph, positions count from each paragraph's start, and a target counts unless
-    its input is a pad or a separator. A batch with neither id trains as without segments.
+    its input is a pad (the separator's, the next paragraph's first character, counts: the
+    context-length workplan, D11). A batch with neither id trains as without segments.
     """
 
     vocabulary: int

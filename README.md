@@ -1041,7 +1041,7 @@ specs = [
 ]
 ```
 
-- **Special tokens** (`CharacterTokenizer.special`): `<|sep|>` (id V) ends each paragraph and
+- **Special tokens** (`CharacterTokenizer.special`): `<|sep|>` (id V), the end-of-paragraph token, ends each paragraph and
   `<|pad|>` (V + 1) fills a padded row. The embedding has V + 2 rows, the pad's zero and never
   updated; the output has V + 1 classes (a model predicts the separator, never the pad).
 - **Packing** (`load_packed_text_dataset`): the paragraphs (between blank lines), each followed by
@@ -1057,8 +1057,10 @@ specs = [
 - **Positions** count from each segment's first token; rotary scores depend on `t - u` within a
   segment, so only a learned `Position` reads differently.
 - **The loss** is the mean over the batch's counted targets, PyTorch's `ignore_index` mean: a
-  target counts unless its input is a pad or a separator (the next paragraph's first character
-  can't be predicted across the mask). The evaluation counts the same tokens.
+  target counts unless its input is a pad. The separator is the end-of-paragraph token, so its
+  target, the next paragraph's first character, counts, predicted from the paragraph it ends (the
+  context-length workplan, D11): a decode's first character after it comes from a trained row.
+  The evaluation counts the same tokens.
 - **A batch with neither special id** takes the path without segments, bit for bit and at its
   speed. A packed segment's outputs are those it gives packed after any other, or alone and
   left-padded (tests, all three implementations).

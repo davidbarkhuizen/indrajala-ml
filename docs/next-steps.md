@@ -110,8 +110,8 @@ golden entries (D10). Left:
 - **The forward context's cost:** stage 2's keyword context costs Rust's dense B=32 epoch 1.1%
   (D10, accepted); a call path that passes it without the keyword is the place to look if a later
   A/B needs it back.
-- The decoder's follow-ups (a batched crate step; a paragraph's first token from an untrained row)
-  are in From generation.
+- The decoder's follow-ups (a batched crate step) are in From generation; a paragraph's first
+  token, drawn from an untrained row, is trained since the context-length workplan's D11.
 
 ## From the training recipe (retired 2026-11-01)
 

@@ -60,8 +60,8 @@ def test_the_context_reads_segments_positions_and_counted_targets_from_the_ids()
     context = segment_context(ids, SEP, PAD)
     assert context.segments.tolist() == [[1, 1, 1, 2, 2, 2, 3, 3], [0, 0, 0, 1, 1, 1, 1, 2]]
     assert context.positions.tolist() == [[0, 1, 2, 0, 1, 2, 0, 1], [0, 1, 2, 0, 1, 2, 3, 0]]
-    assert context.counted.tolist() == [[1, 1, 0, 1, 1, 0, 1, 1], [0, 0, 0, 1, 1, 1, 0, 1]]
-    assert context.count == 10
+    assert context.counted.tolist() == [[1, 1, 1, 1, 1, 1, 1, 1], [0, 0, 0, 1, 1, 1, 1, 1]]
+    assert context.count == 13
     assert segment_context(np.array([[0, 1, 2, 3]], dtype=np.float64), SEP, PAD) is NO_CONTEXT
 
 
@@ -138,11 +138,12 @@ def test_the_pads_row_is_zero_and_stays_zero_through_training():
 
 def test_the_evaluation_counts_the_targets_the_loss_counts():
     network = _network("rotary")
-    window = ((1.0, 2.0, float(SEP), 3.0, 4.0, float(SEP), 0.0, 1.0), (2, SEP, 3, 4, SEP, 0, 1, 2))
+    # a pad's target doesn't count; the end-of-paragraph token's does (the context-length workplan, D11)
+    window = ((float(PAD), 2.0, float(SEP), 3.0, 4.0, float(SEP), 0.0, 1.0), (2, SEP, 3, 4, SEP, 0, 1, 2))
     evaluation = sequence_evaluate(network, [window])
-    assert evaluation.tokens == 6
+    assert evaluation.tokens == 7
     probabilities = _outputs(network, [[int(x) for x in window[0]]])[0]
-    kept = [t for t in range(T) if window[0][t] not in (SEP, PAD)]
+    kept = [t for t in range(T) if window[0][t] != PAD]
     expected = -np.mean([np.log(probabilities[t, window[1][t]]) for t in kept])
     assert evaluation.cross_entropy == pytest.approx(expected, rel=1e-12)
 

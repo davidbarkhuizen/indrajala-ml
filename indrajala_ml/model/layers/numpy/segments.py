@@ -5,8 +5,9 @@ id, its position within its segment, and whether its target counts.
 - A separator ends its paragraph, so it belongs to it: a token's segment is 1 + the separators
   before it, and a pad's is 0. Pads stand before a row's first real token (left padding, D8).
 - A position counts from its segment's first token (D5).
-- A target counts unless its input is a pad or a separator (D6): the token after a separator, the
-  next paragraph's first, can't be predicted from the masked context.
+- A target counts unless its input is a pad (D6; the context-length workplan, D11): the separator is
+  the end-of-paragraph token, so its target, the next paragraph's first character, counts,
+  predicted from the paragraph the token ends.
 
 A batch with neither a separator nor a pad has one segment a row and every target counted: its
 context is NO_CONTEXT, so it trains by today's path, bit for bit (D9).
@@ -34,7 +35,7 @@ def segment_context(X: FloatArray, separator: int, pad: int) -> ForwardContext:
     starts[:, 1:] = segments[:, 1:] != segments[:, :-1]
     first: npt.NDArray[np.intp] = np.maximum.accumulate(np.where(starts, tokens, 0), axis=1)
     positions = tokens - first
-    counted = (~(is_separator | is_pad)).astype(np.float64)
+    counted = (~is_pad).astype(np.float64)
     return ForwardContext(
         segments=segments, positions=positions, counted=counted, count=int(counted.sum()), examples=ids.shape[0]
     )
