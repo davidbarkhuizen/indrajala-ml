@@ -57,7 +57,7 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
         self._output_deltas(category)
         self._backward_hidden_layers(context=context)
 
-    def _output_deltas(self, category: int) -> None:
+    def _output_deltas(self, category: int, context: ForwardContext = NO_CONTEXT) -> None:
         for i, node in enumerate(self.output_layer.nodes):
             node.compute_output_delta(1.0 if i == category else 0.0)
 

@@ -133,6 +133,7 @@ class RustBackend:
             positions=pa.Array(context.positions.astype(np.float64).tolist()),
             counted=pa.Array(context.counted.tolist()),
             count=context.count,
+            examples=context.examples,
         )
 
     @staticmethod

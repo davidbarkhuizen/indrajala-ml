@@ -52,7 +52,7 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
         self._output_deltas(reference_value)
         self._backward_hidden_layers(context=context)
 
-    def _output_deltas(self, reference_value: float) -> None:
+    def _output_deltas(self, reference_value: float, context: ForwardContext = NO_CONTEXT) -> None:
         self.output_layer.nodes[0].compute_output_delta(reference_value)
 
     def half_widths(self) -> list[float]:

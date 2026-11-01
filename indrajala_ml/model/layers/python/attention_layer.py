@@ -53,6 +53,7 @@ from typing import ClassVar
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer
+from indrajala_ml.model.layers.python.segments import blocked
 from indrajala_ml.model.layers.python.token_layer import (
     TokenNode,
     WeightRow,
@@ -243,7 +244,9 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
             return self._rotated(Q, start=start), self._rotated(K, start=start), V
         return Q, K, V
 
-    def _attend(self, Q: Matrix, K: Matrix, V: Matrix, masked: bool = True) -> tuple[Matrix, Matrix, Matrix | None]:
+    def _attend(
+        self, Q: Matrix, K: Matrix, V: Matrix, masked: bool = True, segments: Sequence[int] | None = None
+    ) -> tuple[Matrix, Matrix, Matrix | None]:
         # each head's weights, mix and mask: P (T, h * T), H (T, h * d_k) and M (T, h * T, or None
         # when nothing is drawn), packed; a causal layer masks unless the keys are all at or before
         # the queries (a decode's step)
@@ -258,6 +261,9 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
                 s = [_dot(q, k) / self.scale for k in Ki]
                 if self.causal and masked:
                     s[i_query + 1 :] = [-math.inf] * (len(s) - i_query - 1)
+                if segments is not None:
+                    # across segments and from pads (the segments workplan, D4)
+                    s = [-math.inf if blocked(segments, i_query, u) else s_u for u, s_u in enumerate(s)]
                 m = max(s)
                 e = [exp(s_u - m) for s_u in s]
                 total = fold(e)
@@ -279,7 +285,8 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
 
     def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._Q, self._K, self._V = self._project(self._inputs())
-        self._P, self._H, self._M = self._attend(self._Q, self._K, self._V)
+        segments = None if context.segments is None else context.segments[0]
+        self._P, self._H, self._M = self._attend(self._Q, self._K, self._V, segments=segments)
         out = self._combine(self._H)
         for node, value in zip(self.nodes, (value for row in out for value in row)):
             node.activate(value)

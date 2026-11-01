@@ -14,7 +14,6 @@ import pytest
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT
 from indrajala_ml.model.layers.numpy.segments import attention_blocked, segment_context
-from indrajala_ml.model.networks.python.sequential_backprop_network import SequentialSequenceBackpropNetwork
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.persistence.format2_json import layer_from_json, layer_to_json
 from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, LayerSpec, Position, Residual
@@ -154,11 +153,6 @@ def test_a_segmented_embedding_is_written_only_when_it_has_segments():
     assert entry["segments"] is True and layer_from_json(entry) == Embedding(7, 4, segments=True)
     with pytest.raises(ValueError, match="separator and a pad"):
         Embedding(2, 4, segments=True)
-
-
-def test_segments_are_refused_in_pure_python_until_its_stage():
-    with pytest.raises(NotImplementedError, match="stage 7"):
-        SequentialSequenceBackpropNetwork((T,), _specs("rotary"), Adam())
 
 
 def test_a_packed_batch_trains_and_its_loss_falls():

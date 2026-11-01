@@ -8,6 +8,7 @@ from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
 from indrajala_ml.model.layers.python.python_layer_builder import build_python_layers
+from indrajala_ml.model.layers.python.segments import segment_rows
 from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.layers.python.token_layer import TokenSoftmaxLayer
 from indrajala_ml.model.optimizers.python_optimizer import PythonOptimizer, WeightSetState
@@ -15,7 +16,7 @@ from indrajala_ml.model.persistence.format2 import PYTHON
 from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
 from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer, TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_batch, validate_input_bounds
-from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.layer_specs import Embedding, LayerSpec
 from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
@@ -69,6 +70,10 @@ class BackpropNetworkBase[
 
         self.input_shape = input_shape
         self.layer_specs = list(specs)
+        # an Embedding with segments, first, makes every batch's context read its ids (the
+        # segments workplan, D3-D6)
+        first = self.layer_specs[0] if self.layer_specs else None
+        self._segments = first if isinstance(first, Embedding) and first.segments else None
         self.dimension = math.prod(input_shape)
 
         validate_input_bounds(self.dimension, input_bounds)
@@ -147,7 +152,7 @@ class BackpropNetworkBase[
     def _backward(self, target: Any, /, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError
 
-    def _output_deltas(self, target: Any, /) -> None:
+    def _output_deltas(self, target: Any, /, context: ForwardContext = NO_CONTEXT) -> None:
         # the output layer's deltas for one example's target, the first half of _backward
         raise NotImplementedError
 
@@ -157,14 +162,19 @@ class BackpropNetworkBase[
     def _forward_context(self, states: Sequence[Sequence[float]]) -> ForwardContext:
         """
         The batch's forward context, built once from its states (the segments workplan, D3) and
-        passed to every layer's passes. Empty until the segments workplan's stage 7.
+        passed to every layer's passes: a network whose Embedding has segments reads the batch's from
+        its ids (segments.py), as lists of rows; the layers, one example at a time, read its
+        example(n). NO_CONTEXT otherwise.
         """
-        return NO_CONTEXT
+        segments = self._segments
+        if segments is None:
+            return NO_CONTEXT
+        return segment_rows(states, segments.separator, segments.pad)
 
     def _forward_outputs(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> list[float]:
         # an inference call gives no context: the example's own is built here
         if context is None:
-            context = self._forward_context([state])
+            context = self._forward_context([state]).example(0)
         self.update_state_layer(state)
         for layer in self.trainable_layers:
             layer.forward(context=context)
@@ -191,7 +201,7 @@ class BackpropNetworkBase[
         # Training mode for the forward pass only: a no-op but for dropout layers. A network with
         # batch norm refuses (D4).
         self._refuse_single_example()
-        context = self._forward_context([state])
+        context = self._forward_context([state]).example(0)
         self._set_training_mode(True)
         try:
             self._forward(state, context=context)
@@ -217,10 +227,11 @@ class BackpropNetworkBase[
         context = self._forward_context([state for state, _target in batch])
         self._set_training_mode(True)
         try:
-            for state, target in batch:
-                self._forward(state, context=context)
-                self._backward(target, context=context)
-                self._accumulate_gradients(context=context)
+            for n, (state, target) in enumerate(batch):
+                example = context.example(n)
+                self._forward(state, context=example)
+                self._backward(target, context=example)
+                self._accumulate_gradients(context=example)
             self.optimizer.step(self.trainable_layers, learning_rate, len(batch), clip_norm)
         finally:
             self._set_training_mode(False)
@@ -234,7 +245,9 @@ class BackpropNetworkBase[
         try:
             pass_ = LayerMajorBatch(self.input_layer, self.trainable_layers, [state for state, _target in batch])
             pass_.forward(context=context)
-            pass_.backward(lambda example: self._output_deltas(batch[example][1]), context=context)
+            pass_.backward(
+                lambda example: self._output_deltas(batch[example][1], context.example(example)), context=context
+            )
             pass_.accumulate_gradients(context=context)
             self.optimizer.step(self.trainable_layers, learning_rate, len(batch), clip_norm)
         finally:
@@ -245,7 +258,7 @@ class BackpropNetworkBase[
         # the caller set: per example, or layer-major for a network with batch norm or dropout
         context = self._forward_context(states)
         if not self._layer_major:
-            return [self._forward_outputs(state, context=context) for state in states]
+            return [self._forward_outputs(state, context=context.example(n)) for n, state in enumerate(states)]
         pass_ = LayerMajorBatch(self.input_layer, self.trainable_layers, states)
         pass_.forward(context=context)
         return pass_.outputs()
