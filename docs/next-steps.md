@@ -77,6 +77,7 @@ docs cite them by section:
 | The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
 | aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
 | Generation with a key/value cache (roadmap step 9, D1-D9) | #640 | #1143-#1148, crate #85, this PR | `git show 836e9a3:docs/workplans/library/generation-workplan.md` |
+| The training recipe: schedules, AdamW, clipping (roadmap step 10, D1-D11) | #641 | #1150-#1156, crate #86, this PR | `git show b446c31:docs/workplans/library/training-recipe-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -94,7 +95,33 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
 
-## From the research separation (retired 2026-10-31)
+## From the training recipe (retired 2026-11-01)
+
+Done: learning-rate schedules as data (`lr_schedule.py`), recorded and checked in run files; the
+step split and clipping by the global norm; AdamW; golden entries; the study (findings in
+`scripts/studies/lr_schedule_study.py`: cosine below constant on 36 of 40 pairs, C1 holds; the
+recipe below cosine on 40 of 40, C2 differs). Left:
+
+- **Which half of the recipe gains.** C2 compared cosine against cosine with AdamW 0.1 and
+  clipping at 1.0 together; an arm with each alone would say which (or both) gives the 0.021 bits.
+- **The cosine's peak** stayed the constant rate's tuned one (D8 (a)); a decay usually tolerates a
+  higher peak, untested here.
+- **jebel's golden re-record** for the four entries stage 6 added (`golden_training_run.py record`
+  then `archive --reason new-functionality`), now that the study has freed it.
+
+- **indrajala-studies' `FactorRates`** (`window_recurrent_study.py`), a wrapper of the network's
+  optimizer, has no `step()`, which every network's batch step calls since #1152: give it one
+  (`step` applying each layer through its own `apply`) in the studies' next ml bump, or its runs
+  fail at the first batch.
+- **A run file doesn't record `clip_norm`**, so a resumed run under another clip isn't refused as
+  one under another schedule is. Record it beside the schedule (run file version 3) when a resumed
+  clipped run needs it.
+- **Corpora to add** (the owner, 2026-10-31: both in the long run): Newton's *Principia* (Motte's
+  1729 English translation, public domain), long uniform prose like Euclid's; and Whitehead and
+  Russell's *Principia Mathematica* (public domain in the US), whose notation survives plain text
+  only if transcribed, so a source with its symbols is needed before it can be a character corpus.
+  Check each source's licence for the exact edition held (the literature rule).
+
 
 Done: every piece of the window-recurrent research is in
 [indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies): the harness and its
@@ -873,8 +900,8 @@ sampling filters and one seeded draw (D4); a tokenizer file beside a model (D5);
 Within the window a decode is its implementation's full pass by bits in pure Python and on Rust,
 within rounding on numpy (D7).
 
-- **D9's samples are to be replaced when step 10's longer training gives better ones.** They are
-  from 10 epochs (2.410 and 1.438 bits per character held out); `train --epochs` takes more.
+- **D9's samples were replaced** by the training-recipe study's 30-epoch recipe models (2.304 and
+  1.420 bits per character held out, against 10 epochs' 2.410 and 1.438).
 - **numpy's cached step is overhead-bound:** 5.1x uncached against Rust's 12.1x (jebel, the
   2-layer model). A step is a dozen small numpy calls per layer; a fused step would make it
   arithmetic-bound, but nothing needs numpy's decode fast yet.

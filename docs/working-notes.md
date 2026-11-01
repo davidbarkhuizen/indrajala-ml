@@ -69,6 +69,15 @@ where you meet a new trap; delete one that no longer holds.
   files; without `rust/`, `./cli test` stops at once ("no tests ran", exit 0): run `PYTHONPATH=.
   .venv/bin/python -m pytest tests/ -q -p no:cacheprovider` for a package-only PR. `data/mnist`'s
   link isn't ignored, so stage files by name. `git worktree remove --force` deletes only the links.
+- **Squash a branch onto main only after rebasing it there:** `git reset --soft origin/main` on a
+  branch cut from an older main keeps the branch's tree, so the commit reverts whatever merged in
+  between (2026-10-31: segments stage 2's first push reverted stage 3, #1158). Rebase first (`git
+  rebase --onto origin/main <base> <branch>`), then reset, then check `git diff --name-only
+  origin/main` lists only the branch's own files.
+- **Never switch branches or edit files in a worktree while a suite or golden run runs from it**
+  (2026-10-31, three times in one session): the run imports some modules at collection and others
+  later (subprocess tests, the golden run after the suite), so it tests a mix of both trees, and
+  its result counts for neither. Stop it and rerun; put concurrent work in another worktree.
 - **Which package a worktree imports:** pytest imports the worktree's (rootdir); `python -c` and
   scripts import the main checkout's unless `PYTHONPATH=.` (the script's directory, not the cwd,
   is on `sys.path`; `indrajala_ml` is a namespace package with the editable finder). This holds
