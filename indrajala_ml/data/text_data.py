@@ -25,6 +25,11 @@ no paragraph is on both sides: the contiguous split's training part is the first
 the boundary nearest TRAIN_FRACTION of the characters, and the spread split's blocks are runs of whole paragraphs, each
 split the same way, each piece packed on its own. The fixed-window loader stays, for the earlier
 studies' reproducibility.
+
+Windows cut anew every epoch (the context-length workplan, D4; load_packed_text_epochs): the
+training paragraphs shuffled by the trainer's generator each epoch, then packed and cut
+(PackedEpochs); the held-out windows fixed. A step's windows at a token budget: budget_batch_size
+(D5).
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
+from random import Random
 from typing import Literal
 
 from indrajala_ml.model.protocols.classifier_protocols import Example
@@ -220,6 +226,65 @@ def load_packed_text_dataset(
         return [window for block in blocks for window in windows(pack(block, vocabulary), context)]
 
     return cut(train_blocks), cut(held_out_blocks), vocabulary
+
+
+@dataclass(frozen=True)
+class PackedEpochs:
+    """
+    Training windows cut anew every epoch (the context-length workplan, D4): the training
+    paragraphs, shuffled by the trainer's generator, each followed by the separator, packed and cut
+    into windows of context + 1 as load_packed_text_dataset's, so every paragraph is seen once an
+    epoch while the windows' cuts change. The trainer draws an epoch's windows at its start
+    (train.EpochData), so a run resumed from its checkpoint, whose generator state is the epoch
+    boundary's, cuts the same windows. Every epoch has the same count of windows (the tokens are
+    the same, the remainder shorter than a window dropped); which tokens fall in it changes.
+    """
+
+    pieces: tuple[str, ...]
+    vocabulary: Vocabulary
+    context: int = CONTEXT
+
+    def epoch(self, rng: Random) -> list[Example[Labels]]:
+        order = list(self.pieces)
+        rng.shuffle(order)
+        return windows(pack(order, self.vocabulary), self.context)
+
+    def __len__(self) -> int:
+        return (sum(len(piece) + 1 for piece in self.pieces)) // (self.context + 1)
+
+
+def load_packed_text_epochs(
+    path: str = TEXT_PATH,
+    context: int = CONTEXT,
+    train_fraction: float = TRAIN_FRACTION,
+    split_by: Split = "contiguous",
+) -> tuple[PackedEpochs, list[Example[Labels]], Vocabulary]:
+    """
+    load_packed_text_dataset's split with the training windows cut anew every epoch (PackedEpochs,
+    its training paragraphs, every block's under the spread split) and the held-out windows fixed,
+    as load_packed_text_dataset's, so evaluations compare across epochs.
+    """
+    text = load_text(path)
+    vocabulary = Vocabulary.of(text)
+    pieces = paragraphs(text)
+    if split_by == "contiguous":
+        train, held_out = split_paragraphs(pieces, train_fraction)
+        return PackedEpochs(tuple(train), vocabulary, context), windows(pack(held_out, vocabulary), context), vocabulary
+    assert split_by == "spread", f"a split is contiguous or spread; got {split_by!r}"
+    train_blocks, held_out_blocks = spread_split_paragraphs(pieces, train_fraction)
+    train_pieces = tuple(piece for block in train_blocks for piece in block)
+    held_out = [window for block in held_out_blocks for window in windows(pack(block, vocabulary), context)]
+    return PackedEpochs(train_pieces, vocabulary, context), held_out, vocabulary
+
+
+# the token budget per step (the context-length workplan, D5): today's 32 windows of 64
+TOKEN_BUDGET = 2048
+
+
+def budget_batch_size(context: int, budget: int = TOKEN_BUDGET) -> int:
+    """The windows per step at context that make budget tokens (D5): 32 at 64, 8 at 256, 2 at 1,024."""
+    assert context >= 1 and budget % context == 0, f"the context divides the token budget {budget}; got {context}"
+    return budget // context
 
 
 def load_text(path: str = TEXT_PATH) -> str:
