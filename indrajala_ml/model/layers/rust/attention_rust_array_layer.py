@@ -13,8 +13,10 @@ batch's segments, keeping each row's last segment's rotated keys and values in a
 AttentionRustCache; step is the crate's attention_step per row, one token on its row's cache (emptied
 first when the token starts a segment, so it holds the keys a mask would leave, D8 (b)) with its
 column's row of the table (extended past T), its key and value appended and the oldest dropped past
-T. A batched crate step reading the keys' segments would take numpy's form (next-steps.md). Each
-of the crate's outputs is one fixed chain, so a decode's bits are the full pass's within the window.
+T, and its first cached key's column (origin), so the crate cuts the cache's key blocks where the
+full pass's are (the context-length workplan, D3). A batched crate step reading the keys' segments
+would take numpy's form (next-steps.md). Each of the crate's sums is a sequential fold, so a
+decode's bits are the full pass's within the window.
 """
 
 from __future__ import annotations
@@ -57,18 +59,21 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     K and V likewise, each head's P[i] = softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and
     H[i] = P[i] V[i], out = H Wo^T + bo with H the heads side by side. Its parameters, also its
     draw order, are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k),
-    heads as row (Wo: column) blocks; the weights are decayed, the biases not. A causal layer (the
-    sequence task workplan, D7) masks S_ij for j > i in the two forward ops; the backward ops read
-    P, whose masked weights are exactly 0, so they take no mask. A layer with dropout (the
-    attention-dropout workplan, D3-D5) drops its weights in training: the forward ops draw the mask
-    from rng, the network's crate Generator, in numpy's (N, h, T, T) order, so from generators in
-    the same state it is AttentionArrayLayer's by bits, and the backward op takes it. In inference
+    heads as row (Wo: column) blocks; the weights are decayed, the biases not. Attend is tiled, as
+    AttentionArrayLayer's (the context-length workplan, D3): the crate keeps each query's max m and
+    sum l, never P, and its backward op recomputes each key block's weights, masked as the forward
+    was (causal, the sequence task workplan, D7; by segment, the segments workplan, D4), so the
+    layer keeps the forward's segments for it. A layer with dropout (the attention-dropout workplan,
+    D3-D5; the context-length workplan, D12) drops its weights in training: the forward ops draw the
+    masks from rng, the network's crate Generator, key block by key block in numpy's (N, h, T, b)
+    order, so from generators in the same state they are AttentionArrayLayer's by bits, and return
+    the generator's copy before the draws, from which the backward op draws them again. In inference
     and at dropout 0 nothing is drawn. A rotary layer (the rotary-positions workplan, D4, D5) holds
     rotary_table's cos and sin as crate arrays, built once, and passes them to the forward ops, which
     rotate Q and K at the end of project, and to the backward op, which rotates dQ and dK back:
     elementwise, so numpy's bits on the same Q and K. Hidden only, ending a token block's body. The
-    caches are packed as the crate's: Q, K (rotated), V, H (N * T, h * d_k) and P (N * T, h * T),
-    head i in columns i * T..
+    caches are packed as the crate's: Q, K (rotated), V, H (N * T, h * d_k), head i in columns
+    i * d_k.., and m and l (N * T, h).
 
     The backward pass runs whole when the delta is computed (attention_downstream_batch), since the
     gradients need dQ, dK and dV and the layer before reads dX. A single example is the same ops on
@@ -90,11 +95,13 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         self.causal = causal
         self.dropout = dropout
         self._set_up(tokens, features, heads, key_size)
-        # set by set_training_mode and set_rng, as a dense dropout layer's; the forward pass's mask,
-        # None when it drew none, is what the backward pass reads
+        # set by set_training_mode and set_rng, as a dense dropout layer's; the forward pass's copy of
+        # the generator before its draws, None when it drew none, is what the backward pass draws
+        # the same masks from (the context-length workplan, D12)
         self.training = False
         self.rng = pa.default_rng()
-        self._M: pa.Array | None = None
+        self._dropout_rng: pa.Generator | None = None
+        self._segments: Any = None
         assert positions in ("none", "rotary"), f'an attention\'s positions are "none" or "rotary"; got {positions!r}'
         self.positions = positions
         self.rotary_base = rotary_base
@@ -125,7 +132,8 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         ]
 
     def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
-        self.a, self._Q, self._K, self._V, self._P, self._H, self._M = pa.attention_forward(
+        self._segments = context.segments
+        self.a, self._Q, self._K, self._V, self._H, self._m, self._l, self._dropout_rng = pa.attention_forward(
             x,
             *self.parameters(),
             heads=self.heads,
@@ -139,7 +147,8 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         return self.a
 
     def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
-        self.A, self._Q, self._K, self._V, self._P, self._H, self._M = pa.attention_forward_batch(
+        self._segments = context.segments
+        self.A, self._Q, self._K, self._V, self._H, self._m, self._l, self._dropout_rng = pa.attention_forward_batch(
             X,
             *self.parameters(),
             heads=self.heads,
@@ -175,7 +184,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         # keys and values
         N = context.examples
         L = X.shape[0] // N
-        A, _Q, K, V, _P, _H, _M = pa.attention_forward_batch(
+        A, _Q, K, V, _H, _m, _l, _rng = pa.attention_forward_batch(
             X.reshape((N, L * self.features)),
             *self.parameters(),
             heads=self.heads,
@@ -201,6 +210,9 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         out: list[pa.Array] = []
         for n in range(N):
             cache.start_segment(n, 1 if segments is None else segments[n])
+            # the first cached key's column once this token's is appended: the crate cuts the cache's
+            # key blocks where the full pass's are (the context-length workplan, D3)
+            origin = context.column + 1 - min(self.tokens, cache.K[n].shape[0] + 1)
             a, cache.K[n], cache.V[n] = pa.attention_step(
                 x.row(n),
                 *self.parameters(),
@@ -208,6 +220,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
                 v_cache=cache.V[n],
                 heads=self.heads,
                 window=self.tokens,
+                origin=origin,
                 **table,
             )
             out.append(a.reshape((1, self.features)))
@@ -223,11 +236,16 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             self._Q,
             self._K,
             self._V,
-            self._P,
+            self._H,
+            self._m,
+            self._l,
             heads=self.heads,
-            mask=self._M,
+            causal=self.causal,
+            segments=self._segments,
             dropout=self.dropout,
-            **self._table,
+            dropout_rng=self._dropout_rng,
+            cos=self._table.get("cos"),
+            sin=self._table.get("sin"),
         )
 
     def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:

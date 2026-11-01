@@ -52,13 +52,18 @@ either backend's RNG) and non-default hyperparameters, so a hyperparameter the l
 
 Writing refuses to overwrite a fixture: save() no longer writes the legacy envelope, so a rewritten
 legacy fixture would no longer pin it, and a rewritten format-2 one would no longer pin the format
-as first written. Only a new class gets a new file.
+as first written. Only a new class gets a new file. After an approved change to a forward pass's
+arithmetic (docs/measurement.md, §8), a fixture's stored outputs alone are predicted again by its
+loaded network, its file and weights kept:
+
+    python -m tests.saved_model_fixtures --outputs NAME ...
 """
 
 from __future__ import annotations
 
 import json
 import random
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -705,7 +710,35 @@ def _seed_generator(network: Any, seed: int) -> None:
         cast("BackpropNetworkBase[Any]", network).rng = default_rng(seed)
 
 
+def rerecord_outputs(name: str) -> None:
+    """
+    A fixture's stored outputs predicted again by its loaded network: after an approved change to a
+    forward pass's arithmetic (docs/measurement.md, §8), the saved file and its weights stay, and
+    only what the network predicts from them moves (the context-length workplan, D9: tiled
+    attention's re-record).
+    """
+    fixture = FIXTURES[name]
+    expected_path = FIXTURE_DIR / f"{name}.expected.json"
+    with open(expected_path) as f:
+        expected = json.load(f)
+    loaded = fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json"))
+    states = [tuple(state) for state in from_bits(expected["states"])]
+    expected["outputs"] = outputs(loaded, fixture.predict, states)
+    with open(expected_path, "w") as f:
+        json.dump(expected, f, indent=1)
+        f.write("\n")
+    print(f"{name}: outputs re-recorded")
+
+
 def main() -> None:
+    """
+    Writes every missing fixture; with --outputs NAME ..., re-records those fixtures' stored outputs
+    instead (rerecord_outputs).
+    """
+    if len(sys.argv) > 2 and sys.argv[1] == "--outputs":
+        for name in sys.argv[2:]:
+            rerecord_outputs(name)
+        return
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
     for name, fixture in FIXTURES.items():
         _write(name, fixture)
