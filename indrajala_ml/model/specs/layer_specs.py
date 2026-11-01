@@ -132,10 +132,31 @@ class Embedding:
     """
     A flat input of T token ids, each in [0, vocabulary), as (T, size) tokens: each id's row of a
     learned (vocabulary, size) table (the sequence task workplan, D5). The first layer, as Patches.
+
+    segments (the segments workplan, D2-D6): the last two ids are the tokenizer's special tokens, the
+    separator (vocabulary - 2) ending each paragraph and the pad (vocabulary - 1), whose row is zero
+    and never updated. The network reads every batch's segments from its ids: a token attends only
+    within its paragraph, positions count from each paragraph's start, and a target counts unless
+    its input is a pad or a separator. A batch with neither id trains as without segments.
     """
 
     vocabulary: int
     size: int
+    segments: bool = False
+
+    def __post_init__(self) -> None:
+        if self.segments and self.vocabulary < 3:
+            raise ValueError(
+                f"an Embedding with segments has a symbol, a separator and a pad; got {self.vocabulary} ids"
+            )
+
+    @property
+    def separator(self) -> int:
+        return self.vocabulary - 2
+
+    @property
+    def pad(self) -> int:
+        return self.vocabulary - 1
 
 
 @dataclass(frozen=True)

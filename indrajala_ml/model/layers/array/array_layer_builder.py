@@ -213,6 +213,9 @@ def _token_layer(
     if isinstance(spec, Patches):
         return classes.patches(*image_shape(shape), spec.patch_size)
     if isinstance(spec, Embedding):
+        if spec.segments:
+            # the pad's row stays zero (the segments workplan, D2); numpy only until stage 6
+            return classes.embedding(shape[0], spec.vocabulary, spec.size, spec.pad)
         return classes.embedding(shape[0], spec.vocabulary, spec.size)
     if isinstance(spec, LayerNorm):
         return classes.layer_norm(*token_shape(shape), spec.epsilon)

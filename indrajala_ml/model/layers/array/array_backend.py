@@ -6,11 +6,13 @@ from typing import Any
 import indrajala_math_rust as pa
 import numpy as np
 
+from indrajala_ml.model.layers.forward_context import ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import (
     FloatArray,
     fan_in_aware_random_layer,
     fan_in_aware_random_weights,
 )
+from indrajala_ml.model.layers.numpy.segments import segment_context
 from indrajala_ml.model.layers.rust.rust_array_layer import (
     fan_in_aware_random_rust_layer,
     fan_in_aware_random_rust_weights,
@@ -40,6 +42,10 @@ class NumpyBackend:
     name = "numpy"
     random_layer = staticmethod(fan_in_aware_random_layer)
     random_weights = staticmethod(fan_in_aware_random_weights)
+
+    @staticmethod
+    def segment_context(X: FloatArray, separator: int, pad: int) -> ForwardContext:
+        return segment_context(X, separator, pad)
 
     @staticmethod
     def default_rng(seed: Any = None) -> np.random.Generator:
@@ -113,6 +119,10 @@ class RustBackend:
     name = "rust"
     random_layer = staticmethod(fan_in_aware_random_rust_layer)
     random_weights = staticmethod(fan_in_aware_random_rust_weights)
+
+    @staticmethod
+    def segment_context(X: pa.Array, separator: int, pad: int) -> ForwardContext:
+        raise NotImplementedError("segments on Rust come with the segments workplan's stage 6")
 
     @staticmethod
     def default_rng(seed: Any = None) -> pa.Generator:

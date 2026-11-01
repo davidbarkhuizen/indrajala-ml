@@ -25,7 +25,7 @@ from indrajala_ml.model.protocols.array_protocols import (
 )
 from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer
 from indrajala_ml.model.specs.bounds import validate_batch
-from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.layer_specs import Embedding, LayerSpec
 from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
@@ -70,6 +70,14 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
     def __init__(self, specs: Sequence[LayerSpec], input_shape: InputShape) -> None:
         self.input_shape = input_shape
         self.layer_specs = list(specs)
+        # an Embedding with segments, first, makes every batch's context read its ids (the
+        # segments workplan, D3-D6)
+        first = self.layer_specs[0] if self.layer_specs else None
+        self._segments = first if isinstance(first, Embedding) and first.segments else None
+        if self._segments is not None and self.backend.name != "numpy":
+            raise NotImplementedError(
+                "an Embedding with segments trains on numpy until the segments workplan's stage 6"
+            )
         self.layers = cast(
             "list[ArrayNetworkLayer[A]]",
             build_array_layers(specs, input_shape, self.backend.name, self._window_state_size()),
@@ -111,10 +119,14 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
     def _forward_context(self, X: A) -> ForwardContext:
         """
         The batch's forward context, built once from its input (the segments workplan, D3) and
-        passed to every layer's passes; X is one example's vector or a batch's rows. Empty until the
-        segments workplan's stage 4 reads segment ids from it.
+        passed to every layer's passes; X is one example's vector or a batch's rows. A network whose
+        Embedding has segments builds the batch's segments from its ids (segments.py); every other
+        batch's is NO_CONTEXT, as is one with neither special id (D9).
         """
-        return NO_CONTEXT
+        segments = self._segments
+        if segments is None:
+            return NO_CONTEXT
+        return self.backend.segment_context(X, segments.separator, segments.pad)
 
     def _forward_input(self, x: A) -> A:
         context = self._forward_context(x)
@@ -299,6 +311,10 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
                 embedding = cast("EmbeddingTableLayer[A]", layer)
                 vocabulary, size = embedding.E.shape
                 embedding.E = self.backend.random_weights(self.rng, vocabulary, size)
+                pad = getattr(embedding, "pad", None)
+                if pad is not None:
+                    for j in range(size):
+                        embedding.E[pad, j] = 0.0  # the pad's row is zero (the segments workplan, D2)
             elif isinstance(layer, StateProjectionLayer):
                 state_input = cast("StateProjectionLayer[A]", layer)
                 rows, fan_in = state_input.P.shape

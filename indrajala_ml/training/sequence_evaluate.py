@@ -1,7 +1,9 @@
 """
 A sequence network's evaluation on held-out windows (the sequence task workplan, D8): the mean
 per-token cross-entropy, in nats and in bits per token (bits per character on a character-level
-corpus), and the per-token accuracy, every token of every window counted once.
+corpus), and the per-token accuracy, every token of every window counted once. For a network whose
+Embedding has segments, only the targets that count in its loss (the segments workplan, D6): not
+those whose input is a pad or a separator, so the evaluation reports the training loss's tokens.
 """
 
 from __future__ import annotations
@@ -41,15 +43,25 @@ def sequence_evaluate(network: Any, examples: Sequence[Example[tuple[int, ...]]]
     classes = network.class_count
     labels = np.array([label for _state, window in examples for label in window])
     assert labels.size == len(examples) * network.tokens, f"each window's labels are {network.tokens}, one per token"
+    inputs = np.array([state for state, _window in examples], dtype=np.float64).reshape(-1)
+    segments = getattr(network, "_segments", None)
+    counted = (
+        np.ones(labels.size, dtype=bool)
+        if segments is None
+        else (inputs != segments.separator) & (inputs != segments.pad)
+    )
     loss = 0.0
     correct = 0
     start = 0
     for output_batch in network.forward_rows(prepared):
         probabilities = np.asarray(output_batch.tolist()).reshape(-1, classes)
         stop = start + probabilities.shape[0]
-        chunk = labels[start:stop]
+        keep = counted[start:stop]
+        chunk = labels[start:stop][keep]
+        probabilities = probabilities[keep]
         with np.errstate(divide="ignore"):
             loss += float(-np.log(probabilities[np.arange(chunk.size), chunk]).sum())
         correct += int((probabilities.argmax(axis=1) == chunk).sum())
         start = stop
-    return SequenceEvaluation(loss / labels.size, correct / labels.size, int(labels.size))
+    total = int(counted.sum())
+    return SequenceEvaluation(loss / total, correct / total, total)

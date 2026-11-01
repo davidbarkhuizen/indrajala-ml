@@ -78,6 +78,10 @@ def _token_layer(
     if isinstance(spec, Patches):
         return PatchesLayer(input_layer, *image_shape(shape), spec.patch_size)
     if isinstance(spec, Embedding):
+        if spec.segments:
+            raise NotImplementedError(
+                "an Embedding with segments trains in pure Python from the segments workplan's stage 7"
+            )
         return EmbeddingLayer(input_layer, shape[0], spec.vocabulary, spec.size)
     tokens, features = token_shape(shape)
     if isinstance(spec, LayerNorm):

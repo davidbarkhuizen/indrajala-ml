@@ -114,6 +114,13 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         default = Attention()
         fields = {key: value for key, value in asdict(spec).items() if value != getattr(default, key)}
         return {"kind": "attention", **fields}
+    if isinstance(spec, Embedding):
+        # an entry without segments as before Embedding had them (the segments workplan, D2), so
+        # those files don't change
+        fields = asdict(spec)
+        if not spec.segments:
+            del fields["segments"]
+        return {"kind": _TOKEN_KINDS[type(spec)], **fields}
     return {"kind": _TOKEN_KINDS[type(spec)], **asdict(spec)}
 
 
