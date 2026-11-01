@@ -211,3 +211,21 @@ def test_pickle_carries_the_state():
     clone = pickle.loads(pickle.dumps(rng))
     assert clone.state == rng.state
     assert clone.random() == rng.random()
+
+
+@pytest.mark.parametrize("delta", [0, 1, 2, 63, 1000, 2**40 + 7])
+def test_advance_is_numpys_and_steps_past_delta_draws(delta: int):
+    # numpy's PCG64.advance: the next draw is the one delta draws ahead (the context-length
+    # workplan, D12: pure Python's attention draws each example's slab of a batch's masks)
+    ours = default_rng(11)
+    ours.advance(delta)
+    bit_generator = np.random.PCG64(11)
+    bit_generator.advance(delta)
+    assert ours.random() == np.random.Generator(bit_generator).random()
+    if delta <= 1000:
+        drawn = default_rng(11)
+        for _ in range(delta):
+            drawn.random()
+        jumped = default_rng(11)
+        jumped.advance(delta)
+        assert jumped.state == drawn.state

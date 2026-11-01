@@ -190,15 +190,13 @@ def _uniform(count: int, seed: int) -> list[float]:
     return np.random.default_rng(seed).uniform(-1.0, 1.0, count).tolist()
 
 
-def test_a_causal_layers_masked_weights_are_exactly_zero():
+def test_a_causal_layers_first_token_weighs_only_itself():
+    # token 0's one unmasked weight: exp(0) / 1, so its row of H is its row of V exactly (the tiled
+    # attend's m and l, the context-length workplan, D3)
     layer = _attention(True, _uniform(24, 1))
     layer.forward()
-    # packed (T, h * T): head i in columns i * T..
-    for head in range(2):
-        for i, row in enumerate(layer._P):  # pyright: ignore[reportPrivateUsage]
-            weights = row[head * 4 : (head + 1) * 4]
-            assert all(w == 0.0 for w in weights[i + 1 :]) and all(w > 0.0 for w in weights[: i + 1])
-        assert layer._P[0][head * 4] == 1.0  # pyright: ignore[reportPrivateUsage]
+    assert all(l_head[0] == 1.0 for l_head in layer._l)  # pyright: ignore[reportPrivateUsage]
+    assert bits(layer._H[0]) == bits(layer._V[0])  # pyright: ignore[reportPrivateUsage]
 
 
 def test_in_a_causal_layer_the_last_token_reaches_only_its_own_output():

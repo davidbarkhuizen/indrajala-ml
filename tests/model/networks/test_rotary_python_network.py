@@ -70,7 +70,8 @@ def test_the_backward_pass_rotates_dq_and_dk_back_before_projects_products_by_bi
     rotary, plain = _layers(heads, key_size)
     rotary.forward()
     # the unrotated layer from the rotary one's caches: attend's gradients of the rotated Q and K
-    plain._Q, plain._K, plain._V, plain._P, plain._M = rotary._Q, rotary._K, rotary._V, rotary._P, rotary._M  # pyright: ignore[reportPrivateUsage]
+    for name in ("_Q", "_K", "_V", "_H", "_m", "_l", "_draws", "_segments"):
+        setattr(plain, name, getattr(rotary, name))
     rng = random.Random(2)
     row = [rng.uniform(-1.0, 1.0) for _ in range(T * D)]
     rotary.compute_hidden_deltas(downstream(row))

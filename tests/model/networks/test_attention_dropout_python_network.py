@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.layers.numpy.token_array_layer import TokenDropoutArrayLayer
-from indrajala_ml.model.layers.python.attention_layer import AttentionLayer
+from indrajala_ml.model.layers.python.attention_layer import AttentionLayer, key_blocks
 from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.layers.python.token_layer import TokenDropoutLayer
 from indrajala_ml.model.specs.update_rules import Adam, UpdateRule
@@ -49,9 +49,15 @@ def _record_masks(built: Any) -> list[list[Any]]:
             if isinstance(layer, TokenDropoutLayer):
                 passes.append([node._mask for node in layer.nodes])  # pyright: ignore[reportPrivateUsage]
             else:
-                # (T, h * T), head i in columns i * T.., as numpy's (h, T, T)
-                packed, t = np.array(layer._M), layer.tokens  # pyright: ignore[reportPrivateUsage]
-                passes.append(packed.reshape(t, layer.heads, t).transpose(1, 0, 2))
+                # the example's masks, key block by key block, as numpy's (h, T, T) (the
+                # context-length workplan, D12)
+                draws = layer._draws  # pyright: ignore[reportPrivateUsage]
+                if draws is not None:
+                    blocks = [
+                        layer._block_draws(draws, k1 - k0, k0)  # pyright: ignore[reportPrivateUsage]
+                        for k0, k1 in key_blocks(layer.tokens, layer.block)
+                    ]
+                    passes.append(np.concatenate([np.array(b) for b in blocks], axis=-1))
 
         layer.forward = forward
     return masks
