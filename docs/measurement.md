@@ -31,6 +31,7 @@ timing PR and workplan relies on it, not only optimization work.
   | the Python-to-crate call boundary (argument conversion, call overhead) | `op_call_timing` |
   | `classify_rows` or the accuracy passes | `accuracy_pass_timing` |
   | mini-batch paths of dense training | `batch_size_timing` |
+  | attention's forward and backward at long `T` (time and peak memory) | `attention_timing` |
 
 - **Why 4 passes are enough for tier 1, and what a flagged row means there.** Over passes 1-4
   (`report --passes 1-4`), the i7's six A/As flagged 43 of 591 rows consistent (7.3%, up to 9.5%),
@@ -179,6 +180,7 @@ From the quick survey to the decisive number:
 | A training-path change | `python scripts/measurement/prepared_dataset_timing.py time` | one trainer epoch per process, dense full MNIST and the conv subset, both backends; `--epochs N`. The default A/B benchmark. |
 | An accuracy pass, per row against batched | `python scripts/measurement/accuracy_pass_timing.py time` | all demo architectures, both backends; counts differing predictions. |
 | Dense full-MNIST epochs, broken down | `python scripts/measurement/batch_size_timing.py time` / `profile` | epoch, step loop, one accuracy pass and conversions apart, per batch size. Its accuracy-pass column times the old tuple path. |
+| Attention at long `T`, time and memory | `python scripts/measurement/attention_timing.py` | one attention layer's forward and backward at `T` 64, 256 and 1,024 at the token budget (`B * T = 2,048`), causal and packed, numpy and Rust; peak memory per case in a fresh process (`VmHWM`), `tracemalloc` beside it for numpy (the context-length workplan, D7). |
 | The Rust/numpy ratios end to end | `python -m indrajala_ml.measurement.conv_comparison` | about 3 minutes; median of 5 from identical weights, UCI digits and a 2000-row MNIST subset, plus a Rust op profile. |
 | Old against new, any of the above | `python scripts/measurement/ab.py run --bench <benchmark>` | [§4](#4-running-an-ab-with-abpy). Every script above with an adapter, and any probe. |
 | A threading setting | `set_matmul_threading(t, threshold)` | in one process, no rebuild; accept only on end-to-end numbers. |
@@ -201,7 +203,7 @@ machine check, environment), `progress.jsonl`, and each pass's raw output and lo
 directory is also the neutral working directory every pass runs from.
 
 Benchmarks: `prepared_dataset_timing`, `focused_benchmark`, `epoch_op_profile`,
-`accuracy_pass_timing`, `op_call_timing`, `batch_size_timing`, and `cmd` (a probe).
+`accuracy_pass_timing`, `op_call_timing`, `batch_size_timing`, `attention_timing`, and `cmd` (a probe).
 
 **A training-path change** (commit it first; `--new` defaults to `HEAD`, `--old` to `main`):
 

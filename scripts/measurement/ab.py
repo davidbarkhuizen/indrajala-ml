@@ -386,6 +386,29 @@ class BatchSizeTiming:
         return rows
 
 
+class AttentionTiming:
+    """One attention layer's forward and backward seconds and peak memory per T, mask and backend
+    (the context-length workplan, D7)."""
+
+    name: str = "attention_timing"
+    default_args: tuple[str, ...] = ("--repeats", "5")
+    no_control: str = "controls: none (--control-backend reads the other backend's rows as controls)"
+
+    def smoke_args(self, args: list[str]) -> list[str]:
+        return ["--tokens", "64", "--masks", "causal", "--repeats", "1"]
+
+    def command(self, script_tree: Path, args: list[str], out: Path) -> list[str]:
+        return [str(_script(script_tree, "attention_timing.py")), *args, "--json", str(out)]
+
+    def rows(self, out: Path, stdout: Path, control_backend: str | None) -> list[Row]:
+        units = {"forward": "s", "backward": "s", "peak RSS": "MB", "tracemalloc peak": "MB"}
+        return [
+            Row(case, metric, value, units[metric], _is_backend(case, control_backend))
+            for case, values in json.loads(out.read_text()).items()
+            for metric, value in values.items()
+        ]
+
+
 ADAPTERS: dict[str, Adapter] = {
     adapter.name: adapter
     for adapter in (
@@ -395,6 +418,7 @@ ADAPTERS: dict[str, Adapter] = {
         AccuracyPassTiming(),
         OpCallTiming(),
         BatchSizeTiming(),
+        AttentionTiming(),
         CommandProbe(),
     )
 }
