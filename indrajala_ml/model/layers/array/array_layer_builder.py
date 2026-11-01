@@ -214,7 +214,7 @@ def _token_layer(
         return classes.patches(*image_shape(shape), spec.patch_size)
     if isinstance(spec, Embedding):
         if spec.segments:
-            # the pad's row stays zero (the segments workplan, D2); numpy only until stage 6
+            # the pad's row stays zero (the segments workplan, D2)
             return classes.embedding(shape[0], spec.vocabulary, spec.size, spec.pad)
         return classes.embedding(shape[0], spec.vocabulary, spec.size)
     if isinstance(spec, LayerNorm):

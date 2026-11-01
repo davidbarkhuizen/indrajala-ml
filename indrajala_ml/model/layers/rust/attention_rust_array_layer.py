@@ -118,6 +118,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             dropout=self.dropout,
             training=self.training,
             rng=self.rng,
+            segments=context.segments,
             **self._table,
         )
         return self.a
@@ -131,6 +132,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             dropout=self.dropout,
             training=self.training,
             rng=self.rng,
+            segments=context.segments,
             **self._table,
         )
         return self.A

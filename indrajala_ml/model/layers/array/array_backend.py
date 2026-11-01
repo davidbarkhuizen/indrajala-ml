@@ -122,7 +122,18 @@ class RustBackend:
 
     @staticmethod
     def segment_context(X: pa.Array, separator: int, pad: int) -> ForwardContext:
-        raise NotImplementedError("segments on Rust come with the segments workplan's stage 6")
+        # numpy's, its (N, T) arrays as crate arrays of floats: the crate's attention reads the
+        # segment ids, and the layers read positions and counted as the ids of an embedding_forward
+        # gather (segments.py)
+        context = segment_context(np.atleast_2d(np.asarray(X.tolist())), separator, pad)
+        if context.segments is None:
+            return context
+        return ForwardContext(
+            segments=pa.Array(context.segments.astype(np.float64).tolist()),
+            positions=pa.Array(context.positions.astype(np.float64).tolist()),
+            counted=pa.Array(context.counted.tolist()),
+            count=context.count,
+        )
 
     @staticmethod
     def default_rng(seed: Any = None) -> pa.Generator:
