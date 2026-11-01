@@ -76,8 +76,9 @@ docs cite them by section:
 | Publishing the crate on PyPI and crates.io, the first release 0.1.0 (D1-D11) | #1118 | crate #78-#84, #1119-#1121, #1127, #1129, this PR | `git show 995f0bd:docs/workplans/infrastructure/release-workplan.md` |
 | The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
 | aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
-| Generation with a key/value cache (roadmap step 9, D1-D9) | #640 | #1143-#1148, crate #85, this PR | `git show 836e9a3:docs/workplans/library/generation-workplan.md` |
-| The training recipe: schedules, AdamW, clipping (roadmap step 10, D1-D11) | #641 | #1150-#1156, crate #86, this PR | `git show b446c31:docs/workplans/library/training-recipe-workplan.md` |
+| Generation with a key/value cache (roadmap step 9, D1-D9) | #640 | #1143-#1148, crate #85, #1149 | `git show 836e9a3:docs/workplans/library/generation-workplan.md` |
+| The training recipe: schedules, AdamW, clipping (roadmap step 10, D1-D11) | #641 | #1150-#1156, crate #86, #1160 | `git show b446c31:docs/workplans/library/training-recipe-workplan.md` |
+| Segments: packing, document masks and padding (roadmap step 11, D1-D11) | #642 | #1157, #1158, #1162-#1166, crate #87, #1159, this PR | `git show 69e2e93:docs/workplans/library/segments-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -94,6 +95,23 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From segments (retired 2026-11-01)
+
+Done: special tokens and packed windows of paragraphs (D2, D7); the forward context through every
+layer's passes (D3); the segment mask in attention, positions per segment and the loss over counted
+targets in all three implementations and the crate (D4-D6, D9); padded batch decoding (D8); packed
+golden entries (D10). Left:
+
+- **The document-mask study is step 12's** (D11): at `T = 64` too few windows cross a paragraph
+  boundary; the context-length study has the masked and unmasked arms at 256 and 1,024.
+- **Skipping wholly masked blocks** (the varlen kernels' gain, D9) waits for step 12's tiled
+  attention, where a block above the diagonal or across segments is skipped whole.
+- **The forward context's cost:** stage 2's keyword context costs Rust's dense B=32 epoch 1.1%
+  (D10, accepted); a call path that passes it without the keyword is the place to look if a later
+  A/B needs it back.
+- The decoder's follow-ups (a batched crate step; a paragraph's first token from an untrained row)
+  are in From generation.
 
 ## From the training recipe (retired 2026-11-01)
 

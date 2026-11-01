@@ -1025,6 +1025,47 @@ words: at this size (2 layers, 64 characters of context) three times the trainin
 recipe gained 0.106 bits on Tiny Shakespeare and 0.018 on Euclid. The models are in pyramidon's gitignored
 `data/studies/lr-schedule/sweep/models/`.
 
+## Segments
+
+One segment id per token, from which attention, the loss and the evaluation know which tokens
+belong together and which are padding (roadmap step 11): training packs paragraphs into full
+windows with explicit boundaries, and inference pads variable-length inputs.
+
+```python
+train, held_out, vocabulary = text_data.load_packed_text_dataset(text_data.CORPORA["herodotus-rawlinson"])
+specs = [
+    Embedding(len(vocabulary) + 2, 64, segments=True),
+    *blocks,
+    LayerNorm(),
+    Dense(len(vocabulary) + 1, output=True, activation="softmax", loss="cross_entropy"),
+]
+```
+
+- **Special tokens** (`CharacterTokenizer.special`): `<|sep|>` (id V) ends each paragraph and
+  `<|pad|>` (V + 1) fills a padded row. The embedding has V + 2 rows, the pad's zero and never
+  updated; the output has V + 1 classes (a model predicts the separator, never the pad).
+- **Packing** (`load_packed_text_dataset`): the paragraphs (between blank lines), each followed by
+  the separator, cut into windows; both splits cut at paragraph boundaries, the spread split's
+  rounding carried from block to block so it holds out its fraction.
+- **The context** (`model/layers/forward_context.py`): every layer's forward, backward and gradient
+  passes take a `ForwardContext`, built once per batch by the network from its ids: each token's
+  segment (1 + the separators before it, 0 for a pad), its position from its segment's start, and
+  whether its target counts.
+- **Attention** masks key `u` for query `t` unless `u <= t` (causal), they share a segment and it
+  isn't a pad's; the diagonal never, so no row is all `-inf`. The crate's attention ops take the
+  segment ids and mask per head, never storing an `(N, T, T)` mask.
+- **Positions** count from each segment's first token; rotary scores depend on `t - u` within a
+  segment, so only a learned `Position` reads differently.
+- **The loss** is the mean over the batch's counted targets, PyTorch's `ignore_index` mean: a
+  target counts unless its input is a pad or a separator (the next paragraph's first character
+  can't be predicted across the mask). The evaluation counts the same tokens.
+- **A batch with neither special id** takes the path without segments, bit for bit and at its
+  speed. A packed segment's outputs are those it gives packed after any other, or alone and
+  left-padded (tests, all three implementations).
+- **Padded inference**: the Decoder's batches are left-padded to the longest prompt, the pads
+  masked and each paragraph's positions counted from its first token, in a prompt or stepped
+  (Generation).
+
 ## The addition study
 
 Which is the smallest network, built from the package's layers, that reliably adds? The task is
