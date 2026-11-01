@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
@@ -30,11 +31,11 @@ class AffineArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], ArrayL
     is 1; its downstream and gradients are ArrayLayer's. Hidden only.
     """
 
-    def forward(self, x: FloatArray) -> FloatArray:
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.a = self.W @ x + self.b
         return self.a
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.A = X @ self.W.T + self.b
         return self.A
 
@@ -54,11 +55,11 @@ class ForkArrayLayer(RowDecoding[FloatArray], Hidden[FloatArray], ParameterFree[
         self.size = size
         self.input_size = size
 
-    def forward(self, x: FloatArray) -> FloatArray:
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.x = x
         return x
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.X = X
         return X
 
@@ -66,17 +67,17 @@ class ForkArrayLayer(RowDecoding[FloatArray], Hidden[FloatArray], ParameterFree[
         self.decoded = R
         return R
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         # next_layer is body_first
-        self.delta = next_layer.downstream() + self.add.delta
+        self.delta = next_layer.downstream(context=context) + self.add.delta
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch() + self.add.delta_batch
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.delta_batch = next_layer.downstream_batch(context=context) + self.add.delta_batch
 
-    def downstream(self) -> FloatArray:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self.delta
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self.delta_batch
 
 
@@ -94,19 +95,19 @@ class AddArrayLayer(
         self.size = fork.size
         self.input_size = fork.size
 
-    def forward(self, x: FloatArray) -> FloatArray:
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.a = x + self.fork.x
         return self.a
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.A = X + self.fork.X
         return self.A
 
     def decode_rows(self, R: FloatArray) -> FloatArray:
         return R + self.fork.decoded
 
-    def downstream(self) -> FloatArray:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self.delta
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self.delta_batch

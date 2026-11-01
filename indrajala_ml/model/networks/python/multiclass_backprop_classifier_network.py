@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, ClassVar, Self
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
 from indrajala_ml.model.protocols.classification import argmax_first_occurrence
@@ -38,8 +39,8 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
 
         super().__init__(self._dense_specs(layer_sizes, class_count), (dimension,), input_bounds)
 
-    def _forward(self, state: tuple[float, ...]) -> list[float]:
-        return self._forward_outputs(state)
+    def _forward(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> list[float]:
+        return self._forward_outputs(state, context=context)
 
     def predict_probabilities(self, state: tuple[float, ...]) -> list[float]:
         return self._forward(state)
@@ -52,9 +53,9 @@ class MultiClassBackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer
     ) -> None:
         self._learn_batch(learning_rate, batch, clip_norm)
 
-    def _backward(self, category: int) -> None:
+    def _backward(self, category: int, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._output_deltas(category)
-        self._backward_hidden_layers()
+        self._backward_hidden_layers(context=context)
 
     def _output_deltas(self, category: int) -> None:
         for i, node in enumerate(self.output_layer.nodes):

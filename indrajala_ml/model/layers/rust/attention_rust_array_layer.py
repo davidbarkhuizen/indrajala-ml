@@ -24,6 +24,7 @@ from indrajala_ml.model.layers.array.array_parameters import AttentionProjection
 from indrajala_ml.model.protocols.decoding_protocols import refuse_non_causal_decoding
 from indrajala_ml.model.specs.hidden_layers import Hidden
 from indrajala_ml.model.specs.rotary_table import rotary_table
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class AttentionRustCache:
@@ -108,7 +109,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             for array in (pa.Array.zeros((rows, fan_in)), pa.Array.zeros(rows))
         ]
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.a, self._Q, self._K, self._V, self._P, self._H, self._M = pa.attention_forward(
             x,
             *self.parameters(),
@@ -121,7 +122,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         )
         return self.a
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.A, self._Q, self._K, self._V, self._P, self._H, self._M = pa.attention_forward_batch(
             X,
             *self.parameters(),
@@ -188,18 +189,18 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             **self._table,
         )
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
-        self.delta = next_layer.downstream()
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.delta = next_layer.downstream(context=context)
         self._backward(self.delta)
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
-        self.delta_batch = next_layer.downstream_batch()
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.delta_batch = next_layer.downstream_batch(context=context)
         self._backward(self.delta_batch)
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self._dX
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self._dX
 
     def _accumulate(self, delta: pa.Array, X: pa.Array) -> None:
@@ -207,8 +208,8 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             pa.attention_accumulate_gradient_batch(delta, X, self._H, self._dQ, self._dK, self._dV, *self.gradients())
         )
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._accumulate(self.delta, input_activation)
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._accumulate(self.delta_batch, input_activation_batch)

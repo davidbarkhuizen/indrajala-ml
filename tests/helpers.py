@@ -82,10 +82,10 @@ class FixedDownstream:
         self.gradient_batch = gradient_batch
         self.gradient = gradient
 
-    def downstream_batch(self) -> Any:
+    def downstream_batch(self, *, context: Any = None) -> Any:
         return self.gradient_batch
 
-    def downstream(self) -> Any:
+    def downstream(self, *, context: Any = None) -> Any:
         return self.gradient
 
 

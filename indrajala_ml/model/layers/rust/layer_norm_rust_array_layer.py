@@ -14,6 +14,7 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class LayerNormRustArrayLayer(
@@ -40,11 +41,11 @@ class LayerNormRustArrayLayer(
         self.beta = pa.Array.zeros(features)
         self.reset_gradient_accum()
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.a, self._xhat, self._std = pa.layer_norm_forward(x, self.gamma, self.beta, self.epsilon)
         return self.a
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.A, self._xhat, self._std = pa.layer_norm_forward_batch(X, self.gamma, self.beta, self.epsilon)
         return self.A
 
@@ -52,18 +53,18 @@ class LayerNormRustArrayLayer(
         # the new tokens' (L, d) rows, each a batch row of one token: each token's statistics as in training
         return pa.layer_norm_forward_batch(R, self.gamma, self.beta, self.epsilon)[0]
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.layer_norm_downstream_batch(self.delta, self.gamma, self._xhat, self._std)
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.layer_norm_downstream_batch(self.delta_batch, self.gamma, self._xhat, self._std)
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_gamma, self.grad_beta = pa.layer_norm_accumulate_gradient_batch(
             self.delta, self._xhat, self.grad_gamma, self.grad_beta
         )
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_gamma, self.grad_beta = pa.layer_norm_accumulate_gradient_batch(
             self.delta_batch, self._xhat, self.grad_gamma, self.grad_beta
         )

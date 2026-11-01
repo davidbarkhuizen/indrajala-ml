@@ -13,6 +13,7 @@ from typing import ClassVar
 
 import numpy as np
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.specs.hidden_layers import BatchOnly, DeltaIsDownstream, Hidden
 from indrajala_ml.model.specs.single_example import refuse_single_example
@@ -43,23 +44,25 @@ class LinearArrayLayer(Hidden[FloatArray], BatchOnly[FloatArray], DeltaIsDownstr
     def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
         (self.W,) = parameters
 
-    def forward(self, x: FloatArray) -> FloatArray:
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # classify_state's single-example forward pass
         self.a = self.W @ x
         return self.a
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self.A = X @ self.W.T
         return self.A
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # ArrayLayer.downstream_batch: the gradient into a linear layer before this one
         return self.delta_batch @ self.W
 
-    def accumulate_gradient(self, input_activation: FloatArray) -> None:
+    def accumulate_gradient(self, input_activation: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         refuse_single_example(self)
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         # ArrayLayer.accumulate_gradient_batch's grad_W
         self.grad_W += self.delta_batch.T @ input_activation_batch
 

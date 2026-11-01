@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import ClassVar, Literal
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.conv_kernel import ConvKernel
 from indrajala_ml.model.layers.python.conv_unit import ConvUnit
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
@@ -104,11 +105,11 @@ class ConvLayer:
             for kc in range(self.kernel_size)
         ]
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for unit in self.nodes:
             unit.forward()
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         # the next layer supplies each unit's downstream sum, dense or sparse
         for own_index, unit in enumerate(self.nodes):
             unit.compute_hidden_delta(next_layer.downstream_sum(own_index))
@@ -120,7 +121,7 @@ class ConvLayer:
         # a no-op; BackpropNetworkBase calls it on every trainable layer
         pass
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for unit in self.nodes:
             unit.accumulate_gradient()
 

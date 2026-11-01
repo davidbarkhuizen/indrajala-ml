@@ -7,6 +7,7 @@ from typing import Any, ClassVar, NoReturn, Self, cast
 
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 from indrajala_ml.model.layers.array.array_layer_builder import build_array_layers
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
 from indrajala_ml.model.protocols.array_protocols import (
     ArrayBackend,
@@ -107,9 +108,18 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
     def _forward(self, state: tuple[float, ...]) -> A:
         return self._forward_input(self.backend.vector(state))
 
+    def _forward_context(self, X: A) -> ForwardContext:
+        """
+        The batch's forward context, built once from its input (the segments workplan, D3) and
+        passed to every layer's passes; X is one example's vector or a batch's rows. Empty until the
+        segments workplan's stage 4 reads segment ids from it.
+        """
+        return NO_CONTEXT
+
     def _forward_input(self, x: A) -> A:
+        context = self._forward_context(x)
         for layer in self.layers:
-            x = layer.forward(x)
+            x = layer.forward(x, context=context)
         return x
 
     def classify_row(self, prepared: PreparedDataset, index: int) -> Any:
@@ -133,8 +143,9 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         states = self._prepared_states(prepared)
         for start in range(0, len(prepared), CLASSIFY_CHUNK_ROWS):
             X = self.backend.row_range(states, start, min(start + CLASSIFY_CHUNK_ROWS, len(prepared)))
+            context = self._forward_context(X)
             for layer in self.layers:
-                X = layer.forward_batch(X)
+                X = layer.forward_batch(X, context=context)
             yield X
 
     def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> PreparedDataset:
@@ -184,27 +195,28 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
     def _learn_input(self, learning_rate: float, x: A, category: Any) -> None:
         if self.batch_norm_index is not None:
             self._refuse_single_example(self.batch_norm_index)
+        context = self._forward_context(x)
         activations = [x]
         self._set_training_mode(True)
         try:
             for layer in self.layers:
-                x = layer.forward(x)
+                x = layer.forward(x, context=context)
                 activations.append(x)
         finally:
             self._set_training_mode(False)
 
         target = self._target_array(category)
-        self.output_layer.compute_output_delta(target)
+        self.output_layer.compute_output_delta(target, context=context)
 
         for i in reversed(range(len(self.layers) - 1)):
-            self.layers[i].compute_hidden_delta(self.layers[i + 1])
+            self.layers[i].compute_hidden_delta(self.layers[i + 1], context=context)
 
         # step_single is accumulate_gradient then apply at batch_size=1, which the Rust optimizer
         # fuses into one call for plain SGD
         optimizer = self.optimizer
         optimizer.begin_step()
         for index, (layer, input_activation) in enumerate(zip(self.layers, activations)):
-            optimizer.step_single(index, layer, input_activation, learning_rate)
+            optimizer.step_single(index, layer, input_activation, learning_rate, context=context)
 
     def learn_batch(
         self, learning_rate: float, batch: Sequence[tuple[tuple[float, ...], object]], clip_norm: float | None = None
@@ -229,26 +241,27 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
                 self._refuse_single_example(self.batch_norm_index)
             refuse_single_example_groups(self.layer_specs, batch_size)
 
+        context = self._forward_context(X)
         activations = [X]
         self._set_training_mode(True)
         try:
             for layer in self.layers:
-                X = layer.forward_batch(X)
+                X = layer.forward_batch(X, context=context)
                 activations.append(X)
         finally:
             self._set_training_mode(False)
 
         target_batch = self._target_batch_array(categories)
-        self.output_layer.compute_output_delta_batch(target_batch)
+        self.output_layer.compute_output_delta_batch(target_batch, context=context)
 
         for i in reversed(range(len(self.layers) - 1)):
-            self.layers[i].compute_hidden_delta_batch(self.layers[i + 1])
+            self.layers[i].compute_hidden_delta_batch(self.layers[i + 1], context=context)
 
         # every layer's gradient, then every layer's update (the training-recipe workplan, D10):
         # clipping by the global norm needs them all first. The deltas are computed above, so the
         # split keeps every bit
         for layer, input_activation_batch in zip(self.layers, activations):
-            layer.accumulate_gradient_batch(input_activation_batch)
+            layer.accumulate_gradient_batch(input_activation_batch, context=context)
         self.optimizer.step(self.layers, learning_rate, batch_size, clip_norm)
 
     @classmethod

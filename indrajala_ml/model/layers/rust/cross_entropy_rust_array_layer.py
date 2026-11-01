@@ -3,6 +3,7 @@ from __future__ import annotations
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class CrossEntropyRustArrayLayer(RustArrayLayer):
@@ -12,8 +13,8 @@ class CrossEntropyRustArrayLayer(RustArrayLayer):
     softmax-specific maths, so no new Rust op is needed.
     """
 
-    def compute_output_delta(self, reference: pa.Array) -> None:
+    def compute_output_delta(self, reference: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.delta = pa.layer_softmax_output_delta(self.a, reference)
 
-    def compute_output_delta_batch(self, reference_batch: pa.Array) -> None:
+    def compute_output_delta_batch(self, reference_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.delta_batch = pa.layer_softmax_output_delta(self.A, reference_batch)

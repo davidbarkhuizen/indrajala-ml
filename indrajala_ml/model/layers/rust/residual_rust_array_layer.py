@@ -20,6 +20,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class ForkRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], ParameterFree[pa.Array]):
@@ -37,11 +38,11 @@ class ForkRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], ParameterFree[
         self.size = size
         self.input_size = size
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.x = x
         return x
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.X = X
         return X
 
@@ -50,18 +51,18 @@ class ForkRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], ParameterFree[
         self.decoded = R
         return R
 
-    def compute_hidden_delta(self, next_layer: Any) -> None:
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         # lazy: downstream() sums the paths when a layer before asks for it
         pass
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         pass
 
-    def downstream(self) -> pa.Array:
-        return self.body_first.downstream() + self.add.delta
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        return self.body_first.downstream(context=context) + self.add.delta
 
-    def downstream_batch(self) -> pa.Array:
-        return self.body_first.downstream_batch() + self.add.delta_batch
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        return self.body_first.downstream_batch(context=context) + self.add.delta_batch
 
 
 class AddRustArrayLayer(
@@ -74,19 +75,19 @@ class AddRustArrayLayer(
         self.size = fork.size
         self.input_size = fork.size
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.a = x + self.fork.x
         return self.a
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self.A = X + self.fork.X
         return self.A
 
     def decode_rows(self, R: pa.Array) -> pa.Array:
         return R + self.fork.decoded
 
-    def downstream(self) -> pa.Array:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self.delta
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return self.delta_batch

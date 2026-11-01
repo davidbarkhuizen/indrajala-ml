@@ -27,6 +27,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.layers.python.state_layer import StateLayer
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
@@ -95,7 +96,7 @@ class LayerMajorBatch:
         else:
             _load(layer, self.lanes[index][example])
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         count = len(self.states)
         for index, layer in enumerate(self.layers):
             if isinstance(layer, BatchNormLayer):
@@ -116,7 +117,7 @@ class LayerMajorBatch:
                     self._select(other, example)
                 if begin_example is not None:
                     begin_example(example)
-                layer.forward()
+                layer.forward(context=context)
                 lanes.append(_capture(layer))
             self.lanes.append(lanes)
 
@@ -133,7 +134,11 @@ class LayerMajorBatch:
         return rows
 
     def backward(
-        self, output_deltas: Callable[[int], None], beside: tuple[int, Sequence[Sequence[float]]] | None = None
+        self,
+        output_deltas: Callable[[int], None],
+        beside: tuple[int, Sequence[Sequence[float]]] | None = None,
+        *,
+        context: ForwardContext = NO_CONTEXT,
     ) -> None:
         """
         The deltas of every layer, output_deltas(e) setting the output layer's for example e (the
@@ -164,17 +169,17 @@ class LayerMajorBatch:
                     self._select(other, example)
                 self._select(index, example)
                 if beside is not None and index == beside[0] - 1:
-                    layer.compute_hidden_deltas(_Beside(next_layer, beside[1][example]))
+                    layer.compute_hidden_deltas(_Beside(next_layer, beside[1][example]), context=context)
                 else:
-                    layer.compute_hidden_deltas(next_layer)
+                    layer.compute_hidden_deltas(next_layer, context=context)
                 self.lanes[index][example] = _capture(layer)
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for index, layer in enumerate(self.layers):
             if isinstance(layer, BatchNormLayer):
-                layer.accumulate_gradients()
+                layer.accumulate_gradients(context=context)
                 continue
             for example in range(len(self.states)):
                 self._select(index - 1, example)
                 self._select(index, example)
-                layer.accumulate_gradients()
+                layer.accumulate_gradients(context=context)

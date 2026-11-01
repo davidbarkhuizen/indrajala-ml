@@ -386,7 +386,9 @@ def _record_python_masks(python: Any) -> list[list[list[float]]]:
         rows: list[list[float]] = []
         masks.append(rows)
 
-        def forward(layer: Any = layer, rows: list[list[float]] = rows, inner: Any = layer.forward) -> None:
+        def forward(
+            layer: Any = layer, rows: list[list[float]] = rows, inner: Any = layer.forward, *, context: Any = None
+        ) -> None:
             inner()
             rows.append([1.0 if node._kept else 0.0 for node in layer.nodes])
 

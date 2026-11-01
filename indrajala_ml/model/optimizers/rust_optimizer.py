@@ -12,6 +12,7 @@ from typing import cast
 
 import indrajala_math_rust as pa
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.optimizers.array_optimizer_base import ArrayOptimizerBase
 from indrajala_ml.model.protocols.array_protocols import ArrayBackend, ArrayNetworkLayer, TrainedArrayLayer
@@ -99,7 +100,13 @@ class RustOptimizer(ArrayOptimizerBase[pa.Array, _Pair, tuple[pa.Array, pa.Array
         return squares
 
     def step_single(
-        self, index: int, layer: ArrayNetworkLayer[pa.Array], input_activation: pa.Array, learning_rate: float
+        self,
+        index: int,
+        layer: ArrayNetworkLayer[pa.Array],
+        input_activation: pa.Array,
+        learning_rate: float,
+        *,
+        context: ForwardContext = NO_CONTEXT,
     ) -> None:
         if self._fused_sgd_step and isinstance(layer, RustArrayLayer):
             # accumulate then apply at batch_size=1 as one fused call, bit-identical to that pair
@@ -109,7 +116,7 @@ class RustOptimizer(ArrayOptimizerBase[pa.Array, _Pair, tuple[pa.Array, pa.Array
             # which layer_sgd_step's outer product doesn't.
             layer.W, layer.b = pa.layer_sgd_step(layer.W, layer.b, layer.delta, input_activation, learning_rate)
             return
-        layer.accumulate_gradient(input_activation)
+        layer.accumulate_gradient(input_activation, context=context)
         self.apply(index, layer, learning_rate, 1)
 
     def _pair_state(self, index: int, pair: _Pair, count: int) -> list[pa.Array]:

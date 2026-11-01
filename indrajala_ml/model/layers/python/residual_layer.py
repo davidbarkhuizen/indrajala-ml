@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, ClassVar
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.backprop_node import BackpropNode
 from indrajala_ml.model.layers.python.base_node import AbstractNode
@@ -67,7 +68,7 @@ class ForkNode(PassNode):
         super().__init__()
         self.input_node = input_node
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._activation = self.input_node.value()
 
 
@@ -77,7 +78,7 @@ class AddNode(PassNode):
         self.body_node = body_node
         self.fork_node = fork_node
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         # y + x: the body's output plus the block's input
         self._activation = self.body_node.value() + self.fork_node.value()
 
@@ -102,7 +103,7 @@ class ParameterFreeLayer[NodeT: PassNode]:
         # the gradient into the node before: this node's delta, the identity's
         return self.nodes[own_index].delta
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         pass
 
     def weight_sets(self) -> Sequence[WeightSet]:
@@ -138,7 +139,7 @@ class ForkLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[ForkNode]):
     def backward_reads(self) -> tuple[TrainableLayer, ...]:
         return (self.add,)
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for node in self.nodes:
             node.forward()
 
@@ -147,7 +148,7 @@ class ForkLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[ForkNode]):
         self.decoded = R
         return R
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         # next_layer is body_first
         for own_index, (node, add_node) in enumerate(zip(self.nodes, self.add.nodes)):
             node.delta = next_layer.downstream_sum(own_index) + add_node.delta
@@ -170,7 +171,7 @@ class AddLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[AddNode]):
     def forward_reads(self) -> tuple[TrainableLayer, ...]:
         return (self.fork,)
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for node in self.nodes:
             node.forward()
 
@@ -179,6 +180,6 @@ class AddLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[AddNode]):
             [y + x for y, x in zip(body, kept, strict=True)] for body, kept in zip(R, self.fork.decoded, strict=True)
         ]
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)

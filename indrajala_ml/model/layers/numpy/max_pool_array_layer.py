@@ -4,6 +4,7 @@ import numpy as np
 import numpy.typing as npt
 from numpy.lib.stride_tricks import sliding_window_view
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 from indrajala_ml.model.specs.window_geometry import output_size, pool_stride, validate_pool_arguments
@@ -50,7 +51,7 @@ class MaxPoolArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], Param
         self.input_size = input_channels * input_height * input_width
         self.size = input_channels * self.out_height * self.out_width
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = X.shape[0]
         p, s = self.pool_size, self.stride
         planes = X.reshape(n, self.input_channels, self.input_height, self.input_width)
@@ -60,8 +61,8 @@ class MaxPoolArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], Param
         self.A = np.take_along_axis(slots, self.argmax_batch[..., np.newaxis], axis=-1).reshape(n, self.size)
         return self.A
 
-    def forward(self, x: FloatArray) -> FloatArray:
-        self.a = self.forward_batch(x[np.newaxis, :])[0]
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        self.a = self.forward_batch(x[np.newaxis, :], context=context)[0]
         self.argmax = self.argmax_batch[0]
         return self.a
 
@@ -82,8 +83,8 @@ class MaxPoolArrayLayer(Hidden[FloatArray], DeltaIsDownstream[FloatArray], Param
             dX[:, :, pr : pr + row_span : s, pc : pc + col_span : s] += D * (argmax_batch == slot)
         return dX.reshape(n, self.input_size)
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self._downstream(self.delta_batch, self.argmax_batch)
 
-    def downstream(self) -> FloatArray:
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         return self._downstream(self.delta[np.newaxis, :], self.argmax[np.newaxis])[0]

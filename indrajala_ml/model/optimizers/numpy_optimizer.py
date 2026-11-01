@@ -11,6 +11,7 @@ from typing import cast
 
 import numpy as np
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.optimizers.array_optimizer_base import ArrayOptimizerBase, momentum_update
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer, TrainedArrayLayer
@@ -50,10 +51,16 @@ class NumpyOptimizer(ArrayOptimizerBase[FloatArray, TrainedArrayLayer[FloatArray
         return [gradient * scale for gradient in layer.gradients()]
 
     def step_single(
-        self, index: int, layer: ArrayNetworkLayer[FloatArray], input_activation: FloatArray, learning_rate: float
+        self,
+        index: int,
+        layer: ArrayNetworkLayer[FloatArray],
+        input_activation: FloatArray,
+        learning_rate: float,
+        *,
+        context: ForwardContext = NO_CONTEXT,
     ) -> None:
         # accumulate, then apply at batch_size=1
-        layer.accumulate_gradient(input_activation)
+        layer.accumulate_gradient(input_activation, context=context)
         self.apply(index, layer, learning_rate, 1)
 
     def _apply_sgd(

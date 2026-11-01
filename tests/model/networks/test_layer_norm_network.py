@@ -42,11 +42,11 @@ def _freeze(layer: DropoutRustArrayLayer) -> None:
     # itself)
     forward, forward_batch = layer.forward, layer.forward_batch
 
-    def frozen(x: Any) -> Any:
+    def frozen(x: Any, *, context: Any = None) -> Any:
         layer.set_rng(pa.default_rng(11))
         return forward(x)
 
-    def frozen_batch(X: Any) -> Any:
+    def frozen_batch(X: Any, *, context: Any = None) -> Any:
         layer.set_rng(pa.default_rng(11))
         return forward_batch(X)
 
@@ -61,7 +61,7 @@ def _freeze_dropout(implementation: Implementation, built: Any, monkeypatch: pyt
         for name in ("_learn_batch", "_forward_batch_outputs"):
             method = getattr(built, name)
 
-            def seeded(*args: Any, method: Any = method) -> Any:
+            def seeded(*args: Any, method: Any = method, **kwargs: Any) -> Any:
                 built.rng = default_rng(11)
                 return method(*args)
 

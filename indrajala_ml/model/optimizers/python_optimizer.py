@@ -20,6 +20,7 @@ import math
 from collections.abc import Sequence
 from typing import cast
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.optimizers.optimizer_base import OptimizerBase
 from indrajala_ml.model.persistence.checkpoint import OptimizerState
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer, WeightSet
@@ -79,9 +80,11 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
         scale = self._gradient_scale
         return weight_set.bias_gradient_accum if scale is None else weight_set.bias_gradient_accum * scale
 
-    def step_single(self, index: int, layer: TrainableLayer, learning_rate: float) -> None:
+    def step_single(
+        self, index: int, layer: TrainableLayer, learning_rate: float, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         # accumulate, then apply at batch_size=1
-        layer.accumulate_gradients()
+        layer.accumulate_gradients(context=context)
         self.apply(index, layer, learning_rate, 1)
 
     def _zeros(self, index: int, weight_sets: Sequence[WeightSet], count: int) -> list[WeightSetState]:

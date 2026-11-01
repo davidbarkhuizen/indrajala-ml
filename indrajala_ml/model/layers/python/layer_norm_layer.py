@@ -16,6 +16,7 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.batch_norm_layer import GammaAsWeights, fold
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer, PassNode
 from indrajala_ml.model.layers.python.token_layer import token_values
@@ -82,7 +83,7 @@ class LayerNormLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[LayerNor
         xhat = [c_j / std for c_j in c]
         return [channel.gamma * xhat_j + channel.beta for xhat_j, channel in zip(xhat, self.channels)], std, xhat
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for t in range(self.tokens):
             y, std, xhat = self._normalized(token_values(self.input_layer.nodes, t, self.features))
             for node, y_j, xhat_j in zip(self._token(t), y, xhat):
@@ -93,7 +94,7 @@ class LayerNormLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[LayerNor
     def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
         return [self._normalized(x)[0] for x in R]
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         # the delta, the next layer's downstream, then each token's dl/dx, which needs all of the
         # token's deltas
         for own_index, node in enumerate(self.nodes):
@@ -110,7 +111,7 @@ class LayerNormLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[LayerNor
     def downstream_sum(self, own_index: int) -> float:
         return self.nodes[own_index].dx
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         # over this example's tokens in order, after the examples before it
         d = self.features
         for i, node in enumerate(self.nodes):

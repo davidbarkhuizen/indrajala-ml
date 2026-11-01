@@ -23,6 +23,7 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
@@ -146,12 +147,12 @@ class PatchesLayer(ParameterFreeLayer[TokenNode]):
         self.nodes = [TokenNode() for _ in self.source]
         self.size = len(self.nodes)
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         inputs = self.input_layer.nodes
         for node, image_index in zip(self.nodes, self.source):
             node.activate(inputs[image_index].value())
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
 
@@ -196,7 +197,7 @@ class TokenDropoutLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[Dropo
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for node, input_node in zip(self.nodes, self.input_layer.nodes):
             x = input_node.value()
             if self.training:
@@ -211,7 +212,7 @@ class TokenDropoutLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[Dropo
         # the identity, as in inference
         return R
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
 
@@ -234,12 +235,12 @@ class TokenMeanLayer(ParameterFreeLayer[TokenNode]):
         self.nodes = [TokenNode() for _ in range(features)]
         self.size = features
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         inputs, d = self.input_layer.nodes, self.size
         for j, node in enumerate(self.nodes):
             node.activate(fold([inputs[t * d + j].value() for t in range(self.tokens)]) / self.tokens)
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
 
@@ -275,7 +276,7 @@ class EmbeddingLayer(RowDecoding[Any], ParameterFreeLayer[TokenNode]):
         )
         return ids
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         d = self.features
         for t, token_id in enumerate(self._ids()):
             for j, weight in enumerate(self.rows[token_id].weights):
@@ -285,14 +286,14 @@ class EmbeddingLayer(RowDecoding[Any], ParameterFreeLayer[TokenNode]):
         # L ids as their L rows of E
         return [list(self.rows[token_id].weights) for token_id in self._ids(R)]
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
 
     def downstream_sum(self, own_index: int) -> float:
         raise NotImplementedError("an Embedding is the first layer: nothing reads its downstream")
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         d = self.features
         for t, token_id in enumerate(self._ids()):
             accum = self.rows[token_id].weight_gradient_accum
@@ -328,7 +329,7 @@ class PositionLayer(ParameterFreeLayer[TokenNode]):
         self.nodes = [TokenNode() for _ in range(tokens * features)]
         self.size = len(self.nodes)
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         d = self.features
         for i, (node, input_node) in enumerate(zip(self.nodes, self.input_layer.nodes)):
             node.activate(input_node.value() + self.rows[i // d].weights[i % d])
@@ -346,11 +347,11 @@ class PositionLayer(ParameterFreeLayer[TokenNode]):
     def _added(self, x: Sequence[float], t: int) -> list[float]:
         return [x_j + p_j for x_j, p_j in zip(x, self.rows[t].weights, strict=True)]
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             node.delta = next_layer.downstream_sum(own_index)
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         d = self.features
         for i, node in enumerate(self.nodes):
             self.rows[i // d].weight_gradient_accum[i % d] += node.delta
@@ -388,7 +389,7 @@ class TokenDenseLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[TokenNo
         z = [fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias for unit in self.units]
         return [relu_activation(z_k) for z_k in z] if self.activation == "relu" else z
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for t in range(self.tokens):
             outputs = self._token(token_values(self.input_layer.nodes, t, self.input_size))
             for k, value in enumerate(outputs):
@@ -397,7 +398,7 @@ class TokenDenseLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[TokenNo
     def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
         return [self._token(x) for x in R]
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             downstream = next_layer.downstream_sum(own_index)
             node.delta = relu_delta(downstream, node.value()) if self.activation == "relu" else downstream
@@ -408,7 +409,7 @@ class TokenDenseLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[TokenNo
         deltas = self.nodes[t * self.size : (t + 1) * self.size]
         return fold([node.delta * unit.weights[j] for node, unit in zip(deltas, self.units)])
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         # over this example's tokens in order, after the examples before it
         for t in range(self.tokens):
             x = token_values(self.input_layer.nodes, t, self.input_size)
@@ -466,5 +467,5 @@ class TokenSoftmaxLayer(TokenDenseLayer):
         total = fold(e)
         return [e_k / total for e_k in e]
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         raise NotImplementedError("a token-wise softmax layer is the output layer: its deltas are the output's")

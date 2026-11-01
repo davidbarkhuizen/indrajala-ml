@@ -17,6 +17,7 @@ from collections.abc import Sequence
 from typing import Any, ClassVar, Self
 
 from indrajala_ml.generation.decoder import Decoder
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.token_layer import TokenSoftmaxLayer
 from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase, randomize_fan_in_aware
@@ -164,8 +165,8 @@ class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[Trainable
         super().__init__(layers, input_shape, _bounds(input_shape, input_bounds))
         self.tokens = spec_shapes(layers, input_shape)[-1].output_shape[0]
 
-    def _forward(self, state: tuple[float, ...]) -> list[float]:
-        return self._forward_outputs(state)
+    def _forward(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> list[float]:
+        return self._forward_outputs(state, context=context)
 
     def predict_probabilities(self, state: tuple[float, ...]) -> list[list[float]]:
         """Each token's class probabilities."""
@@ -199,9 +200,9 @@ class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[Trainable
     ) -> None:
         self._learn_batch(learning_rate, batch, clip_norm)
 
-    def _backward(self, category: Sequence[int]) -> None:
+    def _backward(self, category: Sequence[int], *, context: ForwardContext = NO_CONTEXT) -> None:
         self._output_deltas(category)
-        self._backward_hidden_layers()
+        self._backward_hidden_layers(context=context)
 
     def _output_deltas(self, category: Sequence[int]) -> None:
         # one-hot per token: node t * class_count + k against 1.0 where k is token t's label

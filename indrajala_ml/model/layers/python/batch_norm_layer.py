@@ -19,6 +19,7 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar, Literal
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_node import sigmoid
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.layers.python.relu_layer import relu_activation
@@ -197,7 +198,7 @@ class BatchNormLayer:
     def set_training_mode(self, training: bool) -> None:
         self.training = training
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         # classify_state's single-example forward pass: inference only
         if self.training:
             refuse_single_example(self)
@@ -252,7 +253,7 @@ class BatchNormLayer:
                 node.delta = channel.deltas[k]
                 node.dx = channel.dxs[k]
 
-    def compute_hidden_deltas(self, next_layer: Any) -> None:
+    def compute_hidden_deltas(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         refuse_single_example(self)
 
     def backward_batch(self, downstream: Sequence[Sequence[float]]) -> None:
@@ -285,7 +286,7 @@ class BatchNormLayer:
         # dl/dx of the selected example: the linear layer's delta
         return self.nodes[own_index].dx
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         # over the whole batch at once
         for node in self.channels:
             node.weight_gradient_accum[0] += fold([delta_i * xhat_i for delta_i, xhat_i in zip(node.deltas, node.xhat)])

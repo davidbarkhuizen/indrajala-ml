@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import ClassVar
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase, as_dense_layers
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
@@ -33,8 +34,8 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
         self.layer_sizes = layer_sizes
         super().__init__(self._dense_specs(layer_sizes, 1), (dimension,), input_bounds)
 
-    def _forward(self, state: tuple[float, ...]) -> float:
-        return self._forward_outputs(state)[0]
+    def _forward(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> float:
+        return self._forward_outputs(state, context=context)[0]
 
     def predict_probability(self, state: tuple[float, ...]) -> float:
         return self._forward(state)
@@ -47,9 +48,9 @@ class BackpropClassifierNetwork[LayerT: TrainableLayer = BackpropLayer](Backprop
     ) -> None:
         self._learn_batch(learning_rate, batch, clip_norm)
 
-    def _backward(self, reference_value: float) -> None:
+    def _backward(self, reference_value: float, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._output_deltas(reference_value)
-        self._backward_hidden_layers()
+        self._backward_hidden_layers(context=context)
 
     def _output_deltas(self, reference_value: float) -> None:
         self.output_layer.nodes[0].compute_output_delta(reference_value)

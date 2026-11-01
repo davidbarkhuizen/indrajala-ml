@@ -14,6 +14,7 @@ from __future__ import annotations
 import numpy as np
 
 from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
@@ -60,7 +61,7 @@ class LayerNormArrayLayer(RowDecoding[FloatArray], BatchShaped, GammaAndBeta[Flo
         xhat = c / std
         return self.gamma * xhat + self.beta, std, xhat
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         y, self._std, self._xhat = self._normalized(self._rows(X))
         self.A = y.reshape(X.shape)
         return self.A
@@ -71,14 +72,16 @@ class LayerNormArrayLayer(RowDecoding[FloatArray], BatchShaped, GammaAndBeta[Flo
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         d = self.features
         dxhat = self._rows(self.delta_batch) * self.gamma
         m1 = sum_features(dxhat) / d
         m2 = sum_features(dxhat * self._xhat) / d
         return (((dxhat - m1) - self._xhat * m2) / self._std).reshape(self.delta_batch.shape)
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         delta = self._rows(self.delta_batch)
         self.grad_gamma += sum_rows(delta * self._xhat)
         self.grad_beta += sum_rows(delta)

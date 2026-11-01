@@ -42,7 +42,9 @@ def _record_masks(built: Any) -> list[list[Any]]:
         passes: list[Any] = []
         masks.append(passes)
 
-        def forward(layer: Any = layer, passes: list[Any] = passes, inner: Any = layer.forward) -> None:
+        def forward(
+            layer: Any = layer, passes: list[Any] = passes, inner: Any = layer.forward, *, context: Any = None
+        ) -> None:
             inner()
             if isinstance(layer, TokenDropoutLayer):
                 passes.append([node._mask for node in layer.nodes])  # pyright: ignore[reportPrivateUsage]

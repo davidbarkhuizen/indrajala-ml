@@ -49,6 +49,7 @@ import numpy as np
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, MergeArrayLayer, SplitArrayLayer
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy import recurrent_array_layer as numpy_parts
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.rust import recurrent_rust_array_layer as rust_parts
@@ -100,8 +101,8 @@ class _WithPooling:
         self._layer = layer
         self._pooled = pooled
 
-    def downstream_batch(self) -> Any:
-        return self._layer.downstream_batch() + self._pooled
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> Any:
+        return self._layer.downstream_batch(context=context) + self._pooled
 
 
 class _Pooled:
@@ -113,7 +114,7 @@ class _Pooled:
     def __init__(self, pooled: Any) -> None:
         self._pooled = pooled
 
-    def downstream_batch(self) -> Any:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> Any:
         return self._pooled
 
 
@@ -128,8 +129,8 @@ class _Merged:
         self._merge = merge
         self._pooled = pooled
 
-    def downstream_batch(self) -> Any:
-        delta = self._merge.downstream_batch()
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> Any:
+        delta = self._merge.downstream_batch(context=context)
         return delta if self._pooled is None else delta + self._pooled
 
 
@@ -289,15 +290,18 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         for state_input in self._state_inputs:
             state_input.set_state(C)
         self._activations: list[Any] = [X]
+        # the window's forward context (the segments workplan, D3), kept with its activations for
+        # its backward pass
+        context = self._window_context = self._forward_context(X)
         for layer in self.layers:
-            self._activations.append(layer.forward_batch(self._activations[-1]))
+            self._activations.append(layer.forward_batch(self._activations[-1], context=context))
         reads = self._pooling_reads
         tokens = (
             self._activations[reads[0]]
             if len(set(reads)) == 1
             else [self._activations[r] for r in reads]  # each factor's branch's (the window branches workplan)
         )
-        return self._activations[-1], self.recurrence_layer.forward_batch(tokens, C)
+        return self._activations[-1], self.recurrence_layer.forward_batch(tokens, C, context=context)
 
     def _run_windows(
         self, X: Any, C: Any, states: bool, codes: bool, live: bool = False
@@ -479,9 +483,10 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         # one window's backward pass after its forward pass: its gradients accumulated, and its
         # state's gradient returned, from the next state's dC_next and its digits' targets Y
         pooled, dC = self.recurrence_layer.backward_batch(dC_next, weight)
+        context = self._window_context
 
         output_layer: Any = self.layers[-1]
-        output_layer.compute_output_delta_batch(Y)
+        output_layer.compute_output_delta_batch(Y, context=context)
         # the mean over every window's columns: each window's mean over its own, times 1 / W
         output_layer.delta_batch = output_layer.delta_batch * weight
         reads = self._pooling_reads
@@ -490,15 +495,17 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
             readers = [g for g, r in enumerate(reads) if r == i + 1]
             if isinstance(following, BranchArrayLayer) and following.merge is not None:
                 merged = _Merged(following.merge, _summed(pooled, readers) if readers else None)
-                self.layers[i].compute_hidden_delta_batch(merged)
+                self.layers[i].compute_hidden_delta_batch(merged, context=context)
             elif isinstance(following, BranchArrayLayer):
-                self.layers[i].compute_hidden_delta_batch(_Pooled(_summed(pooled, readers)))
+                self.layers[i].compute_hidden_delta_batch(_Pooled(_summed(pooled, readers)), context=context)
             elif readers:
-                self.layers[i].compute_hidden_delta_batch(_WithPooling(following, _summed(pooled, readers)))
+                self.layers[i].compute_hidden_delta_batch(
+                    _WithPooling(following, _summed(pooled, readers)), context=context
+                )
             else:
-                self.layers[i].compute_hidden_delta_batch(following)
+                self.layers[i].compute_hidden_delta_batch(following, context=context)
         for layer, input_activation_batch in zip(self.layers, self._activations):
-            layer.accumulate_gradient_batch(input_activation_batch)
+            layer.accumulate_gradient_batch(input_activation_batch, context=context)
 
         for state_input in self._state_inputs:
             dC = dC + state_input.state_delta

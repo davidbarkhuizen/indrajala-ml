@@ -125,7 +125,7 @@ class _Next:
     def __init__(self, downstream: Any) -> None:
         self._downstream = downstream
 
-    def downstream_batch(self) -> Any:
+    def downstream_batch(self, *, context: Any = None) -> Any:
         return self._downstream
 
 
@@ -286,7 +286,7 @@ def test_every_gradient_through_dropout_after_batch_norm_matches_its_finite_diff
     # again
     forward = LayerMajorBatch.forward
 
-    def seeded(self: LayerMajorBatch) -> None:
+    def seeded(self: LayerMajorBatch, *, context: Any = None) -> None:
         network.rng = default_rng(11)
         forward(self)
 

@@ -15,6 +15,7 @@ from typing import Any, Literal
 import numpy as np
 
 from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta, RunningAverages
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray, relu, sigmoid
 from indrajala_ml.model.specs.hidden_layers import BatchOnly, Hidden
 from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
@@ -104,14 +105,14 @@ class BatchNormArrayLayer(
         xhat = (self._rows(X) - self.running_mean) / np.sqrt(self.running_var + self.epsilon)
         return self._flat(self._activate(self.gamma * xhat + self.beta))
 
-    def forward(self, x: FloatArray) -> FloatArray:
+    def forward(self, x: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # classify_state's single-example forward pass: inference only
         if self.training:
             refuse_single_example(self)
         self.a = self._inference(x[np.newaxis, :])[0]
         return self.a
 
-    def forward_batch(self, X: FloatArray) -> FloatArray:
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         self._was_training = self.training
         if not self.training:
             self.A = self._inference(X)
@@ -148,17 +149,17 @@ class BatchNormArrayLayer(
         self.running_var = (1 - rate) * self.running_var + rate * (ss / (m - 1))
         return A, xhat, (m, d, var, std)
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         # dl/dy: the downstream times the activation's derivative, as ArrayLayer's and
         # ReLUArrayLayer's hidden deltas
         assert self._was_training, "the backward pass needs a training forward pass's batch statistics"
-        downstream = next_layer.downstream_batch()
+        downstream = next_layer.downstream_batch(context=context)
         if self.activation == "sigmoid":
             self.delta_batch = downstream * self.A * (1.0 - self.A)
         else:
             self.delta_batch = downstream * (self.A > 0.0)
 
-    def downstream_batch(self) -> FloatArray:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term, per group
         if len(self._groups) == 1:
             return self._downstream(self.delta_batch, self._stats[0])
@@ -178,10 +179,12 @@ class BatchNormArrayLayer(
         dmu = sum_rows(dxhat * -inv_std) + dvar * sum_rows(-2 * d) / m
         return self._flat(dxhat * inv_std + dvar * (2 * d) / m + dmu / m)
 
-    def accumulate_gradient(self, input_activation: FloatArray) -> None:
+    def accumulate_gradient(self, input_activation: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> None:
         refuse_single_example(self)
 
-    def accumulate_gradient_batch(self, input_activation_batch: FloatArray) -> None:
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
         delta = self._rows(self.delta_batch)
         self.grad_gamma += sum_rows(delta * self._xhat)
         self.grad_beta += sum_rows(delta)

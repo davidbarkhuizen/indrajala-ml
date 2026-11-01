@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import ClassVar
 
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer, WeightSet
 from indrajala_ml.model.specs.window_geometry import output_size, pool_stride, validate_pool_arguments
@@ -119,11 +120,11 @@ class MaxPoolLayer:
             for pc in range(self.pool_size)
         ]
 
-    def forward(self) -> None:
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for unit in self.nodes:
             unit.forward()
 
-    def compute_hidden_deltas(self, next_layer: TrainableLayer) -> None:
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, unit in enumerate(self.nodes):
             unit.compute_hidden_delta(next_layer.downstream_sum(own_index))
 
@@ -135,7 +136,7 @@ class MaxPoolLayer:
     def set_training_mode(self, training: bool) -> None:
         pass
 
-    def accumulate_gradients(self) -> None:
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         pass
 
     def weight_sets(self) -> Sequence[WeightSet]:

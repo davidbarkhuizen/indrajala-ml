@@ -11,6 +11,7 @@ from indrajala_ml.model.layers.rust.residual_rust_array_layer import ForkRustArr
 from indrajala_ml.model.layers.rust.rust_array_layer import before_layer_norm
 from indrajala_ml.model.specs.hidden_layers import BatchOnly, Hidden
 from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
+from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBeta[pa.Array], RunningAverages[pa.Array]):
@@ -78,14 +79,14 @@ class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBet
             X, self.gamma, self.beta, self.running_mean, self.running_var, self.epsilon, self.activation, self.positions
         )
 
-    def forward(self, x: pa.Array) -> pa.Array:
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # classify_state's single-example forward pass: inference only
         if self.training:
             refuse_single_example(self)
         self.a = self._inference(x)
         return self.a
 
-    def forward_batch(self, X: pa.Array) -> pa.Array:
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         self._was_training = self.training
         if not self.training:
             self.A = self._inference(X)
@@ -117,11 +118,11 @@ class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBet
         )
         return self.A
 
-    def compute_hidden_delta_batch(self, next_layer: Any) -> None:
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         # dl/dy: the downstream times the activation's derivative
         assert self._was_training, "the backward pass needs a training forward pass's batch statistics"
         if self.activation == "sigmoid" and before_layer_norm(next_layer):
-            self.delta_batch = pa.array_sigmoid_mask(next_layer.downstream_batch(), self.A)
+            self.delta_batch = pa.array_sigmoid_mask(next_layer.downstream_batch(context=context), self.A)
         elif self.activation == "sigmoid" and isinstance(next_layer, ForkRustArrayLayer):
             # before a residual block: the fused skip op (D8, RustArrayLayer.compute_hidden_delta)
             body = next_layer.body_first
@@ -131,18 +132,18 @@ class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBet
         elif self.activation == "sigmoid":
             self.delta_batch = pa.layer_hidden_delta_batch(next_layer.W, next_layer.delta_batch, self.A)
         else:
-            self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(), self.A)
+            self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(context=context), self.A)
 
-    def downstream_batch(self) -> pa.Array:
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term
         return pa.batch_norm_downstream_batch(
             self.delta_batch, self.gamma, self._d, self._var, self._std, self.epsilon, self.positions, self.group_size
         )
 
-    def accumulate_gradient(self, input_activation: pa.Array) -> None:
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         refuse_single_example(self)
 
-    def accumulate_gradient_batch(self, input_activation_batch: pa.Array) -> None:
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_gamma, self.grad_beta = pa.batch_norm_accumulate_gradient_batch(
             self.delta_batch, self._xhat, self.grad_gamma, self.grad_beta, self.positions
         )
