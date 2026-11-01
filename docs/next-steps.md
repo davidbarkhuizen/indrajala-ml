@@ -929,9 +929,8 @@ within rounding on numpy (D7).
   one cache form.
 - **A paragraph's first token is drawn from an untrained row.** Training counts no target whose
   input is a separator (the segments workplan, D6), so after a separator a decode samples from a
-  distribution no loss shaped. A begin-of-paragraph token, or counting that target (its input the
-  separator, attending to its own paragraph), would train it; step 12's longer windows are where
-  generating several paragraphs matters.
+  distribution no loss shaped. The owner chose an end-of-paragraph token (2026-11-01): the
+  separator's target counts (the context-length workplan, D11, its stage 2).
 - **A prompt longer than `T`** is prefilled up to `T` and then stepped token by token. A
   band-masked prefill in chunks of `T` would be one pass per chunk, and is exact.
 - **A learned `Position` past `T`** falls back to a full pass per token (D3 (a)), which is exact
