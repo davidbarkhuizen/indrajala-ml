@@ -259,6 +259,12 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
 - **The addition harness's `crate` field hashes the crate's `__init__.py`**, not the `.so`: it
   doesn't identify the build (fixed in the length-generalisation workplan's stage 7). To check a
   venv's crate, hash the extension module.
+- **Record a golden version from a clean tree.** `record` trains the working tree's code, so a
+  stage's uncommitted changes (the next stage's, kept while the last one merges) go into the
+  version archived under the merged commit, and pyramidon's `archive` merges its own PR at once
+  (2026-11-01: `golden/pyramidon/2026-11-01-1f70731` held the next stage's pure-Python moves;
+  corrected by `-2` with `--replaces`). `git stash -u` first, and check `compare` lists only the
+  merged stage's entries before archiving.
 - **The golden run** (`.venv/bin/python scripts/measurement/golden_training_run.py check
   data/refactoring/golden_run.json`; untracked, per machine) has 124 networks on both machines
   since #705, each version archived in `indrajala-benchmarks`; earlier versions are kept beside it

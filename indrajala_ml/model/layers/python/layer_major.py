@@ -111,14 +111,24 @@ class LayerMajorBatch:
             lanes: list[Lane] = []
             reads = self._reads(layer, "forward_reads")
             begin_example: Callable[[int], None] | None = getattr(layer, "begin_example", None)
-            for example in range(count):
-                self._select(index - 1, example)
-                for other in reads:
-                    self._select(other, example)
-                if begin_example is not None:
-                    begin_example(example)
-                layer.forward(context=context.example(example))
-                lanes.append(_capture(layer))
+            # a layer that draws for the whole batch at once (an attention's key-block dropout
+            # masks, the context-length workplan, D12) learns the batch's size first
+            begin_batch: Callable[[int], None] | None = getattr(layer, "begin_batch", None)
+            end_batch: Callable[[], None] | None = getattr(layer, "end_batch", None)
+            if begin_batch is not None:
+                begin_batch(count)
+            try:
+                for example in range(count):
+                    self._select(index - 1, example)
+                    for other in reads:
+                        self._select(other, example)
+                    if begin_example is not None:
+                        begin_example(example)
+                    layer.forward(context=context.example(example))
+                    lanes.append(_capture(layer))
+            finally:
+                if end_batch is not None:
+                    end_batch()
             self.lanes.append(lanes)
 
     def outputs(self) -> list[list[float]]:

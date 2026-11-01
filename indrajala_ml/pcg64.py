@@ -178,6 +178,25 @@ class Pcg64Generator:
         rotation = self._state >> 122
         return (folded >> rotation | folded << (64 - rotation)) & MASK_64
 
+    def advance(self, delta: int) -> None:
+        """
+        numpy's PCG64.advance(delta): the LCG stepped delta times at once, by squaring (O(log
+        delta)), so a draw delta values ahead is the next one; the buffered 32-bit half is dropped.
+        Each random() is one step.
+        """
+        assert delta >= 0, f"advance steps forward; got {delta}"
+        acc_mult, acc_plus = 1, 0
+        cur_mult, cur_plus = PCG_MULTIPLIER, self._inc
+        while delta:
+            if delta & 1:
+                acc_mult = (acc_mult * cur_mult) & MASK_128
+                acc_plus = (acc_plus * cur_mult + cur_plus) & MASK_128
+            cur_plus = ((cur_mult + 1) * cur_plus) & MASK_128
+            cur_mult = (cur_mult * cur_mult) & MASK_128
+            delta >>= 1
+        self._state = (acc_mult * self._state + acc_plus) & MASK_128
+        self._has_uint32, self._uinteger = 0, 0
+
     def random(self) -> float:
         """A double in [0, 1): the top 53 bits of one draw."""
         return (self.next_uint64() >> 11) * (1.0 / 9007199254740992.0)

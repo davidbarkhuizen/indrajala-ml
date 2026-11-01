@@ -19,7 +19,7 @@ import pytest
 
 from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.layers.numpy.token_array_layer import PatchesArrayLayer, PositionArrayLayer, TokenMeanArrayLayer
-from indrajala_ml.model.layers.python.attention_layer import AttentionLayer
+from indrajala_ml.model.layers.python.attention_layer import AttentionLayer, Masking
 from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer, fold
 from indrajala_ml.model.layers.python.layer_norm_layer import LayerNormLayer
 from indrajala_ml.model.layers.python.linear_layer import LinearLayer
@@ -149,20 +149,22 @@ def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bit
         return [fold([x_j * w_j for x_j, w_j in zip(x, weights, strict=True)]) + b for weights, b in rows_]
 
     snapshot = layer.snapshot_state()
-    assert layer._P == [[1.0]]
+    # its one weight is exp(0) / 1 (the tiled attend's m and l, the context-length workplan, D3)
+    assert layer._l == [[1.0]]
     expected = affine(affine(X, snapshot[10:15]), snapshot[15:20])
     assert bits([node.value() for node in layer.nodes]) == bits(expected)
 
 
 def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth():
-    # T = 16: every score is 0, every weight 1/16, and H is the token mean of V, the same fold
+    # T = 16: every score is 0, so m = 0, every e = 1 and l = 16, and H is V's tokens folded, / 16:
+    # the token mean of V, the same fold
     rng = random.Random(4)
     layer = _attention(16, 8, [rng.uniform(-1.0, 1.0) for _ in range(16 * 8)], seed=3)
     snapshot = layer.snapshot_state()
     layer.restore_state([([0.0] * 8, 0.0)] * 16 + snapshot[16:])  # Wq, bq, Wk, bk
     layer.forward()
 
-    assert layer._P == [[1 / 16] * 16] * 16
+    assert layer._m == [[0.0] * 16] and layer._l == [[16.0] * 16]
     mean = TokenMeanLayer(_input([v for row in layer._V for v in row]), 16, 8)
     mean.forward()
     assert bits(layer._H) == bits([[node.value() for node in mean.nodes]] * 16)
@@ -257,9 +259,16 @@ def _scales(python: Any, gradients: list[list[Any]]) -> list[float]:
     # each layer's largest gradient, but a linear layer's is its batch norm's: batch norm's dl/dx
     # is a difference of terms that cancel (to 1e-7 of them, measured here, once Adam's steps kill
     # the ReLU layer before), so its rounding is the terms', as the batch-norm parity tests found
+    # the run's ReLU units die and come back alike, so a layer's gradients can be vanishing: the
+    # two-layer model's second FFN gets its first nonzero gradient at step 37 (1.2e-6, from a unit
+    # at the edge of activity, 1e-8 of the network's largest), which is the difference of terms of
+    # the network's size, so its rounding is theirs (5e-10 of it, numpy against pure Python, since
+    # tiled attention: the context-length workplan, stage 7). Each scale is floored at 1e-7 of the
+    # network's largest
     largest = [max((float(np.abs(np.array(values)).max()) for values in layer), default=0.0) for layer in gradients]
+    floor = 1e-7 * max(largest, default=0.0)
     return [
-        largest[i + 1] if isinstance(layer, LinearLayer) else largest[i]
+        max(largest[i + 1] if isinstance(layer, LinearLayer) else largest[i], floor)
         for i, layer in enumerate(python.trainable_layers)
     ]
 
@@ -367,7 +376,7 @@ def test_one_token_attends_only_to_itself_in_every_head_by_bits(heads: int, key_
 
     w = layer.width
     snapshot = layer.snapshot_state()
-    assert layer._P == [[1.0] * heads]
+    assert layer._l == [[1.0]] * heads
     expected = affine(affine(X, snapshot[2 * w : 3 * w]), snapshot[3 * w :])
     assert bits([node.value() for node in layer.nodes]) == bits(expected)
 
@@ -381,7 +390,7 @@ def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth_in_every_
     layer.restore_state([([0.0] * 6, 0.0)] * (2 * w) + snapshot[2 * w :])  # Wq, bq, Wk, bk
     layer.forward()
 
-    assert layer._P == [[1 / 16] * (16 * heads)] * 16
+    assert layer._m == [[0.0] * 16] * heads and layer._l == [[16.0] * 16] * heads
     mean = TokenMeanLayer(_input([v for row in layer._V for v in row]), 16, w)
     mean.forward()
     assert bits(layer._H) == bits([[node.value() for node in mean.nodes]] * 16)
@@ -399,7 +408,7 @@ def test_identical_heads_weigh_and_mix_alike_by_bits(heads: int, key_size: int |
     layer.forward()
 
     for i in range(1, heads):
-        assert bits([row[i * 4 : (i + 1) * 4] for row in layer._P]) == bits([row[:4] for row in layer._P])
+        assert bits(layer._m[i]) == bits(layer._m[0]) and bits(layer._l[i]) == bits(layer._l[0])
         assert bits([row[i * d_k : (i + 1) * d_k] for row in layer._H]) == bits([row[:d_k] for row in layer._H])
 
 
@@ -433,7 +442,7 @@ def test_the_blocks_called_in_turn_are_the_layers_passes_by_bits(heads: int, key
     delta = [rng.uniform(-0.5, 0.5) for _ in range(24)]
 
     Q, K, V = layer._project(layer._inputs())
-    P, H, _ = layer._attend(Q, K, V)
+    H, m, l = layer._tiled((Q, K, V), Masking(layer.causal))
     out = layer._combine(H)
     layer.forward()
     assert bits([node.value() for node in layer.nodes]) == bits([v for row in out for v in row])
@@ -441,4 +450,4 @@ def test_the_blocks_called_in_turn_are_the_layers_passes_by_bits(heads: int, key
     layer.compute_hidden_deltas(downstream(delta))
     dQ, dK, dV = layer._attend_backward(layer._combine_backward(layer._deltas()))
     assert bits(layer._dX) == bits(layer._project_backward(dQ, dK, dV))
-    assert bits(layer._P) == bits(P)
+    assert (bits(layer._m), bits(layer._l)) == (bits(m), bits(l))
