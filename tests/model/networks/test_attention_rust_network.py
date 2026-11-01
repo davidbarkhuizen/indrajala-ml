@@ -28,9 +28,6 @@ from indrajala_ml.model.layers.rust.batch_norm_rust_array_layer import BatchNorm
 from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.layers.rust.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
-from indrajala_ml.model.layers.rust.token_rust_array_layer import (
-    TokenMeanRustArrayLayer,
-)
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.specs.layer_specs import BatchNorm, Dense, LayerNorm, LayerSpec, Residual, TokenMean
 from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule, WeightDecay
@@ -108,7 +105,9 @@ def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bit
     X = pa.Array(np.random.default_rng(2).uniform(-1.0, 1.0, (4, 6)).tolist())
 
     out = layer.forward_batch(X)
-    assert bits(to_numpy(layer._P)) == bits(np.ones((4, heads)))  # pyright: ignore[reportPrivateUsage]
+    # each head's one weight is exp(0) / 1 (the tiled attend's m and l, the context-length workplan, D3)
+    assert bits(to_numpy(layer._l)) == bits(np.ones((4, heads)))  # pyright: ignore[reportPrivateUsage]
+    assert bits(to_numpy(layer._H)) == bits(to_numpy(layer._V))  # pyright: ignore[reportPrivateUsage]
     assert bits(to_numpy(out)) == bits(to_numpy(pa.affine_forward_batch(Wo, pa.affine_forward_batch(Wv, X, bv), bo)))
 
 
@@ -116,8 +115,8 @@ def test_one_token_attends_only_to_itself_so_attention_is_two_affine_maps_by_bit
     ("heads", "key_size"), [(1, None), (2, None), (4, None), (4, 3)], ids=["1", "2", "4", "4 of 3"]
 )
 def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth(heads: int, key_size: int | None):
-    # T = 16: every score is 0, every weight 1/16, and each head's H the token mean of its V, the
-    # same fold
+    # T = 16: every score is 0, so m = 0, every e = 1 and l = 16 exactly, and each head's H its V's
+    # tokens summed, then / 16 (one key block: the context-length workplan, D3)
     layer = _attention(16, 8, 3, heads, key_size)
     parameters = list(layer.parameters())
     for i in range(4):  # Wq, bq, Wk, bk
@@ -126,13 +125,16 @@ def test_zero_queries_and_keys_weigh_every_token_exactly_one_sixteenth(heads: in
     X = pa.Array(np.random.default_rng(4).uniform(-1.0, 1.0, (3, 16 * 8)).tolist())
 
     layer.forward_batch(X)
-    assert bits(to_numpy(layer._P)) == bits(np.full((48, heads * 16), 1 / 16))  # pyright: ignore[reportPrivateUsage]
+    assert bits(to_numpy(layer._m)) == bits(np.zeros((48, heads)))  # pyright: ignore[reportPrivateUsage]
+    assert bits(to_numpy(layer._l)) == bits(np.full((48, heads), 16.0))  # pyright: ignore[reportPrivateUsage]
     V, H = to_numpy(layer._V), to_numpy(layer._H)  # pyright: ignore[reportPrivateUsage]
     d_k = layer.key_size
     for i in range(heads):
-        V_i = pa.Array(_head(V, i, d_k).reshape(3, -1).tolist())
-        mean = to_numpy(TokenMeanRustArrayLayer(16, d_k).forward_batch(V_i))
-        assert bits(_head(H, i, d_k)) == bits(np.repeat(mean, 16, axis=0))
+        for n in range(3):
+            total = to_numpy(
+                pa.Array(np.ones((1, 16)).tolist()) @ pa.Array(_head(V, i, d_k)[n * 16 : (n + 1) * 16].tolist())
+            )
+            assert bits(_head(H, i, d_k)[n * 16 : (n + 1) * 16]) == bits(np.repeat(total / 16.0, 16, axis=0))
 
 
 @pytest.mark.parametrize(("heads", "key_size"), [(2, None), (3, None), (2, 4)], ids=["2", "3", "2 of 4"])
@@ -146,9 +148,9 @@ def test_identical_heads_weigh_and_mix_alike_by_bits(heads: int, key_size: int |
     X = pa.Array(np.random.default_rng(6).uniform(-1.0, 1.0, (3, 4 * 6)).tolist())
 
     layer.forward_batch(X)
-    P, H = to_numpy(layer._P), to_numpy(layer._H)  # pyright: ignore[reportPrivateUsage]
+    m, l, H = to_numpy(layer._m), to_numpy(layer._l), to_numpy(layer._H)  # pyright: ignore[reportPrivateUsage]
     for i in range(1, heads):
-        assert bits(_head(P, i, 4)) == bits(_head(P, 0, 4))
+        assert bits(m[:, i]) == bits(m[:, 0]) and bits(l[:, i]) == bits(l[:, 0])
         assert bits(_head(H, i, d_k)) == bits(_head(H, 0, d_k))
 
 

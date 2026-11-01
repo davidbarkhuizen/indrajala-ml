@@ -92,6 +92,17 @@ Each lists the options considered, with pros and cons, and the choice.
     computed, a row may still be wholly masked (a query whose segment starts after the block):
     its `m'` is `-inf`, so the shift uses `0` in its place (`e = exp(-inf) = 0`, `l` and `H` stay
     0), as FlashAttention's kernels do; every row ends with its diagonal, so no row's `l` is 0.
+  - *Global blocks, not per segment* (stage 5). Key blocks are cut at the columns that are
+    multiples of `b`, the same for every row. A segment's arithmetic then depends on where it sits
+    against that grid: packed after another paragraph, alone, or left-padded, and a sliding decode
+    cache whose first column moves, block the same keys differently, so their outputs agree within
+    rounding, no longer by bits on Rust and pure Python (numpy's never were). Options: (i) global
+    blocks (*chosen*): pros, one tile grid per batch, numpy's batched form over `(N, h)`, dropout's
+    key-block draws as D12; cons, the position-independence above is within rounding. (ii)
+    Per-segment blocks, cut from each segment's first column (FlashAttention's varlen kernels):
+    pros, a segment's bits independent of its place; cons, numpy loses its batched products to
+    per-example, per-segment loops, and D12's draw order needs redefining per segment. Revisit
+    (ii) if a later check needs bitwise position independence (next-steps).
   - *Folds.* Each tile's row sums (of `e`, and of `dP * P` in the backward) are left folds in key
     order (the summation-order rule, `tests/model/layers/test_summation_order.py`), and the
     tiles combine in key-block order. The backward's row term is FlashAttention-2's
@@ -258,8 +269,12 @@ Each lists the options considered, with pros and cons, and the choice.
 4. **Tiled attention in numpy** (D3, D12): the expressions, tests by hand (one block equals the
    softmax up to the final division's grouping; masked blocks skipped give the same bits as
    unskipped; memory linear in `T`); the golden re-record (D9, approved).
-5. **The crate**: tiled forward and backward, numpy's bits; "Bump rust/" with the tier 2 A/B.
-6. **Rust layers**; 7. **Pure Python**; parity.
+5. **The crate**: tiled forward and backward, numpy's expressions, in `indrajala-math-rust` (#88);
+   then "Bump rust/" with the Rust layers on it and the tier 2 A/B. The ops' signatures change (`m`,
+   `l` and the dropout generator's copy in place of `P` and the mask), so the bump can't keep the
+   suite green without the layers: the plan's stages 5 and 6 are one PR (refined 2026-11-01).
+6. (Merged into stage 5.)
+7. **Pure Python**; parity.
 8. **Epoch-dependent windows** (D4) and the token budget (D5) in the trainer.
 9. **The study** (D8): its claims registered first.
 10. **Docs**; the workplan retired.

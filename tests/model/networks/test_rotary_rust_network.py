@@ -110,7 +110,7 @@ def test_the_downstream_rotates_dq_and_dk_back():
     X, delta = _array(_X()), _array(_X(seed=2))
     rotary.forward_batch(X)
     rotary._backward(delta)  # pyright: ignore[reportPrivateUsage]
-    for name in ("_Q", "_K", "_V", "_P", "_M"):
+    for name in ("_Q", "_K", "_V", "_H", "_m", "_l", "_dropout_rng", "_segments"):
         setattr(plain, name, getattr(rotary, name))
     plain._backward(delta)  # pyright: ignore[reportPrivateUsage]
     numpy = _numpy_rotation(T, 2, None)

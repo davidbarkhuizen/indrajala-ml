@@ -151,16 +151,15 @@ def _attention(causal: bool, tokens: int = 4, features: int = 6, heads: int = 2)
     return layer
 
 
-def test_a_causal_layers_masked_weights_are_exactly_zero():
+def test_a_causal_layers_first_token_weighs_only_itself():
+    # token 0's one unmasked weight: exp(0) / 1, so its rows of H are its rows of V exactly (the
+    # tiled attend's m and l, the context-length workplan, D3; the masked weights' zeros are the
+    # crate's tests')
     layer = _attention(True)
     layer.forward_batch(_array(np.random.default_rng(1).uniform(-1.0, 1.0, (3, 24))))
-    # packed (N * T, h * T): head i in columns i * T..
-    P = to_numpy(layer._P).reshape(3, 4, 2, 4)  # pyright: ignore[reportPrivateUsage]
-    future = np.triu(np.ones((4, 4), dtype=bool), k=1)
-    for head in range(2):
-        weights = P[:, :, head, :]
-        assert (weights[:, future] == 0.0).all() and (weights[:, ~future] > 0.0).all()
-        assert (weights[:, 0, 0] == 1.0).all()
+    l, H, V = to_numpy(layer._l), to_numpy(layer._H), to_numpy(layer._V)  # pyright: ignore[reportPrivateUsage]
+    assert (l[::4] == 1.0).all()
+    assert bits(H[::4]) == bits(V[::4])
 
 
 def test_a_causal_layer_over_one_token_is_the_unmasked_layer_by_bits():

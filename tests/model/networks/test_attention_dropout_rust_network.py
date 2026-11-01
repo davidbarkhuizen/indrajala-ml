@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
-from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
+from indrajala_ml.model.layers.numpy.attention_array_layer import BLOCK, AttentionArrayLayer, key_blocks
 from indrajala_ml.model.layers.numpy.token_array_layer import TokenDropoutArrayLayer
 from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
 from indrajala_ml.model.layers.rust.token_rust_array_layer import TokenDropoutRustArrayLayer
@@ -45,10 +45,14 @@ def _masks(built: Any) -> list[Any]:
             masks.append(to_numpy(layer._mask))  # pyright: ignore[reportPrivateUsage, reportArgumentType]
         elif isinstance(layer, AttentionArrayLayer) and (mask := layer.dropout_mask()) is not None:
             masks.append(mask)
-        elif isinstance(layer, AttentionRustArrayLayer) and layer._M is not None:  # pyright: ignore[reportPrivateUsage]
-            packed = to_numpy(layer._M)  # pyright: ignore[reportPrivateUsage]
-            n, h, t = packed.shape[0] // layer.tokens, layer.heads, layer.tokens
-            masks.append(packed.reshape(n, t, h, t).transpose(0, 2, 1, 3))
+        elif isinstance(layer, AttentionRustArrayLayer) and layer._dropout_rng is not None:  # pyright: ignore[reportPrivateUsage]
+            # the crate returns its generator's copy before the draws (the context-length workplan,
+            # D12): numpy's draws from that state, key block by key block, are the masks it drew
+            rng = np.random.Generator(np.random.PCG64())
+            rng.bit_generator.state = layer._dropout_rng.state  # pyright: ignore[reportPrivateUsage]
+            n, h, t = to_numpy(layer._Q).shape[0] // layer.tokens, layer.heads, layer.tokens  # pyright: ignore[reportPrivateUsage]
+            blocks = [rng.random((n, h, t, k1 - k0)) >= layer.dropout for k0, k1 in key_blocks(t, BLOCK)]
+            masks.append(np.concatenate(blocks, axis=-1).astype(np.float64))
     return masks
 
 

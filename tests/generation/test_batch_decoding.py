@@ -68,10 +68,12 @@ def _network(implementation: str, positions: str, segments: bool = True) -> Any:
     return network
 
 
-def _assert_equal(implementation: str, got: Any, expected: Any, positions: str = "none") -> None:
+def _assert_equal(implementation: str, got: Any, expected: Any, positions: str = "none", sliding: bool = False) -> None:
     # by bits but numpy's, and a rotary model's at other columns: its angles differ, and its scores
-    # depend on t - u only within rounding
-    if implementation == "numpy" or positions == "rotary":
+    # depend on t - u only within rounding; and past the window, where a cache's key blocks are cut
+    # at its columns (the context-length workplan, D3), which the pads shift: the same online softmax
+    # blocked otherwise, within rounding
+    if implementation == "numpy" or positions == "rotary" or sliding:
         np.testing.assert_allclose(np.array(got), np.array(expected), rtol=0, atol=ATOL)
     else:
         assert got == expected
@@ -107,7 +109,7 @@ def test_a_padded_batch_decodes_each_row_as_alone(implementation: str, positions
     for n, prompt in enumerate(prompts):
         alone = network.decoder()
         expected = [alone.prefill(prompt)] + [alone.step(token) for token in tokens[n]]
-        _assert_equal(implementation, [r[n] for r in rows], expected, positions)
+        _assert_equal(implementation, [r[n] for r in rows], expected, positions, sliding=steps > WINDOW)
 
 
 @pytest.mark.parametrize("positions", POSITIONS)
