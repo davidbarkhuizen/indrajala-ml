@@ -49,8 +49,8 @@ bits.
     default for new sequence models (README, Schedules and clipping; next-steps, From the
     training recipe).
 11. **Segments: packing, document masks and padding**: one segment id per token, for packed
-    training windows and padded inference batches; planned (2026-10-10,
-    [segments-workplan.md](workplans/library/segments-workplan.md)).
+    training windows and padded inference batches; done (2026-11-01), in all three
+    implementations and the crate (README, Segments; next-steps, From segments).
 12. **Context length**: windows of 256 and 1,024 characters, with tiled attention; planned
     (2026-10-10, [context-length-workplan.md](workplans/library/context-length-workplan.md)).
 13. **FFN activations: GELU and SwiGLU**; planned (2026-10-10,

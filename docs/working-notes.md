@@ -69,6 +69,9 @@ where you meet a new trap; delete one that no longer holds.
   files; without `rust/`, `./cli test` stops at once ("no tests ran", exit 0): run `PYTHONPATH=.
   .venv/bin/python -m pytest tests/ -q -p no:cacheprovider` for a package-only PR. `data/mnist`'s
   link isn't ignored, so stage files by name. `git worktree remove --force` deletes only the links.
+- **`ab.py remote run --old main` resolves the laptop's local `main`**, not `origin/main`: pull
+  the main checkout after every merge, or a stage's A/B times its predecessors too (2026-11-01:
+  segments stage 6's old side was main before stage 4).
 - **Squash a branch onto main only after rebasing it there:** `git reset --soft origin/main` on a
   branch cut from an older main keeps the branch's tree, so the commit reverts whatever merged in
   between (2026-10-31: segments stage 2's first push reverted stage 3, #1158). Rebase first (`git
