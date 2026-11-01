@@ -100,6 +100,14 @@ in all three implementations: ROTARY_SPECS under Adam(weight_decay=RECIPE_WEIGHT
 schedule, and each batch call's gradient clipped to RECIPE_CLIP_NORM, which binds on some of
 them. No earlier entry moved when they were recorded.
 
+The packed entries (the segments workplan, stage 9, D10) are added after the training-recipe ones:
+PACKED_SPECS, the sequence model over the excerpt's tokenizer with its two special tokens
+(Embedding(segments=True), the output one class wider for the separator), in all three
+implementations, on PACKED_ROWS: the excerpt's paragraphs packed with separators into 11 windows,
+then a twelfth left-padded with three pads. So attention is masked across paragraphs and from pads,
+the learned Position reads per-segment rows, the loss counts only its counted targets, and the
+pad's row stays zero. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -124,7 +132,7 @@ import indrajala_math_rust as pa
 import numpy as np
 
 from indrajala_ml.data.prepared_dataset import PreparedDataset
-from indrajala_ml.data.text_data import Vocabulary, windows
+from indrajala_ml.data.text_data import Vocabulary, pack, paragraphs, windows
 from indrajala_ml.measurement import benchmark_archive
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
@@ -569,6 +577,28 @@ COSINE_NETWORKS = ["numpy cosine sequence model"]
 RECIPE_WEIGHT_DECAY = 0.1
 RECIPE_CLIP_NORM = 0.6  # binds on 2, 1 and 1 of the 4 batch calls (numpy, Rust, Python)
 RECIPE_NETWORKS = ["numpy recipe model", "rust recipe model", "python recipe model"]
+# the excerpt packed (the segments workplan, D2, D7): its symbols, then the separator and the pad
+PACKED_VOCABULARY = len(SEQUENCE_VOCABULARY) + 2
+PACKED_SEPARATOR, PACKED_PAD = PACKED_VOCABULARY - 2, PACKED_VOCABULARY - 1
+PACKED_SPECS: list[LayerSpec] = [
+    Embedding(PACKED_VOCABULARY, 4, segments=True),
+    *SEQUENCE_SPECS[1:-1],
+    Dense(PACKED_VOCABULARY - 1, output=True, activation="softmax", loss="cross_entropy"),
+]
+PACKED_NETWORKS = ["numpy packed model", "rust packed model", "python packed model"]
+
+
+def _packed_rows() -> list[Example[tuple[int, ...]]]:
+    # the excerpt's paragraphs packed into windows, then a left-padded row: three pads, then the
+    # second paragraph's first three ids (the pads' targets don't count, so any class stands there)
+    ids = pack(paragraphs(TINY_SHAKESPEARE_OPENING), SEQUENCE_VOCABULARY)
+    rows = windows(ids, SEQUENCE_CONTEXT)
+    second = pack(paragraphs(TINY_SHAKESPEARE_OPENING)[1:], SEQUENCE_VOCABULARY)
+    state = (float(PACKED_PAD),) * 3 + tuple(float(i) for i in second[:3])
+    labels = (0, 0, second[0], second[1], second[2], second[3])
+    return [*rows, (state, labels)]
+
+
 # SEQUENCE_SPECS as a window of 2 columns, a dropout after the Position and the state entering
 # before each block, beside a state of 3 features snapped to 4 codes (the window-recurrent adder
 # workplan, stage 7); each sequence row is 3 windows
@@ -967,6 +997,19 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 "predict_probabilities",
                 COSINE_SCHEDULE,
                 RECIPE_CLIP_NORM,
+            ),
+        )
+    packed_rows = _packed_rows()
+    assert len(packed_rows) == ROW_COUNT, f"the packed excerpt is {ROW_COUNT} rows; got {len(packed_rows)}"
+    for name in PACKED_NETWORKS:
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(_sequential_network, name, (SEQUENCE_CONTEXT,), PACKED_SPECS, Adam()),
+                packed_rows,
+                "predict_probabilities",
             ),
         )
 
