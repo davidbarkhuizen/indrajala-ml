@@ -588,6 +588,20 @@ def test_batch_size_timing_rows(tmp_path: Path) -> None:
     ]
 
 
+def test_attention_timing_rows(tmp_path: Path) -> None:
+    out = _write(
+        tmp_path / "a.json",
+        {"T=1024 B=2 causal / numpy": {"forward": 0.4, "backward": 0.2, "peak RSS": 403.5, "tracemalloc peak": 397.2}},
+    )
+    rows = ab.AttentionTiming().rows(out, tmp_path / "none", "numpy")
+    assert [(r.case, r.metric, r.unit, r.control) for r in rows] == [
+        ("T=1024 B=2 causal / numpy", "forward", "s", True),
+        ("T=1024 B=2 causal / numpy", "backward", "s", True),
+        ("T=1024 B=2 causal / numpy", "peak RSS", "MB", True),
+        ("T=1024 B=2 causal / numpy", "tracemalloc peak", "MB", True),
+    ]
+
+
 def test_every_adapter_names_its_script_and_output(tmp_path: Path) -> None:
     for adapter in ab.ADAPTERS.values():
         if adapter.name == "cmd":
