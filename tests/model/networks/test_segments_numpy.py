@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.layers.array.array_backend import NUMPY
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT
 from indrajala_ml.model.layers.numpy.segments import attention_blocked, segment_context
 from indrajala_ml.model.networks.python.sequential_backprop_network import SequentialSequenceBackpropNetwork
@@ -156,9 +156,7 @@ def test_a_segmented_embedding_is_written_only_when_it_has_segments():
         Embedding(2, 4, segments=True)
 
 
-def test_segments_are_refused_on_rust_and_pure_python_until_their_stages():
-    with pytest.raises(NotImplementedError, match="stage 6"):
-        SequentialArrayNetwork((T,), _specs("rotary"), Adam(), "sequence", RUST)
+def test_segments_are_refused_in_pure_python_until_its_stage():
     with pytest.raises(NotImplementedError, match="stage 7"):
         SequentialSequenceBackpropNetwork((T,), _specs("rotary"), Adam())
 

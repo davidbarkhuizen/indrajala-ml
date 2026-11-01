@@ -137,7 +137,9 @@ class EmbeddingRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], DeltaIsDo
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
 
-    def __init__(self, tokens: int, vocabulary: int, size: int) -> None:
+    def __init__(self, tokens: int, vocabulary: int, size: int, pad: int | None = None) -> None:
+        # the pad's id when the Embedding has segments: its row stays zero (the segments workplan, D2)
+        self.pad = pad
         self.tokens = tokens
         self.vocabulary = vocabulary
         self.features = size
@@ -173,9 +175,16 @@ class EmbeddingRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], DeltaIsDo
 
     def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_E = pa.embedding_accumulate_gradient(self.delta, input_activation, self.grad_E)
+        self._zero_pad_gradient()
 
     def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         self.grad_E = pa.embedding_accumulate_gradient(self.delta_batch, input_activation_batch, self.grad_E)
+        self._zero_pad_gradient()
+
+    def _zero_pad_gradient(self) -> None:
+        if self.pad is not None:
+            for j in range(self.features):
+                self.grad_E[self.pad, j] = 0.0  # the pad's row is never updated
 
     def reset_gradient_accum(self) -> None:
         self.grad_E = pa.Array.zeros((self.vocabulary, self.features))
@@ -208,10 +217,16 @@ class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
         (self.P,) = parameters
 
     def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        if context.positions is not None:
+            return x + pa.embedding_forward(context.positions, self.P).reshape(self.size)
         return x + self.P.reshape(self.size)
 
     def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # a new array: X is not written
+        if context.positions is not None:
+            # each token's row by its position within its segment (the segments workplan, D5): an
+            # embedding_forward gather with the positions as ids
+            return X + pa.embedding_forward(context.positions, self.P)
         return X + self.P.reshape(self.size)
 
     def start_decoding(self) -> None:
@@ -232,9 +247,17 @@ class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
         return self.delta_batch
 
     def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        if context.positions is not None:
+            delta = self.delta.reshape((1, self.size))
+            self.grad_P = pa.embedding_accumulate_gradient(delta, context.positions, self.grad_P)
+            return
         self.grad_P = self.grad_P + self.delta.reshape((self.tokens, self.features))
 
     def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        if context.positions is not None:
+            # a scatter-add into the rows the tokens read, as the Embedding's
+            self.grad_P = pa.embedding_accumulate_gradient(self.delta_batch, context.positions, self.grad_P)
+            return
         self.grad_P = self.grad_P + pa.sum_axis0(self.delta_batch).reshape((self.tokens, self.features))
 
     def reset_gradient_accum(self) -> None:
@@ -326,7 +349,23 @@ class TokenSoftmaxRustArrayLayer(TokenDenseRustArrayLayer):
         self._forward_op = pa.layer_softmax_forward_batch
 
     def compute_output_delta(self, reference: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        if context.counted is not None:
+            weights = self._weights(context).reshape(self.a.shape[0])
+            self.delta = (self.a - reference) * 1 / context.count * weights
+            return
         self.delta = (self.a - reference) / self.tokens
 
     def compute_output_delta_batch(self, reference_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        if context.counted is not None:
+            # the mean over the batch's counted targets (the segments workplan, D6): per example
+            # (P - Y) * B / C, zero at a target that doesn't count
+            N = reference_batch.shape[0]
+            self.delta_batch = (self.A - reference_batch) * N / context.count * self._weights(context)
+            return
         self.delta_batch = (self.A - reference_batch) / self.tokens
+
+    def _weights(self, context: ForwardContext) -> pa.Array:
+        # (N, T * size): each token's counted flag over its classes, an embedding_forward gather of
+        # the flags (0.0 or 1.0, as ids) from a table of a zero row and a one row
+        table = pa.Array([[0.0] * self.size, [1.0] * self.size])
+        return pa.embedding_forward(context.counted, table)

@@ -74,10 +74,6 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         # segments workplan, D3-D6)
         first = self.layer_specs[0] if self.layer_specs else None
         self._segments = first if isinstance(first, Embedding) and first.segments else None
-        if self._segments is not None and self.backend.name != "numpy":
-            raise NotImplementedError(
-                "an Embedding with segments trains on numpy until the segments workplan's stage 6"
-            )
         self.layers = cast(
             "list[ArrayNetworkLayer[A]]",
             build_array_layers(specs, input_shape, self.backend.name, self._window_state_size()),
