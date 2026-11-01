@@ -126,6 +126,17 @@ Each lists the options considered, with pros and cons, and the choice.
   A/Bs cover the dense, conv and attention cases, which must not move. New golden entries: a packed
   sequence model with segment masks in each implementation, re-recorded on both machines, archived
   as `new-functionality`. The crate's attention ops change: tier 1 A/B with no segments.
+  - **Stage 2's A/Bs (2026-11-01, `jebel`).** Attention (`sequence_training_timing.py`, 4 passes):
+    every row within noise. Dense and conv (`prepared_dataset_timing`, extended to 6 passes): 15
+    rows within noise and one consistent and small, Rust's dense B=32 epoch, +1.1% (0.763 to
+    0.771 s); its numpy control and every other row stayed. The likely cause is the keyword
+    argument every pass now takes (D3), seen where a layer's call does the least work. Options:
+    (a) *Chosen.* Accept it, recorded. Pros: D3's explicit context is the structure every later
+    per-batch input uses (structure first); 8 ms an epoch on the most call-bound row. Cons: D10's
+    "must not move" isn't met on that row. (b) Pass the context positionally. Cons: the
+    keyword-only default, which lets a layer run alone without one, goes in every layer, for an
+    unmeasured gain. (c) Skip the context for layers that don't read it. Cons: two call paths, which
+    D3 (a) rejected.
 - **D11. The study. Settled.** None in this step: at `T = 64` a window crosses a paragraph boundary
   in about 9% of windows on Herodotus (64 of 729 characters), too few for a document mask to show.
   Step 12's study, at windows that span several paragraphs, has the masked and unmasked arms. This
