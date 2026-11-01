@@ -1,6 +1,7 @@
 import math
 from collections.abc import Sequence
 from random import Random
+from typing import Protocol, runtime_checkable
 
 from indrajala_ml.data.prepared_dataset import PreparedDataset
 from indrajala_ml.model.protocols.classifier_protocols import (
@@ -16,6 +17,19 @@ from indrajala_ml.training.evaluate import class_balanced_disagreement_rate
 from indrajala_ml.training.lr_schedule import LearningRate, schedule_of
 from indrajala_ml.training.run_checkpoint import RunCheckpoint
 from indrajala_ml.training.training_diagnostics import ConvergenceSeries, TrainingDiagnostic
+
+
+@runtime_checkable
+class EpochData[L](Protocol):
+    """
+    Training data drawn anew every epoch (the context-length workplan, D4; text_data.PackedEpochs):
+    epoch(rng) gives an epoch's examples, drawing from the trainer's shuffle generator at the
+    epoch's start, before its batches are shuffled; len is the examples an epoch holds.
+    """
+
+    def epoch(self, rng: Random) -> list[Example[L]]: ...
+
+    def __len__(self) -> int: ...
 
 
 def _prepared_for[L](
@@ -197,7 +211,7 @@ def _refuse_single_example_groups(student: object, examples: int, batch_size: in
 
 def train_backprop_network_mini_batch[L](
     student: BatchTrainableClassifier[L],
-    training_data: Sequence[Example[L]] | PreparedDataset,
+    training_data: Sequence[Example[L]] | PreparedDataset | EpochData[L],
     batch_size: int,
     learning_rate: LearningRate = 0.25,
     epochs: int = 1,
@@ -220,7 +234,10 @@ def train_backprop_network_mini_batch[L](
     disagreement samples draw from rng too. A final short batch is kept, except that a final batch
     of one is dropped for a network with batch norm, which can't train on one example (the
     batch-norm workplan, D4), and a batch size that leaves a batch norm's ghost group one example
-    is refused before training (D6). training_data may be a PreparedDataset.
+    is refused before training (D6). training_data may be a PreparedDataset, or an EpochData whose
+    examples are drawn anew at each epoch's start from rng (the context-length workplan, D4), then
+    prepared and shuffled into batches as a list's; its training accuracy is the epoch's examples',
+    the untrained one's the first epoch's.
 
     Otherwise as train_linear_classifier_network: the pocket checkpoint of the best epoch, and the
     TrainingDiagnostic/ConvergenceSeries return.
@@ -250,7 +267,19 @@ def train_backprop_network_mini_batch[L](
     if drop_single:
         _refuse_single_example_groups(student, len(training_data), batch_size)
 
-    prepared = _prepared_for(student, training_data)
+    epoch_data = training_data if isinstance(training_data, EpochData) else None
+    # the examples and their prepared form the epoch trains on: a list's or a PreparedDataset's for
+    # the whole run; an EpochData's drawn at each epoch's start (the first epoch's here, before
+    # the untrained accuracy reads them, when the run starts afresh)
+    examples: Sequence[Example[L]] | PreparedDataset = [] if epoch_data is not None else training_data  # pyright: ignore[reportAssignmentType]
+    prepared: PreparedDataset | None = None
+    drawn = False
+    if epoch_data is None:
+        prepared = _prepared_for(student, examples)
+    elif resume_from is None:
+        examples = epoch_data.epoch(rng)
+        prepared = _prepared_for(student, examples)
+        drawn = True
 
     if resume_from is None:
         first_epoch = 0
@@ -259,7 +288,7 @@ def train_backprop_network_mini_batch[L](
         if reference_classifier:
             convergence.append((iterations, class_balanced_disagreement_rate(reference_classifier, student, rng=rng)))
         best_checkpoint = student.checkpoint()
-        best_training_accuracy = _training_accuracy(student, training_data, prepared)
+        best_training_accuracy = _training_accuracy(student, examples, prepared)
         best_epoch_index = -1  # -1: the untrained starting point was never beaten
         epoch_training_accuracies: list[float] = []
     else:
@@ -287,7 +316,7 @@ def train_backprop_network_mini_batch[L](
             rng.shuffle(epoch_data)
         return epoch_data
 
-    def learn_epoch() -> None:
+    def learn_epoch(examples: Sequence[Example[L]] | PreparedDataset, prepared: PreparedDataset | None) -> None:
         nonlocal iterations
         if prepared is not None:
             assert isinstance(student, PreparedTrainableClassifier)  # _prepared_for's contract
@@ -296,16 +325,20 @@ def train_backprop_network_mini_batch[L](
                 iterations += 1
                 record_disagreement()
         else:
-            assert not isinstance(training_data, PreparedDataset)  # a PreparedDataset always has prepared
-            for batch in _chunk_into_batches(epoch_order(training_data), batch_size, drop_single):
+            assert not isinstance(examples, PreparedDataset)  # a PreparedDataset always has prepared
+            for batch in _chunk_into_batches(epoch_order(examples), batch_size, drop_single):
                 student.learn_batch(_rate(learning_rate, iterations), batch, **clip)
                 iterations += 1
                 record_disagreement()
 
     for epoch_index in range(first_epoch, epochs):
-        learn_epoch()
+        if epoch_data is not None and not drawn:
+            examples = epoch_data.epoch(rng)
+            prepared = _prepared_for(student, examples)
+        drawn = False
+        learn_epoch(examples, prepared)
 
-        training_accuracy = _training_accuracy(student, training_data, prepared)
+        training_accuracy = _training_accuracy(student, examples, prepared)
         epoch_training_accuracies.append(training_accuracy)
         if training_accuracy > best_training_accuracy:
             best_training_accuracy = training_accuracy
