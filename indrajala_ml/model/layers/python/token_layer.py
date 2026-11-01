@@ -256,8 +256,12 @@ class EmbeddingLayer(RowDecoding[Any], ParameterFreeLayer[TokenNode]):
     into the rows they read, token by token after the examples before: numpy's np.add.at order.
     """
 
-    def __init__(self, input_layer: InputLayer, tokens: int, vocabulary: int, size: int) -> None:
+    def __init__(
+        self, input_layer: InputLayer, tokens: int, vocabulary: int, size: int, pad: int | None = None
+    ) -> None:
         assert len(input_layer.nodes) == tokens
+        # the pad's id when the Embedding has segments: its row stays zero (the segments workplan, D2)
+        self.pad = pad
         self.input_layer = input_layer
         self.tokens = tokens
         self.vocabulary = vocabulary
@@ -296,6 +300,8 @@ class EmbeddingLayer(RowDecoding[Any], ParameterFreeLayer[TokenNode]):
     def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         d = self.features
         for t, token_id in enumerate(self._ids()):
+            if token_id == self.pad:
+                continue  # the pad's row is never updated
             accum = self.rows[token_id].weight_gradient_accum
             for j in range(d):
                 accum[j] += self.nodes[t * d + j].delta
@@ -305,6 +311,8 @@ class EmbeddingLayer(RowDecoding[Any], ParameterFreeLayer[TokenNode]):
 
     def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
         randomize_rows(self.rows, rng)
+        if self.pad is not None:
+            self.rows[self.pad].set_weights([0.0] * self.features)  # the pad's row is zero
 
     def snapshot_state(self) -> list[tuple[list[float]]]:
         return [(list(row.weights),) for row in self.rows]
@@ -331,8 +339,11 @@ class PositionLayer(ParameterFreeLayer[TokenNode]):
 
     def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         d = self.features
+        # each token's row by its position within its segment (the segments workplan, D5)
+        positions = None if context.positions is None else context.positions[0]
         for i, (node, input_node) in enumerate(zip(self.nodes, self.input_layer.nodes)):
-            node.activate(input_node.value() + self.rows[i // d].weights[i % d])
+            row = i // d if positions is None else positions[i // d]
+            node.activate(input_node.value() + self.rows[row].weights[i % d])
 
     def start_decoding(self) -> None:
         return None
@@ -353,8 +364,10 @@ class PositionLayer(ParameterFreeLayer[TokenNode]):
 
     def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         d = self.features
+        positions = None if context.positions is None else context.positions[0]
         for i, node in enumerate(self.nodes):
-            self.rows[i // d].weight_gradient_accum[i % d] += node.delta
+            row = i // d if positions is None else positions[i // d]
+            self.rows[row].weight_gradient_accum[i % d] += node.delta
 
     def weight_sets(self) -> Sequence[PositionRow]:
         return self.rows

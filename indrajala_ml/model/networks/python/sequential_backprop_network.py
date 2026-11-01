@@ -201,10 +201,10 @@ class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[Trainable
         self._learn_batch(learning_rate, batch, clip_norm)
 
     def _backward(self, category: Sequence[int], *, context: ForwardContext = NO_CONTEXT) -> None:
-        self._output_deltas(category)
+        self._output_deltas(category, context)
         self._backward_hidden_layers(context=context)
 
-    def _output_deltas(self, category: Sequence[int]) -> None:
+    def _output_deltas(self, category: Sequence[int], context: ForwardContext = NO_CONTEXT) -> None:
         # one-hot per token: node t * class_count + k against 1.0 where k is token t's label
         assert len(category) == self.tokens, (
             f"a sequence network's label is one class per token, {self.tokens}; got {len(category)}"
@@ -212,7 +212,13 @@ class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[Trainable
         width = self.class_count
         for i, node in enumerate(self.output_layer.nodes):
             t, k = divmod(i, width)
-            node.compute_output_delta(1.0 if k == category[t] else 0.0)
+            target = 1.0 if k == category[t] else 0.0
+            if context.counted is None:
+                node.compute_output_delta(target)
+            else:
+                # the mean over the batch's counted targets (the segments workplan, D6): (p - y) * B
+                # / C, zero at a target that doesn't count; context is the example's view
+                node.delta = (node.value() - target) * context.examples / context.count * context.counted[0][t]
 
     def randomize(self) -> None:
         randomize_fan_in_aware(self)

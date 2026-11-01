@@ -35,7 +35,9 @@ def segment_context(X: FloatArray, separator: int, pad: int) -> ForwardContext:
     first: npt.NDArray[np.intp] = np.maximum.accumulate(np.where(starts, tokens, 0), axis=1)
     positions = tokens - first
     counted = (~(is_separator | is_pad)).astype(np.float64)
-    return ForwardContext(segments=segments, positions=positions, counted=counted, count=int(counted.sum()))
+    return ForwardContext(
+        segments=segments, positions=positions, counted=counted, count=int(counted.sum()), examples=ids.shape[0]
+    )
 
 
 def attention_blocked(segments: npt.NDArray[np.intp]) -> npt.NDArray[np.bool_]:

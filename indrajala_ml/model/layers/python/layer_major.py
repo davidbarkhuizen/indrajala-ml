@@ -117,7 +117,7 @@ class LayerMajorBatch:
                     self._select(other, example)
                 if begin_example is not None:
                     begin_example(example)
-                layer.forward(context=context)
+                layer.forward(context=context.example(example))
                 lanes.append(_capture(layer))
             self.lanes.append(lanes)
 
@@ -169,9 +169,11 @@ class LayerMajorBatch:
                     self._select(other, example)
                 self._select(index, example)
                 if beside is not None and index == beside[0] - 1:
-                    layer.compute_hidden_deltas(_Beside(next_layer, beside[1][example]), context=context)
+                    layer.compute_hidden_deltas(
+                        _Beside(next_layer, beside[1][example]), context=context.example(example)
+                    )
                 else:
-                    layer.compute_hidden_deltas(next_layer, context=context)
+                    layer.compute_hidden_deltas(next_layer, context=context.example(example))
                 self.lanes[index][example] = _capture(layer)
 
     def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
@@ -182,4 +184,4 @@ class LayerMajorBatch:
             for example in range(len(self.states)):
                 self._select(index - 1, example)
                 self._select(index, example)
-                layer.accumulate_gradients(context=context)
+                layer.accumulate_gradients(context=context.example(example))
