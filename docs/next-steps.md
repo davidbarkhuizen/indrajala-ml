@@ -106,8 +106,6 @@ recipe below cosine on 40 of 40, C2 differs). Left:
   clipping at 1.0 together; an arm with each alone would say which (or both) gives the 0.021 bits.
 - **The cosine's peak** stayed the constant rate's tuned one (D8 (a)); a decay usually tolerates a
   higher peak, untested here.
-- **jebel's golden re-record** for the four entries stage 6 added (`golden_training_run.py record`
-  then `archive --reason new-functionality`), now that the study has freed it.
 
 - **indrajala-studies' `FactorRates`** (`window_recurrent_study.py`), a wrapper of the network's
   optimizer, has no `step()`, which every network's batch step calls since #1152: give it one
