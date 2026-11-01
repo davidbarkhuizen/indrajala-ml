@@ -21,7 +21,10 @@ where you meet a new trap; delete one that no longer holds.
   Gate the merge in the command, never by reading: `gh pr checks N | awk -F'\t' '$2!="pass"{bad=1}
   END{exit !(NR>0 && !bad)}' && gh pr merge N --squash --delete-branch` merges only when there are
   checks and every one is `pass` (#829 merged with `tests/` failing when a merge followed a `cat`
-  of the checks). `awk`, not `grep -v`: an agent's shell may wrap `grep`.
+  of the checks). `awk`, not `grep -v`: an agent's shell may wrap `grep`. Count the rows too:
+  while CI is still queued `--watch` can return at once with only some checks listed (#1167 was
+  merged that way; its checks passed afterwards), so check the count of `pass` rows against the
+  full set (19 today, docs-only PRs included) before merging.
 - **One watcher per PR.** Check for a running `gh pr checks` before starting another.
 - **A PR in conflict with main gets no `pull_request` CI run,** and `gh pr checks` then says "no
   checks reported" (#1117): check `gh pr view N --json mergeable`, and merge main into the branch.
