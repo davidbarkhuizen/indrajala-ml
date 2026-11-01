@@ -3,7 +3,8 @@ A sequence network's evaluation on held-out windows (the sequence task workplan,
 per-token cross-entropy, in nats and in bits per token (bits per character on a character-level
 corpus), and the per-token accuracy, every token of every window counted once. For a network whose
 Embedding has segments, only the targets that count in its loss (the segments workplan, D6): not
-those whose input is a pad or a separator, so the evaluation reports the training loss's tokens.
+those whose input is a pad (the end-of-paragraph token's count: the context-length workplan, D11),
+so the evaluation reports the training loss's tokens.
 """
 
 from __future__ import annotations
@@ -45,11 +46,7 @@ def sequence_evaluate(network: Any, examples: Sequence[Example[tuple[int, ...]]]
     assert labels.size == len(examples) * network.tokens, f"each window's labels are {network.tokens}, one per token"
     inputs = np.array([state for state, _window in examples], dtype=np.float64).reshape(-1)
     segments = getattr(network, "_segments", None)
-    counted = (
-        np.ones(labels.size, dtype=bool)
-        if segments is None
-        else (inputs != segments.separator) & (inputs != segments.pad)
-    )
+    counted = np.ones(labels.size, dtype=bool) if segments is None else inputs != segments.pad
     loss = 0.0
     correct = 0
     start = 0
