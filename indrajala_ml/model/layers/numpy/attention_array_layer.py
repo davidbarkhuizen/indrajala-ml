@@ -9,17 +9,28 @@ puts the heads side by side again and projects. One code path for every head cou
 layer is the same blocks with h = 1. Every sum but a product is a left fold through np.cumsum
 along the last axis (tests/model/layers/test_summation_order.py).
 
-A causal layer (the sequence task workplan, D7) sets each score S_ij with j > i to -inf before the
-max shift: the row max comes from the unmasked scores (the diagonal never is), exp(-inf) is exactly
-0, so a masked weight P_ij is exactly 0 and so is its dS_ij, and the backward pass is unchanged. An
-unmasked layer computes what it did before the mask.
+Attend is tiled (the context-length workplan, D3): the keys in blocks of block (BLOCK, 16), and per
+query row a running max m, sum l and unnormalized output H; for each key block in order, m' =
+max(m, the block's row max), e = exp(S - m'), l = l exp(m - m') + the fold of e, H = H exp(m - m')
++ e V, and at the end H / l (tiled_forward). The forward keeps m and l, (N, h, T, 1), never the
+(N, h, T, T) weights; the backward recomputes each block's P = exp(S - m) / l and takes D = the fold
+of dH H over d_k (FlashAttention-2's form of the softmax's row term), dS = P (dP - D), dQ the
+blocks' dS K summed in key order, dK and dV per block (tiled_backward). Memory is linear in T.
 
-A layer with dropout (the attention-dropout workplan, D3, D4) drops its weights in training: one
-(N, h, T, T) mask M per forward batch, drawn row-major from the network's generator (example,
-head, query, key), every entry drawn, the causally masked ones included, M_ij = u_ij >= dropout;
-P~ = P * M / keep and H = P~ V. The backward pass takes dV = P~^T dH and dP = (dH V^T) * M / keep,
-then the softmax's backward with the undropped P. In inference, and at dropout 0, nothing is
-drawn and the layer computes what it did before dropout.
+The masks are built per block (Masking): causal, key u masked for query t when u > t (the sequence
+task workplan, D7); by segment, another segment's key or a pad's, never the query's own (the
+segments workplan, D4); and a band, for the decode tests' sliding reference. A masked score is
+-inf, so its weight is exactly 0; a block no query may attend to is skipped, and a row wholly
+masked within a computed block shifts by 0 in place of its -inf max, so its e is 0 and its l and H
+unchanged. Each block's rows are the range of queries that reach it (causal: from its first key).
+
+A layer with dropout (the attention-dropout workplan, D3, D4; the context-length workplan, D12)
+drops its weights in training: per key block, an (N, h, T, b) mask M drawn from the network's
+generator, every entry drawn, the masked ones included, M = u >= dropout, so a forward batch draws
+N h T T uniforms as before, key block by key block; e is dropped as e M / keep before e V. The
+generator's state before the draws is kept, and the backward pass draws the same masks again
+from a copy: dV = (P M / keep)^T dH and dP = (dH V^T) M / keep. In inference, and at dropout 0,
+nothing is drawn.
 
 A rotary layer (the rotary-positions workplan, D3, D4) ends project by rotating each head's Q and K,
 after their biases, by their token's position t: feature j < d_k / 2 paired with j + d_k / 2,
@@ -34,10 +45,9 @@ forward pass's blocks on a batch of N prompts' L <= T tokens, masked by segment 
 segments, and keeps their rotated keys and values, (N, L, h * d_k) each, and their segments, in an
 AttentionCache; step projects one token a row, rotates its query and key by its column
 (rotary_table extended past T), appends its key and value to its row's cache, dropping the oldest
-past T, and attends from its query to every cached key of its row, none of which is later: unmasked
-without segments, and with them masking another segment's keys and pads' (D4), one batched product
-per head. So a rotary layer's window slides exactly: scores depend on distances up to T - 1, as in
-training.
+past T, and attends from its query to every cached key of its row through the same tiled attend
+(the query the cache's last column), masking another segment's keys and pads' (D4). So a rotary
+layer's window slides exactly: scores depend on distances up to T - 1, as in training.
 
 The softmax's exp is this module's exp, which tests replace with another implementation's (it
 isn't correctly rounded), as batch norm's tests replace sigmoid.
@@ -46,6 +56,10 @@ isn't correctly rounded), as batch norm's tests replace sigmoid.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from itertools import pairwise
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -54,7 +68,6 @@ from indrajala_ml.model.layers.array.array_parameters import AttentionProjection
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
-from indrajala_ml.model.layers.numpy.segments import attention_blocked
 from indrajala_ml.model.layers.numpy.token_array_layer import BatchShaped
 from indrajala_ml.model.protocols.decoding_protocols import refuse_non_causal_decoding
 from indrajala_ml.model.specs.rotary_table import rotary_table
@@ -65,6 +78,172 @@ exp = np.exp
 def _transpose(stack: FloatArray) -> FloatArray:
     # each matrix of a stack transposed
     return stack.swapaxes(-1, -2)
+
+
+# the tiled attention (the context-length workplan, D3, D12): the keys in blocks of BLOCK, an online
+# softmax per query row, nothing (N, h, T, T) kept
+BLOCK = 16
+
+Segments = npt.NDArray[np.intp]
+Draw = Callable[[tuple[int, ...]], FloatArray]
+
+
+@dataclass(frozen=True)
+class Masking:
+    """
+    Which keys a query may attend to: causal, key u at most query t's column t + offset (a decode's
+    queries are the keys' last, offset = keys - queries); band, when set, only the band keys before
+    and including that column (a sliding window); and by segment, the queries' (N, T_q) and the
+    keys' (N, T_k) ids, another segment's or a pad's key masked (the segments workplan, D4), never
+    the query's own column.
+    """
+
+    causal: bool
+    offset: int = 0
+    band: int | None = None
+    query_segments: Segments | None = None
+    key_segments: Segments | None = None
+
+    def tile(self, queries: int, k0: int, k1: int) -> tuple[int, int, npt.NDArray[np.bool_] | None] | None:
+        """
+        Key block k0:k1's rows r0:r1, the smallest range holding every query that may attend to
+        one of its keys in some example, and its (N or 1, 1, r1 - r0, k1 - k0) mask of allowed
+        scores, None when every score is allowed; None for a block no query may attend to.
+        """
+        r0, r1 = 0, queries
+        if self.causal:
+            r0 = max(0, k0 - self.offset)
+        if self.band is not None:
+            r1 = min(r1, k1 - 1 - self.offset + self.band)
+        if r0 >= r1:
+            return None
+        rows = np.arange(r0, r1)[:, np.newaxis] + self.offset
+        keys = np.arange(k0, k1)[np.newaxis, :]
+        allowed: npt.NDArray[np.bool_] | None = None
+        if self.causal and k1 - 1 > r0 + self.offset:
+            allowed = keys <= rows
+        if self.band is not None and k0 <= r1 - 1 + self.offset - self.band:
+            inside = keys > rows - self.band
+            allowed = inside if allowed is None else allowed & inside
+        if self.query_segments is not None:
+            assert self.key_segments is not None
+            q = self.query_segments[:, r0:r1, np.newaxis]
+            k = self.key_segments[:, np.newaxis, k0:k1]
+            same: npt.NDArray[np.bool_] = ((q == k) & (k != 0)) | (keys == rows)
+            joint = same if allowed is None else same & allowed
+            reached = joint.any(axis=(0, 2))
+            if not reached.any():
+                return None
+            first, last = int(np.argmax(reached)), len(reached) - int(np.argmax(reached[::-1]))
+            return r0 + first, r0 + last, joint[:, np.newaxis, first:last]
+        return r0, r1, allowed
+
+
+def key_blocks(keys: int, block: int, origin: int = 0) -> list[tuple[int, int]]:
+    """
+    The key blocks k0:k1 of keys keys whose first is at column origin: their bounds at the columns
+    that are multiples of block, so a decode's cache (from the first column it holds) is cut where
+    the full pass over every column is, and its online softmax is the full pass's, block for block.
+    """
+    bounds = [0, *range((block - origin % block) % block or block, keys, block), keys]
+    return [(k0, k1) for k0, k1 in pairwise(bounds) if k0 < k1]
+
+
+def _scores(Q: FloatArray, K: FloatArray, scale: float, mask: npt.NDArray[np.bool_] | None) -> FloatArray:
+    S = (Q @ _transpose(K)) / scale
+    return S if mask is None else np.where(mask, S, -np.inf)
+
+
+def tiled_forward(
+    Q: FloatArray,
+    K: FloatArray,
+    V: FloatArray,
+    scale: float,
+    masking: Masking,
+    block: int,
+    draw: Draw | None,
+    keep: float,
+    origin: int = 0,
+) -> tuple[FloatArray, FloatArray, FloatArray]:
+    """
+    H, (N, h, T_q, d_k), and the rows' max m and sum l, (N, h, T_q, 1), from Q (N, h, T_q, d_k) and
+    K and V (N, h, T_k, d_k): per key block, in order, m' = max(m, the block's row max), e = exp(S -
+    m') (0 in place of an all-masked row's m'), l = l exp(m - m') + the fold of e, H = H exp(m - m')
+    + e V (e dropped: e M / keep, M drawn by draw for the block's every query and key), then H / l.
+    The key blocks are key_blocks(T_k, block, origin): origin is key 0's column.
+    """
+    N, h, queries, d_k = Q.shape
+    keys = K.shape[2]
+    m = np.full((N, h, queries, 1), -np.inf)
+    l = np.zeros((N, h, queries, 1))
+    H = np.zeros((N, h, queries, d_k))
+    for k0, k1 in key_blocks(keys, block, origin):
+        M = None if draw is None else draw((N, h, queries, k1 - k0))
+        tile = masking.tile(queries, k0, k1)
+        if tile is None:
+            continue
+        r0, r1, mask = tile
+        S = _scores(Q[:, :, r0:r1], K[:, :, k0:k1], scale, mask)
+        m_old = m[:, :, r0:r1]
+        m_new = np.maximum(m_old, S.max(axis=-1, keepdims=True))
+        shift = np.where(m_new == -np.inf, 0.0, m_new)
+        e = exp(S - shift)
+        alpha = exp(m_old - shift)
+        l[:, :, r0:r1] = l[:, :, r0:r1] * alpha + np.cumsum(e, axis=-1)[..., -1:]
+        dropped = e if M is None else e * M[:, :, r0:r1] / keep
+        H[:, :, r0:r1] = H[:, :, r0:r1] * alpha + dropped @ V[:, :, k0:k1]
+        m[:, :, r0:r1] = m_new
+    return H / l, m, l
+
+
+def tiled_backward(
+    dH: FloatArray,
+    saved: tuple[FloatArray, FloatArray, FloatArray, FloatArray, FloatArray, FloatArray],
+    scale: float,
+    masking: Masking,
+    block: int,
+    draw: Draw | None,
+    keep: float,
+    origin: int = 0,
+) -> tuple[FloatArray, FloatArray, FloatArray]:
+    """
+    dQ, dK and dV from dH and the forward's Q, K, V, H, m and l: per key block, P = exp(S - m) / l
+    recomputed (M drawn again, the same draws in the same order), dV = (P M / keep)^T dH, dP = (dH
+    V^T) M / keep, dS = P (dP - D) with D = the fold of dH H over d_k (FlashAttention-2's), dQ the
+    blocks' dS K summed in key order, dK = dS^T Q; dQ and dK then divided by the scale.
+    """
+    Q, K, V, H, m, l = saved
+    N, h, queries, _ = Q.shape
+    keys = K.shape[2]
+    D = np.cumsum(dH * H, axis=-1)[..., -1:]
+    dQ, dK, dV = np.zeros_like(Q), np.zeros_like(K), np.zeros_like(V)
+    for k0, k1 in key_blocks(keys, block, origin):
+        M = None if draw is None else draw((N, h, queries, k1 - k0))
+        tile = masking.tile(queries, k0, k1)
+        if tile is None:
+            continue
+        r0, r1, mask = tile
+        S = _scores(Q[:, :, r0:r1], K[:, :, k0:k1], scale, mask)
+        P = exp(S - m[:, :, r0:r1]) / l[:, :, r0:r1]
+        rows = dH[:, :, r0:r1]
+        dP = rows @ _transpose(V[:, :, k0:k1])
+        if M is None:
+            dV[:, :, k0:k1] = _transpose(P) @ rows
+        else:
+            kept = M[:, :, r0:r1] / keep
+            dV[:, :, k0:k1] = _transpose(P * kept) @ rows
+            dP = dP * kept
+        dS = P * (dP - D[:, :, r0:r1])
+        dQ[:, :, r0:r1] += dS @ K[:, :, k0:k1]
+        dK[:, :, k0:k1] = _transpose(dS) @ Q[:, :, r0:r1]
+    return dQ / scale, dK / scale, dV
+
+
+def _generator_at(state: Mapping[str, Any]) -> np.random.Generator:
+    # a fresh generator in a saved state: the dropout draws again in the backward pass (D12)
+    bit_generator = getattr(np.random, state["bit_generator"])()
+    bit_generator.state = state
+    return np.random.Generator(bit_generator)
 
 
 class AttentionCache:
@@ -120,13 +299,18 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         dropout: float = 0.0,
         positions: str = "none",
         rotary_base: float = 10000.0,
+        block: int = BLOCK,
     ) -> None:
         self._set_up(tokens, features, heads, key_size)
         # computed once and divided by, never multiplied by its reciprocal
         self.scale = math.sqrt(self.key_size)
         self.causal = causal
-        # the masked scores, j > i: True above the diagonal
-        self._future = np.triu(np.ones((tokens, tokens), dtype=np.bool_), k=1)
+        # the key blocks' size (D3): a layer option, not a spec field, since it groups the sums, not the model
+        assert block >= 1, f"an attention's key blocks hold at least one key; got {block}"
+        self.block = block
+        # a band of keys, the last band columns up to each query's, when set (a sliding window: the
+        # decode tests' reference); None, every earlier key
+        self._band: int | None = None
         assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.dropout = dropout
         self._keep = 1.0 - dropout
@@ -134,7 +318,9 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         # None when it drew none, is what the backward pass reads
         self.training = False
         self.rng = np.random.default_rng()
-        self._M: FloatArray | None = None
+        # the dropout generator's state before the forward pass's draws, which the backward pass
+        # draws again (D12); None when the forward drew none
+        self._dropout_state: Mapping[str, Any] | None = None
         assert positions in ("none", "rotary"), f'an attention\'s positions are "none" or "rotary"; got {positions!r}'
         self.positions = positions
         self.rotary_base = rotary_base
@@ -203,32 +389,36 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
             return self._rotated(Q, start=start, tokens=tokens), self._rotated(K, start=start, tokens=tokens), V
         return Q, K, V
 
-    def _attend(
-        self,
-        Q: FloatArray,
-        K: FloatArray,
-        V: FloatArray,
-        masked: bool = True,
-        blocked: npt.NDArray[np.bool_] | None = None,
-    ) -> tuple[FloatArray, FloatArray]:
-        # per example and head, on (N, h, T, d_k) views: the weights P (N, h, T, T) and H; a causal
-        # layer masks unless the keys are all at or before the queries (a decode's step); blocked,
-        # (N, T, T), masks across segments and pads (the segments workplan, D4), every head alike
-        S = (Q @ _transpose(K)) / self.scale
-        if self.causal and masked:
-            T = S.shape[-1]
-            S = np.where(self._future[:T, :T], -np.inf, S)
-        if blocked is not None:
-            S = np.where(blocked[:, np.newaxis], -np.inf, S)
-        m = S.max(axis=-1, keepdims=True)
-        e = exp(S - m)
-        P = e / np.cumsum(e, axis=-1)[..., -1:]
-        if self.training and self.dropout > 0.0:
-            self._M = (self.rng.random(P.shape) >= self.dropout).astype(np.float64)
-            self._P_dropped = P * self._M / self._keep
-            return P, self._P_dropped @ V
-        self._M = None
-        return P, P @ V
+    def _masking(self, query_segments: Segments | None, key_segments: Segments | None, offset: int = 0) -> Masking:
+        return Masking(self.causal, offset, self._band, query_segments, key_segments)
+
+    def _draw(self, rng: np.random.Generator) -> Draw:
+        # a key block's dropout mask, M = u >= dropout, every entry drawn, in the generator's order (D12)
+        return lambda shape: (rng.random(shape) >= self.dropout).astype(np.float64)
+
+    def weights(self) -> FloatArray:
+        """
+        The last forward pass's attention weights P, (N, h, T, T), recomputed from its m and l as
+        the backward pass does, P = exp(S - m) / l, over one block of every key: quadratic in T,
+        for tests and inspection only (the passes never hold it). Undropped.
+        """
+        tile = self._masking_now.tile(self.tokens, 0, self.tokens)
+        assert tile is not None and tile[:2] == (0, self.tokens), "every query attends to its own key"
+        S = _scores(self._Q, self._K, self.scale, tile[2])
+        return exp(S - self._m) / self._l
+
+    def dropout_mask(self) -> FloatArray | None:
+        """
+        The last forward pass's dropout mask M, (N, h, T, T), drawn again from the generator's
+        saved state in the passes' order (key block by key block, D12): quadratic in T, for tests
+        and inspection only. None when the forward drew none.
+        """
+        if self._dropout_state is None:
+            return None
+        draw = self._draw(_generator_at(self._dropout_state))
+        N, T = self._Q.shape[0], self.tokens
+        blocks = [draw((N, self.heads, T, min(T, k0 + self.block) - k0)) for k0 in range(0, T, self.block)]
+        return np.concatenate(blocks, axis=-1)
 
     def _combine(self, H: FloatArray) -> FloatArray:
         # H as (N * T, h * d_k) rows: one product over all heads' columns
@@ -237,8 +427,16 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         Q, K, V = self._project(self._rows(X, self.features))
         self._Q, self._K, self._V = self._heads(Q), self._heads(K), self._heads(V)
-        blocked = None if context.segments is None else attention_blocked(context.segments)
-        self._P, H = self._attend(self._Q, self._K, self._V, blocked=blocked)
+        self._masking_now = self._masking(context.segments, context.segments)
+        draw = None
+        self._dropout_state = None
+        if self.training and self.dropout > 0.0:
+            self._dropout_state = self.rng.bit_generator.state
+            draw = self._draw(self.rng)
+        H, self._m, self._l = tiled_forward(
+            self._Q, self._K, self._V, self.scale, self._masking_now, self.block, draw, self._keep
+        )
+        self._H_heads = H
         self._H = self._side_by_side(H)
         self.A = self._combine(self._H).reshape(X.shape)
         return self.A
@@ -257,8 +455,10 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         Q, K, V = self._project(X, tokens=L)
         segments = None if context.segments is None else np.asarray(context.segments, dtype=np.intp)
         cache.start(K.reshape(N, L, self.width), V.reshape(N, L, self.width), segments)
-        blocked = None if segments is None else attention_blocked(segments)
-        _P, H = self._attend(self._heads(Q, L), self._heads(K, L), self._heads(V, L), blocked=blocked)
+        masking = self._masking(segments, segments)
+        H, _m, _l = tiled_forward(
+            self._heads(Q, L), self._heads(K, L), self._heads(V, L), self.scale, masking, self.block, None, self._keep
+        )
         return self._combine(self._side_by_side(H))
 
     def step(self, x: FloatArray, cache: AttentionCache, context: ForwardContext) -> FloatArray:
@@ -269,14 +469,23 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         segments = None if context.segments is None else np.asarray(context.segments, dtype=np.intp).reshape(N, 1)
         cache.append(k.reshape(N, 1, self.width), v.reshape(N, 1, self.width), segments, self.tokens)
         c = cache.K.shape[1]
-        blocked = None
-        if cache.segments is not None:
-            assert segments is not None
-            blocked = (cache.segments != segments) | (cache.segments == 0)
-            blocked[:, -1] = False
-            blocked = blocked[:, np.newaxis, :]
+        # the query is the cache's last column: every cached key at or before it (offset c - 1)
+        query_segments = None if cache.segments is None else cache.segments[:, -1:]
+        masking = self._masking(query_segments, cache.segments, offset=c - 1)
         K, V = cache.K.reshape(N * c, self.width), cache.V.reshape(N * c, self.width)
-        _P, H = self._attend(self._heads(q, 1), self._heads(K, c), self._heads(V, c), masked=False, blocked=blocked)
+        # the cache's first key is at column context.column - (c - 1): the blocks cut where the
+        # full pass's do
+        H, _m, _l = tiled_forward(
+            self._heads(q, 1),
+            self._heads(K, c),
+            self._heads(V, c),
+            self.scale,
+            masking,
+            self.block,
+            None,
+            self._keep,
+            origin=context.column - (c - 1),
+        )
         return self._combine(self._side_by_side(H))
 
     # the backward pass's blocks, last first
@@ -286,19 +495,11 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         return delta @ self.Wo
 
     def _attend_backward(self, dH: FloatArray) -> tuple[FloatArray, FloatArray, FloatArray]:
-        # per example and head, on (N, h, T, d_k) views: dQ, dK and dV
-        Q, K, V, P = self._Q, self._K, self._V, self._P
-        dP = dH @ _transpose(V)
-        if self._M is None:
-            dV = _transpose(P) @ dH
-        else:
-            dV = _transpose(self._P_dropped) @ dH
-            dP = dP * self._M / self._keep
-        r = np.cumsum(dP * P, axis=-1)[..., -1:]
-        dS = P * (dP - r)
-        dQ = (dS @ K) / self.scale
-        dK = (_transpose(dS) @ Q) / self.scale
-        return dQ, dK, dV
+        # per example and head, on (N, h, T, d_k) views: dQ, dK and dV, the tiles recomputed
+        state = self._dropout_state
+        draw = None if state is None else self._draw(_generator_at(state))
+        saved = (self._Q, self._K, self._V, self._H_heads, self._m, self._l)
+        return tiled_backward(dH, saved, self.scale, self._masking_now, self.block, draw, self._keep)
 
     def _project_backward(self, dQ: FloatArray, dK: FloatArray, dV: FloatArray) -> FloatArray:
         # three products over all heads, summed in this order

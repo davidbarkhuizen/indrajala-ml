@@ -104,7 +104,7 @@ def _attention(causal: bool, tokens: int = 4, features: int = 6, heads: int = 2,
 def test_a_causal_layers_masked_weights_are_exactly_zero_and_each_row_sums_to_one():
     layer = _attention(True)
     layer.forward_batch(np.random.default_rng(1).uniform(-1.0, 1.0, (3, 24)))
-    P = layer._P  # pyright: ignore[reportPrivateUsage]
+    P = layer.weights()
     future = np.triu(np.ones((4, 4), dtype=bool), k=1)
     assert (P[..., future] == 0.0).all() and (P[..., ~future] > 0.0).all()
     np.testing.assert_allclose(P.sum(axis=-1), 1.0, rtol=1e-15)
