@@ -212,11 +212,14 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         positions: str = "none",
         rotary_base: float = 10000.0,
         block: int = BLOCK,
+        document_mask: bool = True,
     ) -> None:
         assert len(input_layer.nodes) == tokens * features
         assert block >= 1, f"an attention's key blocks hold at least one key; got {block}"
         # the key blocks' size (the context-length workplan, D3)
         self.block = block
+        # False: attention across the paragraphs, pads still masked (the context-length workplan, D8)
+        self.document_mask = document_mask
         assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.input_layer = input_layer
         self.tokens = tokens
@@ -332,6 +335,13 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
             for _ in range(self.heads)
         ]
 
+    def _attention_segments(self, segments: Sequence[Sequence[int]] | None, n: int) -> list[int] | None:
+        # row n's segment ids attention masks by: the batch's, or with document_mask False only the
+        # pads' (0), every other token one segment
+        if segments is None:
+            return None
+        return [int(s) for s in segments[n]] if self.document_mask else [0 if s == 0 else 1 for s in segments[n]]
+
     def begin_batch(self, examples: int) -> None:
         """
         The layer-major pass's batch of examples: the generator's state before its draws, which each
@@ -399,7 +409,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
 
     def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._Q, self._K, self._V = self._project(self._inputs())
-        self._segments = None if context.segments is None else list(context.segments[0])
+        self._segments = self._attention_segments(context.segments, 0)
         masking = Masking(self.causal, 0, None if self._segments is None else (self._segments, self._segments))
         self._draws = None
         if self.training and self.dropout > 0.0:
@@ -428,7 +438,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         out: Matrix = []
         for n in range(context.examples):
             Q, K, V = self._project(X[n * L : (n + 1) * L])
-            segments = None if context.segments is None else list(context.segments[n])
+            segments = self._attention_segments(context.segments, n)
             masking = Masking(self.causal, 0, None if segments is None else (segments, segments))
             H, _m, _l = self._tiled((Q, K, V), masking)
             last = 1 if segments is None else segments[-1]
@@ -445,7 +455,8 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         out: Matrix = []
         for n, row in enumerate(x):
             q, k, v = self._project([row], start=context.column)
-            segment = 1 if context.segments is None else context.segments[n][0]
+            attended = self._attention_segments(context.segments, n)
+            segment = 1 if attended is None else attended[0]
             cache.append(n, k, v, segment, self.tokens)
             # the query is the cache's last column; the cache's first key is at origin, so its key
             # blocks are cut where the full pass's are (the context-length workplan, D3)

@@ -257,6 +257,61 @@ Each lists the options considered, with pros and cons, and the choice.
     use. Cons: a format change (format 2's `{"dimension": null}`) in a step about attention's
     cost; its value comes with length generalisation, not this study.
 
+## The study's registration (stage 9, written before any of its data)
+
+Under the research repo's `docs/protocols/experiment-design.md`; the code is
+`indrajala_ml/studies/context_length_study.py` (Attention's `document_mask` for the unmasked arms) (its docstring the protocol), the configuration
+checked against this section by `tests/studies/test_context_length_study.py`.
+
+**Cells.** The 2-layer rotary model under the recipe (D6; `d = 64`, 4 heads, AdamW 0.1, clipping at
+1.0, warmup over the first epoch then cosine to a tenth of the corpus's tuned rate, no dropout), on
+the packed corpora with the end-of-paragraph token's target counted (D11). Five arms: `64`, `256`,
+`1024` (the document mask on) and `256-unmasked`, `1024-unmasked` (attention across paragraphs,
+pads still masked). At the token budget (D5: batches of 32, 8 and 2), so a step's tokens and an
+epoch's steps are equal across arms; the training windows cut anew every epoch (D4); the held-out
+windows fixed. Every corpus, both held-out splits, 5 seeds (a screen), the same seeds in every arm:
+4 x 2 x 5 x 5 = 200 runs.
+
+**Feasibility** (experiment-design §1, information-flow's register). The model is the one the
+training-recipe study trained on every corpus (it represents a character model at every window: the
+window is a shape, not a capacity bound); every window fits its arm's `T` (D2); the vocabulary is
+the corpus's plus the two specials. The exclusion bound and the code counts are a finite machine's
+and don't apply to a character model. The budget is measured before launch (below).
+
+**Claims** on the final-epoch held-out bits per character over the counted targets, paired by
+(corpus, split, seed) over the long-form corpora (Herodotus, Euclid, the *Muqaddimah*): 30 pairs a
+comparison; a sign test on the count of pairs lower; Holm over the five at 0.05. Tiny Shakespeare
+is a reference outside the claims (its scenes are short).
+
+- **C1, 1,024 below 64, one-sided** (lower: a window holding the paragraph can use the argument it
+  predicts within, the Why): holds when the Holm-adjusted one-sided p < 0.05 (uncorrected, at
+  least 20 of 30 lower; Holm asks for more, 22 when it is the smallest of the five); refuted
+  otherwise.
+- **C2, 256 below 64, one-sided** (the same reason, a quarter of the paragraph): as C1.
+- **C3, 1,024 below 256, one-sided** (whether the curve still falls past 256): as C1. Refuted means
+  the step past 256 isn't shown to help at this model and budget, not that it can't.
+- **C4, masked against unmasked at 256, two-sided** (no direction registered: the mask removes
+  noise from unrelated text but also the previous paragraph's real context within one book):
+  differs when the Holm-adjusted two-sided p < 0.05; undecided otherwise.
+- **C5, masked against unmasked at 1,024, two-sided**: as C4.
+- **Descriptive, not tested:** per cell, each arm's final bits (mean ± sd), its last three epochs'
+  fall (convergence), its training bits, the held-out bits by position in the window (16 buckets;
+  whether later positions, with more context, predict better), and its seconds per epoch.
+
+**Budget, backend and hosts** (measured before launch: `context_length_study.py time`, one epoch of
+Herodotus's contiguous split per arm, one job on `jebel`, 2026-11-01). Seconds a training epoch:
+Rust 43, 66 and 122 at `T` 64, 256 and 1,024; numpy 58, 94 and 204, the same held-out bits to three
+decimals. So the study runs on **Rust** (D8's rule), **30 epochs** (the training-recipe study's, so
+its 64-character runs are that study's recipe model on the packed corpus). About 105 core-hours
+at one job's speed: `jebel` (8 workers, PL1 65 W) runs Herodotus and the *Muqaddimah*, `stone`
+(8 workers, its weekend window) Euclid and Tiny Shakespeare, each about 11 to 12 hours. Each run's
+result is written as it ends, so a stopped sweep resumes by whole runs.
+
+**What a result does.** C1 holding makes 1,024 the window for later sequence work on the long-form
+corpora, with C3 saying whether 1,024 earns its cost over 256. C4 and C5 decide whether the document
+mask stays the packed default. No setting changes after the data; a flaw found mid-study is recorded
+and fixed in a new registered experiment.
+
 ## Stages
 
 1. **This workplan** (and its revision of 2026-11-01).
