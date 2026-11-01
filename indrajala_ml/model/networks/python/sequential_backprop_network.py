@@ -16,7 +16,7 @@ import math
 from collections.abc import Sequence
 from typing import Any, ClassVar, Self
 
-from indrajala_ml.generation.decoder import Decoder
+from indrajala_ml.generation.decoder import Decoder, SpecialIds
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.token_layer import TokenSoftmaxLayer
 from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
@@ -179,17 +179,21 @@ class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[Trainable
 
     def decoder(self) -> Decoder:
         """
-        A Decoder over this network's layers (the generation workplan, D2), its rows lists of floats:
-        prefill(ids), then step(id), each the last token's probabilities. Refuses a network whose layers
-        can't all decode.
+        A Decoder over this network's layers (the generation workplan, D2; the segments workplan, D8),
+        its rows lists of floats: prefill(ids) or prefill_batch(prompts), then step(id) or
+        step_batch(tokens), each the last tokens' probabilities. Refuses a network whose layers can't
+        all decode.
         """
+        segments = self._segments
         return Decoder(
             self.trainable_layers,
             self.tokens,
             ids_input=lambda ids: [float(i) for i in ids],
-            last_row=lambda out: list(out[-1]),
-            full_pass=lambda ids: self.predict_probabilities(tuple(float(i) for i in ids))[-1],
+            rows=lambda out: [list(row) for row in out],
+            full_pass=lambda rows: [self.predict_probabilities(tuple(float(i) for i in row))[-1] for row in rows],
+            context=_decode_context,
             learned_positions=any(isinstance(spec, Position) for spec in expand_specs(self.layer_specs)),
+            special=None if segments is None else SpecialIds(segments.separator, segments.pad),
         )
 
     def learn_batch(
@@ -230,3 +234,10 @@ class SequentialSequenceBackpropNetwork(GivenRule, BackpropNetworkBase[Trainable
     @classmethod
     def _load_legacy(cls, state: dict[str, Any]) -> Self:
         raise ValueError(f"{cls.__name__} saves in format 2 only; this file has format {state.get('format')!r}")
+
+
+def _decode_context(
+    segments: list[list[int]] | None, positions: list[list[int]] | None, examples: int, column: int
+) -> ForwardContext:
+    # a decode pass's context, its segments and positions lists of rows as the pure-Python layers read them
+    return ForwardContext(segments=segments, positions=positions, examples=examples, column=column)

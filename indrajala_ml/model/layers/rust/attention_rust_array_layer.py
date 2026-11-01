@@ -7,10 +7,13 @@ The crate computes the README's expressions (Layer norm and attention) with its 
 dense layer's for the projections and `@` between activations, so it matches AttentionArrayLayer
 by bits only where no product is involved, as the dense layers do (the parity tests explain the gap).
 
-A causal layer decodes (the generation workplan, D2, D3, D8): prefill is attention_forward on the
-prompt's L <= T tokens, with the table's first L rows, keeping its rotated keys and values in an
-AttentionRustCache; step is the crate's attention_step, one token on the cache with its position's
-row of the table (extended past T), its key and value appended and the oldest dropped past T. Each
+A causal layer decodes (the generation workplan, D2, D3, D8; the segments workplan, D8): prefill is
+attention_forward_batch on a batch of prompts' L <= T tokens, with the table's first L rows and the
+batch's segments, keeping each row's last segment's rotated keys and values in an
+AttentionRustCache; step is the crate's attention_step per row, one token on its row's cache (emptied
+first when the token starts a segment, so it holds the keys a mask would leave, D8 (b)) with its
+column's row of the table (extended past T), its key and value appended and the oldest dropped past
+T. A batched crate step reading the keys' segments would take numpy's form (next-steps.md). Each
 of the crate's outputs is one fixed chain, so a decode's bits are the full pass's within the window.
 """
 
@@ -28,11 +31,23 @@ from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
 class AttentionRustCache:
-    """One decode's rotated keys K and values V, (c, h * d_k) each, the last c <= T tokens', oldest first."""
+    """
+    One decode's rotated keys K and values V per row of its batch, (c, h * d_k) each: each row's
+    current segment's, its last c <= T tokens', oldest first (the segments workplan, D8 (b)), and
+    that segment's id (1 for every row of a batch without segments).
+    """
 
     def __init__(self, width: int) -> None:
-        self.K = pa.Array.zeros((0, width))
-        self.V = pa.Array.zeros((0, width))
+        self.width = width
+        self.K: list[pa.Array] = []
+        self.V: list[pa.Array] = []
+        self.segments: list[int] = []
+
+    def start_segment(self, n: int, segment: int) -> None:
+        # empties row n's cache when its next token starts a segment (or is a pad's)
+        if segment != self.segments[n] or segment == 0:
+            self.K[n], self.V[n] = pa.Array.zeros((0, self.width)), pa.Array.zeros((0, self.width))
+            self.segments[n] = segment
 
 
 class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
@@ -154,25 +169,49 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         refuse_non_causal_decoding(self.causal)
         return AttentionRustCache(self.width)
 
-    def prefill(self, X: pa.Array, cache: AttentionRustCache) -> pa.Array:
-        # the prompt's (L, d) rows, L <= T, at positions 0 to L - 1: the forward op on L tokens
-        L = X.shape[0]
-        a, _Q, cache.K, cache.V, _P, _H, _M = pa.attention_forward(
-            X.reshape(L * self.features), *self.parameters(), heads=self.heads, causal=True, **self._rows_table(0, L)
-        )
-        return a.reshape((L, self.features))
-
-    def step(self, x: pa.Array, cache: AttentionRustCache, position: int) -> pa.Array:
-        a, cache.K, cache.V = pa.attention_step(
-            x.reshape(self.features),
+    def prefill(self, X: pa.Array, cache: AttentionRustCache, context: ForwardContext) -> pa.Array:
+        # N prompts' (N * L, d) rows, L <= T, at columns 0 to L - 1: the batch forward op on L
+        # tokens, masked by segment when the batch has segments; each row keeps its last segment's
+        # keys and values
+        N = context.examples
+        L = X.shape[0] // N
+        A, _Q, K, V, _P, _H, _M = pa.attention_forward_batch(
+            X.reshape((N, L * self.features)),
             *self.parameters(),
-            k_cache=cache.K,
-            v_cache=cache.V,
             heads=self.heads,
-            window=self.tokens,
-            **self._rows_table(position, 1),
+            causal=True,
+            segments=context.segments,
+            **self._rows_table(0, L),
         )
-        return a.reshape((1, self.features))
+        rows = None if context.segments is None else [[int(s) for s in row] for row in context.segments.tolist()]
+        for n in range(N):
+            last = 1 if rows is None else rows[n][-1]
+            keep = [n * L + t for t in range(L) if rows is None or rows[n][t] == last][-self.tokens :]
+            cache.K.append(K.take_rows(keep))
+            cache.V.append(V.take_rows(keep))
+            cache.segments.append(last)
+        return A.reshape((N * L, self.features))
+
+    def step(self, x: pa.Array, cache: AttentionRustCache, context: ForwardContext) -> pa.Array:
+        # one token a row at context.column: the crate's step per row against its row's cache, which
+        # holds its segment's keys only, so unmasked (D8 (b))
+        N = x.shape[0]
+        segments = None if context.segments is None else [int(row[0]) for row in context.segments.tolist()]
+        table = self._rows_table(context.column, 1)
+        out: list[pa.Array] = []
+        for n in range(N):
+            cache.start_segment(n, 1 if segments is None else segments[n])
+            a, cache.K[n], cache.V[n] = pa.attention_step(
+                x.row(n),
+                *self.parameters(),
+                k_cache=cache.K[n],
+                v_cache=cache.V[n],
+                heads=self.heads,
+                window=self.tokens,
+                **table,
+            )
+            out.append(a.reshape((1, self.features)))
+        return pa.concatenate_columns(out).reshape((N, self.features))
 
     def _backward(self, delta: pa.Array) -> None:
         self._dX, self._dQ, self._dK, self._dV = pa.attention_downstream_batch(

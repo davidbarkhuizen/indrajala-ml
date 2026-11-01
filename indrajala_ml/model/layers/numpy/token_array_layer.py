@@ -250,9 +250,10 @@ class PositionArrayLayer(BatchShaped):
     """
     A learned (T, d) table P added to the tokens (D7), starting at zero and never decayed:
     out_t = x_t + P_t, a new array. Its delta is its downstream, and P's gradient is that delta
-    summed over the examples. It decodes a prompt's L tokens by adding P's first L rows, and the
-    token at position t by adding P_t, t < T: past T a learned position has no row, and the Decoder
-    falls back to a full pass (D3).
+    summed over the examples. It decodes a batch's prompts of L tokens by adding P's first L rows, or
+    each token's position's row when the batch has segments (D5, D8), and a token at position t by
+    adding P_t, t < T: past T a learned position has no row, and the Decoder falls back to a full
+    pass (D3).
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
@@ -281,12 +282,22 @@ class PositionArrayLayer(BatchShaped):
     def start_decoding(self) -> None:
         return None
 
-    def prefill(self, X: FloatArray, cache: Any) -> FloatArray:
-        return X + self.P[: X.shape[0]]
+    def prefill(self, X: FloatArray, cache: Any, context: ForwardContext) -> FloatArray:
+        # N prompts' (N * L, d) rows: each its position's row, or, with no segments, rows 0 to L - 1 each
+        if context.positions is not None:
+            return X + self.P[np.asarray(context.positions).reshape(-1)]
+        L = X.shape[0] // context.examples
+        return X + np.tile(self.P[:L], (context.examples, 1))
 
-    def step(self, x: FloatArray, cache: Any, position: int) -> FloatArray:
-        assert position < self.P.shape[0], f"a learned Position has {self.P.shape[0]} rows; got position {position}"
-        return x + self.P[position]
+    def step(self, x: FloatArray, cache: Any, context: ForwardContext) -> FloatArray:
+        # one token a row: each its position's row, or, with no segments, the column's
+        positions = (
+            np.asarray(context.positions).reshape(-1) if context.positions is not None else np.array([context.column])
+        )
+        assert positions.max() < self.P.shape[0], (
+            f"a learned Position has {self.P.shape[0]} rows; got position {positions.max()}"
+        )
+        return x + self.P[positions]
 
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream

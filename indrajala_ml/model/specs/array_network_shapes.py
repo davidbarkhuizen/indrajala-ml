@@ -4,7 +4,7 @@ import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
-from indrajala_ml.generation.decoder import Decoder
+from indrajala_ml.generation.decoder import Decoder, SpecialIds
 from indrajala_ml.model.layers.python.conv_front_end import ArrayFrontEndLayer, load_conv_model_state
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
@@ -378,17 +378,29 @@ class SequentialSequenceShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
 
     def decoder(self) -> Decoder:
         """
-        A Decoder over this network's layers (the generation workplan, D2): prefill(ids), then step(id),
-        each the last token's probabilities. Refuses a network whose layers can't all decode.
+        A Decoder over this network's layers (the generation workplan, D2; the segments workplan, D8):
+        prefill(ids) or prefill_batch(prompts), then step(id) or step_batch(tokens), each the last
+        tokens' probabilities. Refuses a network whose layers can't all decode.
         """
+        segments = self._segments
         return Decoder(
             self.layers,
             self.tokens,
             ids_input=lambda ids: self.backend.vector([float(i) for i in ids]),
-            last_row=lambda out: out.tolist()[-1],
-            full_pass=lambda ids: self.predict_probabilities(tuple(float(i) for i in ids))[-1],
+            rows=lambda out: out.tolist(),
+            full_pass=self._last_probabilities,
+            context=self.backend.decode_context,
             learned_positions=any(isinstance(spec, Position) for spec in expand_specs(self.layer_specs)),
+            special=None if segments is None else SpecialIds(segments.separator, segments.pad),
         )
+
+    def _last_probabilities(self, rows: Sequence[Sequence[int]]) -> list[list[float]]:
+        # each row of T ids' last token's probabilities: one inference pass over the batch, its own context
+        batch = self.backend.matrix([[float(i) for i in row] for row in rows])
+        context = self._forward_context(batch)
+        for layer in self.layers:
+            batch = layer.forward_batch(batch, context=context)
+        return [row[-self.class_count :] for row in batch.tolist()]
 
     def _labels(self, category: Sequence[int]) -> Sequence[int]:
         assert len(category) == self.tokens, (

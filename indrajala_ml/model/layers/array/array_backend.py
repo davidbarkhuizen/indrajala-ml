@@ -48,6 +48,21 @@ class NumpyBackend:
         return segment_context(X, separator, pad)
 
     @staticmethod
+    def decode_context(
+        segments: Sequence[Sequence[int]] | None, positions: Sequence[Sequence[int]] | None, examples: int, column: int
+    ) -> ForwardContext:
+        # a decode pass's context (the Decoder, the segments workplan, D8): its segments and
+        # positions as (N, L) integer arrays, when the batch has them
+        if segments is None or positions is None:
+            return ForwardContext(examples=examples, column=column)
+        return ForwardContext(
+            segments=np.array(segments, dtype=np.intp),
+            positions=np.array(positions, dtype=np.intp),
+            examples=examples,
+            column=column,
+        )
+
+    @staticmethod
     def default_rng(seed: Any = None) -> np.random.Generator:
         """
         numpy's default_rng (PCG64), the generator a numpy network owns: an int, a sequence of
@@ -134,6 +149,20 @@ class RustBackend:
             counted=pa.Array(context.counted.tolist()),
             count=context.count,
             examples=context.examples,
+        )
+
+    @staticmethod
+    def decode_context(
+        segments: Sequence[Sequence[int]] | None, positions: Sequence[Sequence[int]] | None, examples: int, column: int
+    ) -> ForwardContext:
+        # numpy's, as crate arrays of floats, as segment_context's
+        if segments is None or positions is None:
+            return ForwardContext(examples=examples, column=column)
+        return ForwardContext(
+            segments=pa.Array([[float(s) for s in row] for row in segments]),
+            positions=pa.Array([[float(p) for p in row] for row in positions]),
+            examples=examples,
+            column=column,
         )
 
     @staticmethod

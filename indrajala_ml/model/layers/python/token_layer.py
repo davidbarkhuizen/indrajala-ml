@@ -348,12 +348,23 @@ class PositionLayer(ParameterFreeLayer[TokenNode]):
     def start_decoding(self) -> None:
         return None
 
-    def prefill(self, X: list[list[float]], cache: Any) -> list[list[float]]:
-        return [self._added(x, t) for t, x in enumerate(X)]
+    def prefill(self, X: list[list[float]], cache: Any, context: ForwardContext) -> list[list[float]]:
+        # N prompts' N * L rows: each its position's row, or, with no segments, rows 0 to L - 1 each
+        L = len(X) // context.examples
+        positions = (
+            [t for row in context.positions for t in row]
+            if context.positions is not None
+            else [t for _ in range(context.examples) for t in range(L)]
+        )
+        return [self._added(x, t) for x, t in zip(X, positions, strict=True)]
 
-    def step(self, x: list[list[float]], cache: Any, position: int) -> list[list[float]]:
-        assert position < len(self.rows), f"a learned Position has {len(self.rows)} rows; got position {position}"
-        return [self._added(x[0], position)]
+    def step(self, x: list[list[float]], cache: Any, context: ForwardContext) -> list[list[float]]:
+        # one token a row: each its position's row, or, with no segments, the column's
+        positions = (
+            [row[0] for row in context.positions] if context.positions is not None else [context.column] * len(x)
+        )
+        assert max(positions) < len(self.rows), f"a learned Position has {len(self.rows)} rows; got {max(positions)}"
+        return [self._added(row, t) for row, t in zip(x, positions, strict=True)]
 
     def _added(self, x: Sequence[float], t: int) -> list[float]:
         return [x_j + p_j for x_j, p_j in zip(x, self.rows[t].weights, strict=True)]
