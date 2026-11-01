@@ -190,7 +190,10 @@ class Attention:
     attention-dropout workplan, D3, D4). With positions "rotary", each head's queries and keys are
     rotated by their token's position after their biases, feature j paired with j + d_k / 2 at the
     angle t * rotary_base ** (-2j / d_k), so a score depends on the two tokens' distance and not
-    their places (RoPE; the rotary-positions workplan, D2, D3); "none" rotates nothing.
+    their places (RoPE; the rotary-positions workplan, D2, D3); "none" rotates nothing. With
+    segments (an Embedding's), a token attends within its paragraph (the segments workplan, D4);
+    document_mask False lets it attend across paragraphs, every pad still masked, while positions
+    and the counted targets keep the segments (the context-length workplan, D8's unmasked arm).
     """
 
     heads: int = 1
@@ -199,6 +202,7 @@ class Attention:
     dropout: float = 0.0
     positions: Literal["none", "rotary"] = "none"
     rotary_base: float = 10000.0
+    document_mask: bool = True
 
     def head_size(self, features: int) -> int:
         """Each head's width d_k over tokens of features features: key_size, else features / heads."""

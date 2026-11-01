@@ -230,6 +230,7 @@ def _token_layer(
             spec.dropout,
             spec.positions,
             spec.rotary_base,
+            document_mask=spec.document_mask,
         )
     if isinstance(spec, Dropout):
         return classes.dropout(*token_shape(shape), spec.p)

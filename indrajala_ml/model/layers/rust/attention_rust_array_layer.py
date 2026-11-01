@@ -90,9 +90,12 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         dropout: float = 0.0,
         positions: str = "none",
         rotary_base: float = 10000.0,
+        document_mask: bool = True,
     ) -> None:
         assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.causal = causal
+        # False: attention across the paragraphs, pads still masked (the context-length workplan, D8)
+        self.document_mask = document_mask
         self.dropout = dropout
         self._set_up(tokens, features, heads, key_size)
         # set by set_training_mode and set_rng, as a dense dropout layer's; the forward pass's copy of
@@ -131,8 +134,15 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             for array in (pa.Array.zeros((rows, fan_in)), pa.Array.zeros(rows))
         ]
 
+    def _attention_segments(self, segments: Any) -> Any:
+        # the segment ids attention masks by: a batch's, or with document_mask False only the pads'
+        # (0), every other token one segment
+        if segments is None or self.document_mask:
+            return segments
+        return pa.Array([[0.0 if s == 0.0 else 1.0 for s in row] for row in segments.tolist()])
+
     def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
-        self._segments = context.segments
+        self._segments = self._attention_segments(context.segments)
         self.a, self._Q, self._K, self._V, self._H, self._m, self._l, self._dropout_rng = pa.attention_forward(
             x,
             *self.parameters(),
@@ -141,13 +151,13 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             dropout=self.dropout,
             training=self.training,
             rng=self.rng,
-            segments=context.segments,
+            segments=self._segments,
             **self._table,
         )
         return self.a
 
     def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
-        self._segments = context.segments
+        self._segments = self._attention_segments(context.segments)
         self.A, self._Q, self._K, self._V, self._H, self._m, self._l, self._dropout_rng = pa.attention_forward_batch(
             X,
             *self.parameters(),
@@ -156,7 +166,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             dropout=self.dropout,
             training=self.training,
             rng=self.rng,
-            segments=context.segments,
+            segments=self._segments,
             **self._table,
         )
         return self.A
@@ -189,10 +199,11 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             *self.parameters(),
             heads=self.heads,
             causal=True,
-            segments=context.segments,
+            segments=self._attention_segments(context.segments),
             **self._rows_table(0, L),
         )
-        rows = None if context.segments is None else [[int(s) for s in row] for row in context.segments.tolist()]
+        attended = self._attention_segments(context.segments)
+        rows = None if attended is None else [[int(s) for s in row] for row in attended.tolist()]
         for n in range(N):
             last = 1 if rows is None else rows[n][-1]
             keep = [n * L + t for t in range(L) if rows is None or rows[n][t] == last][-self.tokens :]
@@ -205,7 +216,8 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         # one token a row at context.column: the crate's step per row against its row's cache, which
         # holds its segment's keys only, so unmasked (D8 (b))
         N = x.shape[0]
-        segments = None if context.segments is None else [int(row[0]) for row in context.segments.tolist()]
+        attended = self._attention_segments(context.segments)
+        segments = None if attended is None else [int(row[0]) for row in attended.tolist()]
         table = self._rows_table(context.column, 1)
         out: list[pa.Array] = []
         for n in range(N):

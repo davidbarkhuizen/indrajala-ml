@@ -300,8 +300,11 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         positions: str = "none",
         rotary_base: float = 10000.0,
         block: int = BLOCK,
+        document_mask: bool = True,
     ) -> None:
         self._set_up(tokens, features, heads, key_size)
+        # False: attention across the paragraphs, pads still masked (the context-length workplan, D8)
+        self.document_mask = document_mask
         # computed once and divided by, never multiplied by its reciprocal
         self.scale = math.sqrt(self.key_size)
         self.causal = causal
@@ -389,6 +392,14 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
             return self._rotated(Q, start=start, tokens=tokens), self._rotated(K, start=start, tokens=tokens), V
         return Q, K, V
 
+    def _attention_segments(self, segments: Any) -> Segments | None:
+        # the segment ids attention masks by: a batch's, or with document_mask False only the pads'
+        # (0), every other token one segment
+        if segments is None:
+            return None
+        ids = np.asarray(segments, dtype=np.intp)
+        return ids if self.document_mask else (ids != 0).astype(np.intp)
+
     def _masking(self, query_segments: Segments | None, key_segments: Segments | None, offset: int = 0) -> Masking:
         return Masking(self.causal, offset, self._band, query_segments, key_segments)
 
@@ -427,7 +438,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         Q, K, V = self._project(self._rows(X, self.features))
         self._Q, self._K, self._V = self._heads(Q), self._heads(K), self._heads(V)
-        self._masking_now = self._masking(context.segments, context.segments)
+        segments = self._attention_segments(context.segments)
+        self._masking_now = self._masking(segments, segments)
         draw = None
         self._dropout_state = None
         if self.training and self.dropout > 0.0:
@@ -453,7 +465,7 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         N = context.examples
         L = X.shape[0] // N
         Q, K, V = self._project(X, tokens=L)
-        segments = None if context.segments is None else np.asarray(context.segments, dtype=np.intp)
+        segments = self._attention_segments(context.segments)
         cache.start(K.reshape(N, L, self.width), V.reshape(N, L, self.width), segments)
         masking = self._masking(segments, segments)
         H, _m, _l = tiled_forward(
@@ -466,7 +478,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         # own appended, masking keys of another segment or a pad's but its own (D4, D8)
         N = x.shape[0]
         q, k, v = self._project(x, start=context.column, tokens=1)
-        segments = None if context.segments is None else np.asarray(context.segments, dtype=np.intp).reshape(N, 1)
+        segments = self._attention_segments(context.segments)
+        segments = None if segments is None else segments.reshape(N, 1)
         cache.append(k.reshape(N, 1, self.width), v.reshape(N, 1, self.width), segments, self.tokens)
         c = cache.K.shape[1]
         # the query is the cache's last column: every cached key at or before it (offset c - 1)
