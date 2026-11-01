@@ -119,9 +119,12 @@ where you meet a new trap; delete one that no longer holds.
   test takes 20 s.
 - **`test_ab.py::test_a_host_without_a_profile_is_refused` fails on a loaded machine:** deselect it
   locally under load and say so in the PR; CI runs it.
-- **Parity tests patch three numpy modules' `exp`** (`attention_array_layer`, `token_array_layer`,
-  `recurrent_array_layer`). BLAS order is machine-dependent: never assert a numpy product by bits
+- **Parity tests patch the numpy modules' `exp`** (`attention_array_layer`, `token_array_layer`,
+  `recurrent_array_layer`, and `erf`, whose pure-Python port has its own `exp` too). BLAS order is machine-dependent: never assert a numpy product by bits
   against a left fold.
+- **Test file names are unique across `tests/` and `rust/tests/`:** `./cli test` collects both
+  without packages, so two `test_erf.py` stop it at collection ("import file mismatch"); the crate's
+  suite alone passes. Name ml's test after what it checks (`test_erf_implementations.py`).
 - **Crate stubtest reads the installed stub:** after editing `indrajala_math_rust.pyi`, run
   `maturin develop --release` again. mypy isn't in the venv: make a scratch venv with
   `mypy==2.3.1` and run stubtest with `PYTHONPATH=.venv/lib/python3.14/site-packages` from a
