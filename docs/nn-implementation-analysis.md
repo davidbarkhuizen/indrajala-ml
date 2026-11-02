@@ -734,6 +734,16 @@ Verdicts:
    states. Both are training-state options, like the temperatures and couplings already there,
    and are judged by their fresh-seed success rates.
 
+   *Corrected 2026-11-02 (the remedies workplan):* the library's default is the random draw, as
+   above, but the research harness already initialises codes from the states. The state-formation
+   workplan's k-means codes (its D6), in indrajala-studies (`modular_family.py`, `kmeans` and
+   `codes_from_states`), run k-means++ and Lloyd's iterations over each factor's cells' outputs at
+   the warm-up's end. The audit, written from this repository alone, didn't see it. What neither
+   repository has is re-seeding dead codes, a codebook learning rate and SimVQ's
+   reparameterisation. The owner reports codebook collapse as a recurring failure. The plan,
+   [audit-remedies-workplan.md](workplans/library/audit-remedies-workplan.md), promotes the
+   k-means codes into the library and builds the other three, as options a registered study judges.
+
 ### 16.3 Divergent (benign), and optional changes
 
 1. **Initialisation.** Uniform `±1/√fan_in` has variance `1/(3·fan_in)`, PyTorch's `nn.Linear`

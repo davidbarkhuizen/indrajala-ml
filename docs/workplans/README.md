@@ -20,6 +20,7 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 | [ffn-activations-workplan.md](library/ffn-activations-workplan.md) | step 13: GELU and SwiGLU |
 | [grouped-query-attention-workplan.md](library/grouped-query-attention-workplan.md) | step 14: grouped- and multi-query attention |
 | [cross-attention-workplan.md](library/cross-attention-workplan.md) | step 15: cross-attention and an encoder-decoder model |
+| [audit-remedies-workplan.md](library/audit-remedies-workplan.md) | the implementation audit's remedies (§16): the codebook against collapse, an explicit output loss, a selection set, He initialisation, a FiLM state input, MRI |
 
 ## `infrastructure/`: machines, release and repositories
 
