@@ -17,8 +17,8 @@ support, and four are optional:
 | a multiplicative (FiLM) state input (§16.3.2) | optional | D9, stage 9 |
 | MRI, every needed unit adapted (§16.3.5) | optional (legacy) | D10, stage 10 |
 
-**The codebook comes first** (D1): the owner reports codebook collapse as a recurring failure of the
-window-recurrent network, which makes §16.2.2 the plan's weightiest item.
+**The codebook is the weightiest item** (D1): the owner reports codebook collapse as a recurring
+failure of the window-recurrent network. It follows the small loss stage at once.
 
 ## Why
 
@@ -75,12 +75,16 @@ window-recurrent network, which makes §16.2.2 the plan's weightiest item.
 
 Each lists the options, with pros and cons, and the choice.
 
-- **D1. Order. Settled: (a).**
-  - (a) *Chosen.* The codebook first (stages 3-6), then the loss (2, small, first because it is
-    quick and blocks nothing), then the optional four. Pros: the owner's recurring failure gets its
-    primitives soonest; the loss stage is an hour's work and clears the default before new networks
-    are written against it. Cons: none found.
-  - (b) The audit's order (loss, codebook, optional). Cons: the same work, the codebook later.
+- **D1. Order. Settled: (a) (made exact 2026-11-02).**
+  - (a) *Chosen.* The stages in number order: the loss (stage 2) first, then the codebook (3-6),
+    then the optional four (7-10). The loss stage is small (an hour's mechanical edits) and changes
+    every spec list that writes an output layer; done first, the codebook stages' new tests and
+    windows are written once, already naming their loss. The codebook, the owner's recurring
+    failure, follows at once. Pros: no spec list edited twice; the codebook's primitives a stage
+    later at most. Cons: none found.
+  - (b) The codebook first (3-6), then the loss. Cons: stages 3-6's new spec lists edited again in
+    stage 2.
+  - (c) The codebook only, the rest later. Cons: leaves the supported loss change waiting.
 - **D2. The output layer's loss. Settled: (a).**
   - (a) *Chosen.* `Dense.loss: Loss | None = None`. An output layer must name its loss
     (`validate_layer_specs` refuses `output=True` with `loss=None`, naming the two choices). A
