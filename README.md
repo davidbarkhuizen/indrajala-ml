@@ -636,12 +636,16 @@ attention, X the (T, d) tokens, h heads of d_k features, s = sqrt(d_k)
   the same columns of Q, K, V, H and Wo; at one head with d_k = d, [0] is the whole matrix
   project
     Q = X Wq^T + bq;  K = X Wk^T + bk;  V = X Wv^T + bv   (T, h * d_k) each: the product, then the bias
-  attend, each head i
-    S[i] = (Q[i] K[i]^T) / s                             (T, T)
-    m_t  = max_u(S[i]_tu)                                each row, max-shifted
-    e_tu = exp(S[i]_tu - m_t)
-    P[i]_tu = e_tu / sum_u(e_tu)
-    H[i] = P[i] V[i]                                     (T, d_k)
+  attend, each head i, tiled: the keys in blocks B of 16, in order; per query row t a running
+  max m_t (from -inf), sum l_t (from 0) and unnormalized output H[i]_t (from 0)
+    each key block B
+      S_tu  = (Q[i]_t K[i]_u^T) / s                      u in B; a masked score is -inf
+      m'_t  = max(m_t, max_(u in B)(S_tu))
+      e_tu  = exp(S_tu - m'_t)
+      l_t   = l_t exp(m_t - m'_t) + sum_(u in B)(e_tu)
+      H[i]_t = H[i]_t exp(m_t - m'_t) + sum_(u in B)(e_tu V[i]_u)
+      m_t   = m'_t
+    H[i]_t = H[i]_t / l_t                                (T, d_k); m and l kept, (T, 1) each
   combine
     H = [H[0] ... H[h-1]]                                (T, h * d_k): the heads side by side
     out = H Wo^T + bo                                    one product over all h * d_k columns
@@ -649,13 +653,16 @@ attention, X the (T, d) tokens, h heads of d_k features, s = sqrt(d_k)
   combine
     dH = delta Wo                                        (T, h * d_k)
     grad_Wo += delta^T H;  grad_bo += sum(delta)         over the batch's rows
-  attend, each head i
-    dP[i] = dH[i] V[i]^T
-    dV[i] = P[i]^T dH[i]
-    r_t   = sum_u(dP[i]_tu * P[i]_tu)
-    dS[i]_tu = P[i]_tu * (dP[i]_tu - r_t)
-    dQ[i] = (dS[i] K[i]) / s
-    dK[i] = (dS[i]^T Q[i]) / s
+  attend, each head i, tiled, each key block B recomputed from the kept m and l
+    D_t   = sum_j(dH[i]_tj * H[i]_tj)                    once, over d_k (FlashAttention-2's row term)
+    each key block B
+      P_tu  = exp(S_tu - m_t) / l_t                      u in B
+      dP_tu = dH[i]_t V[i]_u^T
+      dV[i]_u = sum_t(P_tu dH[i]_t)
+      dS_tu = P_tu * (dP_tu - D_t)
+      dQ[i]_t += sum_(u in B)(dS_tu K[i]_u)              the blocks summed in key order
+      dK[i]_u = sum_t(dS_tu Q[i]_t)
+    dQ[i] = dQ[i] / s;  dK[i] = dK[i] / s                once, after the blocks
   project
     dX = (dQ Wq + dK Wk) + dV Wv                         three products over all heads, in this order
     grad_Wq += dQ^T X;  grad_bq += sum(dQ)               and Wk, bk from dK; Wv, bv from dV
@@ -664,6 +671,15 @@ token mean
   out_j = sum_t(x_tj) / T
   backward: dx_tj = delta_j / T for every t
 ```
+
+The attend never holds the `(N, h, T, T)` weights (the context-length workplan, D3): memory is
+linear in `T`, and the backward pass recomputes each block (FlashAttention, Dao et al. 2022; the
+online softmax, Milakov & Gimelshein 2018). Masks are built per block; a block no query may attend
+to is skipped, and a row wholly masked within a computed block shifts by 0, so its `e` is 0 and
+its `l` and `H` unchanged. With dropout each key block's mask is drawn in key order, every entry
+drawn, so a forward batch draws `N h T T` uniforms as before; the backward pass draws the same
+masks again from a copy of the generator (D12). At `T = 1,024` one layer's peak memory fell from
+404 to 29 MB in numpy and from 222 to 24 MB in Rust, where forward plus backward is 60% faster.
 
 Apart from the products, only `+ − × ÷`, `sqrt`, `max` and the softmax's `exp` appear, so
 given the same inputs the pure-Python, numpy and Rust layers compute the same bits outside the
@@ -1047,6 +1063,13 @@ specs = [
 - **Packing** (`load_packed_text_dataset`): the paragraphs (between blank lines), each followed by
   the separator, cut into windows; both splits cut at paragraph boundaries, the spread split's
   rounding carried from block to block so it holds out its fraction.
+- **Windows cut anew every epoch** (`load_packed_text_epochs`, `PackedEpochs`; the context-length
+  workplan, D4): the training paragraphs shuffled by the trainer's generator at each epoch's start,
+  packed and cut again, so every paragraph is seen once an epoch while the cuts change; the trainer
+  takes any `train.EpochData` (`epoch(rng)`, `len`), and a resumed run cuts the same windows. The
+  held-out windows stay fixed.
+- **The token budget** (D5): a step's windows at `B * T = 2,048` tokens (batches of 32, 8 and 2 at
+  windows of 64, 256 and 1,024), so a step's tokens and an epoch's steps are equal across lengths.
 - **The context** (`model/layers/forward_context.py`): every layer's forward, backward and gradient
   passes take a `ForwardContext`, built once per batch by the network from its ids: each token's
   segment (1 + the separators before it, 0 for a pad), its position from its segment's start, and
@@ -1054,6 +1077,9 @@ specs = [
 - **Attention** masks key `u` for query `t` unless `u <= t` (causal), they share a segment and it
   isn't a pad's; the diagonal never, so no row is all `-inf`. The crate's attention ops take the
   segment ids and mask per head, never storing an `(N, T, T)` mask.
+- **`document_mask=False`** (on `Attention`) lets a token attend across paragraphs, every pad still
+  masked, while positions and the counted targets keep the segments: the context-length study's
+  unmasked arms.
 - **Positions** count from each segment's first token; rotary scores depend on `t - u` within a
   segment, so only a learned `Position` reads differently.
 - **The loss** is the mean over the batch's counted targets, PyTorch's `ignore_index` mean: a
