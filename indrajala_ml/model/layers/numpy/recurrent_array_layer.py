@@ -122,6 +122,65 @@ class StateInputArrayLayer(BatchShaped):
         self.grad_P += self._token_sum.T @ self.state
 
 
+class FilmStateInputArrayLayer(StateInputArrayLayer):
+    """
+    The FiLM state input (Perez et al. 2018; the audit-remedies workplan, D9): out_t = x_t * (1 + G c)
+    + P c, G (features, state_size) starting at zero and drawing nothing, so a seed's P is the
+    additive layer's and the layer starts as it (FiLM's gamma = 1 + delta gamma). Its downstream
+    is delta_t * (1 + G c); the state's gradient S P + M G, S the delta summed over the tokens and
+    M the delta times x so summed; P's gradient S^T c, G's M^T c. G is decayed, as P.
+    """
+
+    decayed: ClassVar[tuple[bool, ...]] = (True, True)
+
+    def __init__(self, tokens: int, features: int, state_size: int) -> None:
+        super().__init__(tokens, features, state_size)
+        self.G: FloatArray = np.zeros((features, state_size))
+        self.grad_G: FloatArray = np.zeros((features, state_size))
+
+    def parameters(self) -> tuple[FloatArray, ...]:
+        return (self.P, self.G)
+
+    def gradients(self) -> tuple[FloatArray, ...]:
+        return (self.grad_P, self.grad_G)
+
+    def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
+        self.P, self.G = parameters
+
+    def reset_gradient_accum(self) -> None:
+        super().reset_gradient_accum()
+        self.grad_G = np.zeros(self.G.shape)
+
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        n = X.shape[0]
+        assert self.state.shape == (n, self.state_size), (
+            f"a StateInput needs the batch's states, ({n}, {self.state_size}); got {self.state.shape}"
+        )
+        projected = self.state @ self.P.T
+        self._gamma = 1.0 + self.state @ self.G.T
+        self._X = X
+        tokens = X.reshape(n, self.tokens, self.features)
+        return (tokens * self._gamma[:, np.newaxis, :] + projected[:, np.newaxis, :]).reshape(X.shape)
+
+    def _backward(self, downstream: FloatArray) -> None:
+        self.delta_batch = downstream
+        n = downstream.shape[0]
+        deltas = downstream.reshape(n, self.tokens, self.features)
+        self._token_sum = _fold(deltas, axis=1)
+        self._product_sum = _fold(deltas * self._X.reshape(n, self.tokens, self.features), axis=1)
+        self.state_delta = self._token_sum @ self.P + self._product_sum @ self.G
+        self._downstream = (deltas * self._gamma[:, np.newaxis, :]).reshape(downstream.shape)
+
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        return self._downstream
+
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
+        super().accumulate_gradient_batch(input_activation_batch, context=context)
+        self.grad_G += self._product_sum.T @ self.state
+
+
 class AttentionPoolingArrayLayer:
     """
     The window's summary (the window-recurrent adder workplan, W1b-i, W19): one learned query q of

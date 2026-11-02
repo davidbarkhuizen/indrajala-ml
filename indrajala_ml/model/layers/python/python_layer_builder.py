@@ -22,7 +22,7 @@ from indrajala_ml.model.layers.python.layer_norm_layer import LayerNormLayer
 from indrajala_ml.model.layers.python.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.layers.python.linear_layer import LinearLayer
 from indrajala_ml.model.layers.python.max_pool_layer import MaxPoolLayer, PoolSpec
-from indrajala_ml.model.layers.python.recurrent_layer import StateInputLayer
+from indrajala_ml.model.layers.python.recurrent_layer import FilmStateInputLayer, StateInputLayer
 from indrajala_ml.model.layers.python.relu_layer import ReLULayer
 from indrajala_ml.model.layers.python.residual_layer import AddLayer, AffineLayer, ForkLayer
 from indrajala_ml.model.layers.python.softmax_output_layer import SoftmaxOutputLayer
@@ -145,7 +145,8 @@ def build_python_layers(
             layer = fork.add = AddLayer(previous, fork)
         elif isinstance(spec, StateInput):
             assert state_size is not None
-            layer = StateInputLayer(previous, *token_shape(shape.input_shape), state_size)
+            state_input = FilmStateInputLayer if spec.scale else StateInputLayer  # FiLM's (D9)
+            layer = state_input(previous, *token_shape(shape.input_shape), state_size)
         elif isinstance(spec, Dense) and len(shape.input_shape) == 2 and spec.output:
             # the token-wise output layer (the sequence task workplan, D6): softmax per token
             layer = TokenSoftmaxLayer(previous, spec.size, shape.input_shape[0])

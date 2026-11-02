@@ -21,7 +21,7 @@ from indrajala_ml.model.layers.numpy.gelu_array_layer import GELUArrayLayer
 from indrajala_ml.model.layers.numpy.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layers.numpy.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.layers.numpy.max_pool_array_layer import MaxPoolArrayLayer
-from indrajala_ml.model.layers.numpy.recurrent_array_layer import StateInputArrayLayer
+from indrajala_ml.model.layers.numpy.recurrent_array_layer import FilmStateInputArrayLayer, StateInputArrayLayer
 from indrajala_ml.model.layers.numpy.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.layers.numpy.residual_array_layer import AddArrayLayer, AffineArrayLayer, ForkArrayLayer
 from indrajala_ml.model.layers.numpy.softmax_array_layer import SoftmaxArrayLayer
@@ -48,7 +48,10 @@ from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustA
 from indrajala_ml.model.layers.rust.layer_norm_rust_array_layer import LayerNormRustArrayLayer
 from indrajala_ml.model.layers.rust.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.layers.rust.max_pool_rust_array_layer import MaxPoolRustArrayLayer
-from indrajala_ml.model.layers.rust.recurrent_rust_array_layer import StateInputRustArrayLayer
+from indrajala_ml.model.layers.rust.recurrent_rust_array_layer import (
+    FilmStateInputRustArrayLayer,
+    StateInputRustArrayLayer,
+)
 from indrajala_ml.model.layers.rust.relu_rust_array_layer import ActivationRustArrayLayer, ReLURustArrayLayer
 from indrajala_ml.model.layers.rust.residual_rust_array_layer import AddRustArrayLayer, ForkRustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
@@ -180,6 +183,7 @@ class TokenLayerClasses:
     token_output: LayerClass
     dropout: LayerClass
     state_input: LayerClass
+    film_state_input: LayerClass
 
 
 TOKEN_LAYER_CLASSES = {
@@ -195,6 +199,7 @@ TOKEN_LAYER_CLASSES = {
         token_output=TokenSoftmaxArrayLayer,
         dropout=TokenDropoutArrayLayer,
         state_input=StateInputArrayLayer,
+        film_state_input=FilmStateInputArrayLayer,
     ),
     "rust": TokenLayerClasses(
         token_dense=TokenDenseRustArrayLayer,
@@ -208,6 +213,7 @@ TOKEN_LAYER_CLASSES = {
         token_output=TokenSoftmaxRustArrayLayer,
         dropout=TokenDropoutRustArrayLayer,
         state_input=StateInputRustArrayLayer,
+        film_state_input=FilmStateInputRustArrayLayer,
     ),
 }
 
@@ -251,7 +257,9 @@ def _token_layer(
         return classes.dropout(*token_shape(shape), spec.p)
     if isinstance(spec, StateInput):
         assert state_size is not None
-        return classes.state_input(*token_shape(shape), state_size)
+        # FiLM's scale term when asked (the audit-remedies workplan, D9)
+        build = classes.film_state_input if spec.scale else classes.state_input
+        return build(*token_shape(shape), state_size)
     if isinstance(spec, Position | TokenMean):
         tokens, features = token_shape(shape)
         layer_class = {Position: classes.position, TokenMean: classes.token_mean}

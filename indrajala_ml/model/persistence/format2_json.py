@@ -132,6 +132,9 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         if not spec.segments:
             del fields["segments"]
         return {"kind": _TOKEN_KINDS[type(spec)], **fields}
+    if isinstance(spec, StateInput):
+        # scale only when set (the audit-remedies workplan, D9), so an additive entry is as before
+        return {"kind": _TOKEN_KINDS[type(spec)], **({"scale": True} if spec.scale else {})}
     return {"kind": _TOKEN_KINDS[type(spec)], **asdict(spec)}
 
 
@@ -258,6 +261,8 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("P",)
         case Embedding():
             return ("E",)
+        case StateInput() if spec.scale:
+            return ("P", "G")
         case StateInput():
             return ("P",)
         case Attention():

@@ -266,7 +266,12 @@ class StateInput:
     state_size s, added to every token, x_t + P c. It stands among a window's tokens, right before a
     residual block, so the block reads the state; a window has one before each block that should.
     Only a window holds one (validate_window_recurrent).
+
+    scale (the audit-remedies workplan, D9; Perez et al. 2018's FiLM): x_t * (1 + G c) + P c, a
+    learned (d, s) G starting at zero, so the layer starts as the additive one.
     """
+
+    scale: bool = False
 
 
 @dataclass(frozen=True)
