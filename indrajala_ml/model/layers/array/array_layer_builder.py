@@ -17,6 +17,7 @@ from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArra
 from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
 from indrajala_ml.model.layers.numpy.cross_entropy_array_layer import CrossEntropyArrayLayer
 from indrajala_ml.model.layers.numpy.dropout_array_layer import DropoutArrayLayer
+from indrajala_ml.model.layers.numpy.gelu_array_layer import GELUArrayLayer
 from indrajala_ml.model.layers.numpy.layer_norm_array_layer import LayerNormArrayLayer
 from indrajala_ml.model.layers.numpy.linear_array_layer import LinearArrayLayer
 from indrajala_ml.model.layers.numpy.max_pool_array_layer import MaxPoolArrayLayer
@@ -33,6 +34,7 @@ from indrajala_ml.model.layers.numpy.token_array_layer import (
     TokenMeanArrayLayer,
     TokenSoftmaxArrayLayer,
 )
+from indrajala_ml.model.layers.python.activations import GELUS
 from indrajala_ml.model.layers.python.conv_front_end import ArrayFrontEndLayer
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
@@ -46,7 +48,7 @@ from indrajala_ml.model.layers.rust.layer_norm_rust_array_layer import LayerNorm
 from indrajala_ml.model.layers.rust.linear_rust_array_layer import LinearRustArrayLayer
 from indrajala_ml.model.layers.rust.max_pool_rust_array_layer import MaxPoolRustArrayLayer
 from indrajala_ml.model.layers.rust.recurrent_rust_array_layer import StateInputRustArrayLayer
-from indrajala_ml.model.layers.rust.relu_rust_array_layer import ReLURustArrayLayer
+from indrajala_ml.model.layers.rust.relu_rust_array_layer import ActivationRustArrayLayer, ReLURustArrayLayer
 from indrajala_ml.model.layers.rust.residual_rust_array_layer import AddRustArrayLayer, ForkRustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.layers.rust.softmax_rust_array_layer import SoftmaxRustArrayLayer
@@ -95,6 +97,7 @@ class ArrayLayerClasses:
 
     sigmoid: LayerClass
     relu: LayerClass
+    gelu: LayerClass  # GELU or GELU-tanh, its activation the third argument (the FFN activations workplan)
     dropout: LayerClass  # sigmoid, with dropout
     softmax: LayerClass  # output, cross-entropy
     cross_entropy: LayerClass  # sigmoid output, cross-entropy
@@ -120,6 +123,7 @@ LAYER_CLASSES = {
     "numpy": ArrayLayerClasses(
         sigmoid=ArrayLayer,
         relu=ReLUArrayLayer,
+        gelu=GELUArrayLayer,
         dropout=DropoutArrayLayer,
         softmax=SoftmaxArrayLayer,
         cross_entropy=CrossEntropyArrayLayer,
@@ -135,6 +139,7 @@ LAYER_CLASSES = {
     "rust": ArrayLayerClasses(
         sigmoid=RustArrayLayer,
         relu=ReLURustArrayLayer,
+        gelu=ActivationRustArrayLayer,
         dropout=DropoutRustArrayLayer,
         softmax=SoftmaxRustArrayLayer,
         cross_entropy=CrossEntropyRustArrayLayer,
@@ -253,6 +258,8 @@ def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> Ar
         return classes.dropout(spec.size, input_size, spec.dropout)
     if spec.activation == "relu":
         return classes.relu(spec.size, input_size)
+    if spec.activation in GELUS:
+        return classes.gelu(spec.size, input_size, spec.activation)
     if spec.activation == "softmax":
         return classes.softmax(spec.size, input_size)
     if spec.loss == "cross_entropy":

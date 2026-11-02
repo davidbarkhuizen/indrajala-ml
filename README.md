@@ -133,7 +133,8 @@ network = SequentialArrayNetwork(
 ```
 
 - **Layer specs** (`layer_specs.py`) are backend-free data: `Dense(size, activation, dropout)`
-  (sigmoid or ReLU, dropout on sigmoid only), `Conv(kernel_size, channel_count, stride)`,
+  (sigmoid, ReLU or GELU (Activations), dropout on sigmoid only),
+  `Conv(kernel_size, channel_count, stride)`,
   `Pool(pool_size, stride)`, and the output layer `Dense(size, output=True, activation, loss)`
   (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy), with
   `BatchNorm(activation)` after a linear layer (Batch normalization), `Residual(body)` for a
@@ -356,6 +357,35 @@ train_backprop_network_mini_batch(network, windows, 32, learning_rate=schedule, 
   then cosine to a tenth ended lower held out than the constant rate on 36 of 40 paired runs (by
   0.029 bits a character on the mean), and the full recipe lower than the cosine alone on all 40
   (0.021 more). The recipe is the default for new sequence models.
+
+## Activations
+
+A hidden dense layer, flat or token-wise, is sigmoid, ReLU or GELU (the FFN activations workplan,
+D1, D5): `Dense(size, activation="gelu")` is the exact GELU, `z Φ(z)` through `erf` (Hendrycks &
+Gimpel 2016, BERT's and ViT's), and `activation="gelu_tanh"` GPT-2's approximation. GELU stands
+wherever ReLU may in a dense or token-wise hidden layer, with dropout after it only through
+`Dropout` (Dropout among the tokens); validation refuses it in `BatchNorm`, conv layers, the output
+layer, `Dense(dropout=...)` and a window-recurrent network's window, whose token-wise layers are the
+window program's ReLU ops. Format 2 saves the activation with its `Dense` entry.
+
+All three implementations compute each GELU, and its derivative, in one fixed grouping, through
+their own `exp` and `erf` (a port of fdlibm's `s_erf.c`, through `exp`; D2), so they agree by bits
+wherever their `exp` does (`tests/model/layers/test_gelu_implementations.py`; the parity tests give
+numpy the crate's `exp`, as for softmax and sigmoid). `SQRT1_2`, `INV_SQRT_2PI` and `C` are the
+doubles nearest `1/√2`, `1/√(2π)` and `√(2/π)`, and `K = 0.044715`; `tanh` is the window-recurrent
+cell's, `1 − 2 / (exp(2u) + 1)`, which saturates exactly:
+
+| Function | Expression |
+| --- | --- |
+| `gelu(z)` | `(0.5 * z) * (1.0 + erf(z * SQRT1_2))` |
+| `gelu'(z)` | `0.5 * (1.0 + erf(z * SQRT1_2)) + z * (exp(-0.5 * (z * z)) * INV_SQRT_2PI)` |
+| `gelu_tanh(z)` | `(0.5 * z) * (1.0 + th)`, `th = tanh(C * (z + K * ((z * z) * z)))` |
+| `gelu_tanh'(z)` | `0.5 * (1.0 + th) + (0.5 * z) * ((1.0 - th * th) * (C * (1.0 + (3.0 * K) * (z * z))))` |
+
+ReLU's derivative reads the layer's output (`a > 0`) and GELU's its pre-activation, which a GELU
+layer keeps from its forward pass. On Rust the three are one fused family (`layer_activation_*`,
+`array_activation_mask`; D9): the forward returns `(a, z)`, with `z` only for the GELUs, and ReLU's
+arithmetic is what it was before the family, so every ReLU golden entry is unchanged.
 
 ## Batch normalization
 

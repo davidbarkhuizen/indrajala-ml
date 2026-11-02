@@ -13,14 +13,14 @@ from collections.abc import Callable
 import numpy as np
 import pytest
 
-from indrajala_ml.model.layers.numpy import recurrent_array_layer
+from indrajala_ml.model.layers.numpy import activations, recurrent_array_layer
+from indrajala_ml.model.layers.numpy.activations import tanh
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.recurrent_array_layer import (
     AttentionPoolingArrayLayer,
     CodesArrayLayer,
     GRUArrayLayer,
     StateInputArrayLayer,
-    tanh,
 )
 
 N, T, D, S = 3, 4, 5, 2
@@ -64,6 +64,7 @@ def test_tanh_saturates_exactly_without_a_warning():
 
 
 def test_tanh_and_the_gates_go_through_the_modules_exp(monkeypatch: pytest.MonkeyPatch):
+    # tanh through activations.py's exp (shared with GELU-tanh), the gates through this module's
     calls: list[int] = []
 
     def counted(z: FloatArray) -> FloatArray:
@@ -71,6 +72,7 @@ def test_tanh_and_the_gates_go_through_the_modules_exp(monkeypatch: pytest.Monke
         return np.exp(z)
 
     monkeypatch.setattr(recurrent_array_layer, "exp", counted)
+    monkeypatch.setattr(activations, "exp", counted)
     tanh(np.zeros(3))
     recurrent_array_layer.sigmoid(np.zeros(2))
     assert calls == [3, 2]

@@ -14,8 +14,9 @@ then backward_batch with the gradient of what forward_batch gave, which accumula
 parameters' gradients and returns the inputs'. Each keeps one forward pass's values, so a network
 running several windows re-runs a window's forward pass before its backward pass.
 
-The softmax's exp and the cell's tanh go through this module's exp, which tests may replace with
-another implementation's, as attention's.
+The softmax's exp and the cell's sigmoid go through this module's exp, and its tanh through
+activations.py's (shared with GELU-tanh), which tests may replace with another implementation's,
+as attention's.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ import numpy as np
 import numpy.typing as npt
 
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
+from indrajala_ml.model.layers.numpy.activations import tanh
 from indrajala_ml.model.layers.numpy.array_layer import (
     FloatArray,
     fan_in_aware_random_layer,
@@ -48,16 +50,6 @@ def sigmoid(z: FloatArray) -> FloatArray:
     """1 / (1 + exp(-z)), through this module's exp; array_layer.sigmoid's form."""
     with np.errstate(over="ignore"):
         return 1.0 / (1.0 + exp(-z))
-
-
-def tanh(z: FloatArray) -> FloatArray:
-    """
-    1 - 2 / (exp(2z) + 1) (the window-recurrent adder workplan, W15): through exp, as sigmoid, so
-    the three implementations agree where their exp does. A large z overflows exp(2z) to inf and
-    gives exactly 1; a large negative z gives exactly -1.
-    """
-    with np.errstate(over="ignore"):
-        return 1.0 - 2.0 / (exp(2.0 * z) + 1.0)
 
 
 def _fold(values: FloatArray, axis: int) -> FloatArray:

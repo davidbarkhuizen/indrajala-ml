@@ -19,14 +19,16 @@ implementation's, as attention's.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar
 
 import numpy as np
 import numpy.typing as npt
 
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
+from indrajala_ml.model.layers.numpy import activations
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray, relu
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
+from indrajala_ml.model.layers.python.activations import GELUS, TokenActivation
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 
 exp = np.exp
@@ -322,31 +324,53 @@ class PositionArrayLayer(BatchShaped):
 class TokenDenseArrayLayer(RowDecoding[FloatArray], BatchShaped, ArrayLayer):
     """
     A dense layer acting on each token, its W (size, input_size) and b shared over the tokens (D4):
-    ReLUArrayLayer's or AffineArrayLayer's expressions on the (N * T, input_size) rows. Its W and b
-    are drawn and stepped as a dense layer's. It decodes the new tokens' rows by the same
-    expressions (_forward_rows).
+    ReLUArrayLayer's, GELUArrayLayer's or AffineArrayLayer's expressions on the (N * T, input_size)
+    rows; a GELU keeps Z, which its derivative reads. Its W and b are drawn and stepped as a dense
+    layer's. It decodes the new tokens' rows by the same expressions (_forward_rows).
     """
 
-    def __init__(self, size: int, input_size: int, tokens: int, activation: Literal["relu", "linear"]) -> None:
+    def __init__(self, size: int, input_size: int, tokens: int, activation: TokenActivation) -> None:
         super().__init__(size, input_size)
         self.tokens = tokens
-        self.activation = activation
+        self.activation: TokenActivation = activation
+
+    def _preactivation_rows(self, R: FloatArray) -> FloatArray:
+        # (rows, input_size) to (rows, size)
+        return R @ self.W.T + self.b
+
+    def _activate(self, Z: FloatArray) -> FloatArray:
+        if self.activation == "relu":
+            return relu(Z)
+        if self.activation == "linear":
+            return Z
+        return activations.activate(self.activation, Z)
 
     def _forward_rows(self, R: FloatArray) -> FloatArray:
-        # (rows, input_size) to (rows, size)
-        Z = R @ self.W.T + self.b
-        return relu(Z) if self.activation == "relu" else Z
+        return self._activate(self._preactivation_rows(R))
 
     def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = X.shape[0]
-        self.A = self._forward_rows(X.reshape(n * self.tokens, self.input_size)).reshape(n, self.tokens * self.size)
+        R = X.reshape(n * self.tokens, self.input_size)
+        if self.activation in GELUS:
+            # GELU's derivative reads Z
+            Z = self._preactivation_rows(R)
+            self.Z = Z.reshape(n, self.tokens * self.size)
+            rows = self._activate(Z)
+        else:
+            rows = self._forward_rows(R)
+        self.A = rows.reshape(n, self.tokens * self.size)
         return self.A
 
     def decode_rows(self, R: FloatArray) -> FloatArray:
         return self._forward_rows(R)
 
     def _backward(self, downstream: FloatArray) -> None:
-        self.delta_batch = downstream * (self.A > 0.0) if self.activation == "relu" else downstream
+        if self.activation == "relu":
+            self.delta_batch = downstream * (self.A > 0.0)
+        elif self.activation == "linear":
+            self.delta_batch = downstream
+        else:
+            self.delta_batch = downstream * activations.derivative(self.activation, self.Z)
 
     def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
         n = self.delta_batch.shape[0]

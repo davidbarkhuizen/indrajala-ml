@@ -52,14 +52,16 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 Conv = ConvSpec
 Pool = PoolSpec
 
-Activation = Literal["sigmoid", "relu", "softmax", "linear"]
+Activation = Literal["sigmoid", "relu", "gelu", "gelu_tanh", "softmax", "linear"]
+
 Loss = Literal["squared", "cross_entropy"]
 
 
 @dataclass(frozen=True)
 class Dense:
     """
-    A fully connected layer of size nodes. A hidden layer is sigmoid or ReLU, and a sigmoid one
+    A fully connected layer of size nodes. A hidden layer is sigmoid, ReLU or GELU ("gelu", the
+    exact form through erf, or "gelu_tanh", GPT-2's; README, Activations), and a sigmoid one
     may drop out (dropout: the drop probability, during training only). A linear hidden layer
     has no bias and no activation, and a BatchNorm follows it. The output layer
     (output=True, the last layer) is sigmoid, with the squared or the cross-entropy loss, or

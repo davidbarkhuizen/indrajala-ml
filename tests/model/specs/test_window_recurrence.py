@@ -83,6 +83,13 @@ WINDOWS_INVALID: dict[str, list[LayerSpec]] = {
     "a window ending in a mean": [IDS, STATE, ATTENTION, TokenMean(), Dense(10, output=True)],
     "a token-wise sigmoid output": [IDS, STATE, ATTENTION, Dense(10, output=True)],
     "a flat window": [Dense(16), DIGITS],
+    # the window program's token-wise layers are ReLU (the FFN activations workplan, D5)
+    "a GELU FFN": [
+        IDS,
+        STATE,
+        Residual((LayerNorm(), Dense(32, activation="gelu"), Dense(16, activation="linear", bias=True))),
+        DIGITS,
+    ],
 }
 
 

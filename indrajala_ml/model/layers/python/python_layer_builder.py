@@ -10,12 +10,14 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
+from indrajala_ml.model.layers.python.activations import GELUS, TokenActivation
 from indrajala_ml.model.layers.python.attention_layer import AttentionLayer
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.layers.python.conv_layer import ConvLayer, ConvSpec
 from indrajala_ml.model.layers.python.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.layers.python.dropout_layer import make_dropout_layer_cls
+from indrajala_ml.model.layers.python.gelu_layer import GELULayer, GELUTanhLayer
 from indrajala_ml.model.layers.python.layer_norm_layer import LayerNormLayer
 from indrajala_ml.model.layers.python.linear_conv_layer import LinearConvLayer
 from indrajala_ml.model.layers.python.linear_layer import LinearLayer
@@ -63,6 +65,10 @@ def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
         return make_dropout_layer_cls(spec.dropout)(size=spec.size, input_layer=input_layer)
     if spec.activation == "relu":
         return ReLULayer(size=spec.size, input_layer=input_layer)
+    if spec.activation == "gelu":
+        return GELULayer(size=spec.size, input_layer=input_layer)
+    if spec.activation == "gelu_tanh":
+        return GELUTanhLayer(size=spec.size, input_layer=input_layer)
     if spec.activation == "softmax":
         return SoftmaxOutputLayer(size=spec.size, input_layer=input_layer)
     if spec.loss == "cross_entropy":
@@ -141,8 +147,8 @@ def build_python_layers(
             # the token-wise output layer (the sequence task workplan, D6): softmax per token
             layer = TokenSoftmaxLayer(previous, spec.size, shape.input_shape[0])
         elif isinstance(spec, Dense) and len(shape.input_shape) == 2:
-            # a token-wise dense layer (D4): ReLU, or linear with a bias
-            activation = "relu" if spec.activation == "relu" else "linear"
+            # a token-wise dense layer (D4): ReLU or GELU (the FFN activations workplan, D5), or linear with a bias
+            activation: TokenActivation = spec.activation if spec.activation in ("relu", *GELUS) else "linear"
             layer = TokenDenseLayer(previous, spec.size, shape.input_shape[0], activation)
         elif isinstance(spec, Dense):
             layer = _dense_layer(spec, previous)

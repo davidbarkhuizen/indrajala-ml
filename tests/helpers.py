@@ -261,6 +261,9 @@ def exp_by_math(values: FloatArray) -> FloatArray:
 
 def exp_by_crate(values: FloatArray) -> FloatArray:
     """np.exp as the crate's exp (Rust's f64::exp), elementwise."""
+    if values.size == 0:
+        # erf's empty ranges (pa.Array takes no empty list)
+        return np.empty_like(values, dtype=np.float64)
     return np.array(pa.exp(pa.Array(values.reshape(-1).tolist())).tolist()).reshape(values.shape)
 
 

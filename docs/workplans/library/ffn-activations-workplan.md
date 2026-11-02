@@ -152,7 +152,26 @@ Each lists the options considered, with pros and cons, and the choice.
    reference test and the parity by bits with `exp` patched.
 3. **GELU** (D1, D5, D9): `"gelu"` and `"gelu_tanh"` in specs and validation, the numpy and
    pure-Python dense and token-wise layers, the crate's activation-parameterised fused family
-   (crate PR, bump, tier 1 A/B on `jebel`); persistence; parity.
+   (crate PR, bump, tier 1 A/B on `jebel`); persistence; parity. *Done 2026-11-02* (crate #90;
+   ml #1182, the benchmark's ReLU cases, and the bump). What the code settled:
+   - **The expressions and their grouping** are the README's (Activations), the same in
+     `python/activations.py`, `numpy/activations.py` and the crate's `core/src/activation.rs`;
+     the three agree by bits on the crate's `exp` (`test_gelu_implementations.py`), and the crate is
+     within a few ulps of a 60-digit reference (its `tests/test_activation_ops.py`).
+   - **`tanh` lives in `activations.py`** (numpy and pure Python), moved from the recurrent
+     modules, which import it: one `tanh` per implementation, the cell's and GELU-tanh's. Tests
+     that give the cell another `exp` now patch `activations.exp` too.
+   - **The crate's family replaces the ReLU names** (`layer_relu_*`, `array_relu_mask`):
+     `layer_activation_forward*` (returning `(a, z)`, `z` only for the GELUs),
+     `layer_activation_hidden_delta*`, their `_skip` variants and `array_activation_mask`, the
+     activation by name. Conv and batch norm call the mask's ReLU arm. A breaking change for the
+     crate's next PyPI release (0.1.0 now).
+   - **Layers:** `GELUArrayLayer` (numpy), `GELULayer`/`GELUTanhLayer` (pure Python, nodes keeping
+     `z` per example), `ActivationRustArrayLayer` (Rust; `ReLURustArrayLayer` its ReLU arm); the
+     token-wise layers take `"gelu"`/`"gelu_tanh"` and keep `Z`. Format 2 needs no change: the
+     activation is the `Dense` entry's field.
+   - **The benchmark had no ReLU case:** `focused_benchmark`'s dense case timed the sigmoid layer
+     only, so #1182 added ReLU's forward and hidden delta (`--shape relu`) before the A/B.
 4. **`GatedDense`** (D3): specs, numpy, the crate and a "Bump rust/" PR, Rust, pure Python; row
    decoding; the optimizer pair and its decay flag; persistence; parity.
 5. **Fixtures, checkpoints and golden entries** (D6), the Rust reference on both architectures.

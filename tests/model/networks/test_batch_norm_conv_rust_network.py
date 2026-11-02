@@ -67,7 +67,7 @@ def test_the_layer_is_numpys_by_bits(batch_size: int, channels: int, positions: 
     assert bits(values[1]) == bits(values[0])
 
     # the deltas agree in value, but not in the sign of a ReLU's zero (numpy's downstream * 0.0 is
-    # -0.0 where the downstream is negative, array_relu_mask's 0.0), as for dense batch norm
+    # -0.0 where the downstream is negative, array_activation_mask's 0.0), as for dense batch norm
     np.testing.assert_array_equal(to_numpy(rust.delta_batch), array.delta_batch)
 
 

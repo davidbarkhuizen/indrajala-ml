@@ -41,6 +41,8 @@ def block(*body: LayerSpec) -> Residual:
 NETWORKS: dict[str, list[LayerSpec]] = {
     "sigmoid body": [Dense(INPUT), block(Dense(5))],
     "relu body": [Dense(INPUT, activation="relu"), block(Dense(5, activation="relu"))],
+    # GELU before the fork (the crate's fused skip op) and in the body (the FFN activations workplan)
+    "gelu body": [Dense(INPUT, activation="gelu"), block(Dense(5, activation="gelu_tanh"))],
     "affine body": [Dense(INPUT), Residual((affine(),))],
     "two blocks in a row": [Dense(INPUT), block(Dense(5)), block(Dense(3, activation="relu"))],
     "block first": [block(Dense(5)), Dense(6)],

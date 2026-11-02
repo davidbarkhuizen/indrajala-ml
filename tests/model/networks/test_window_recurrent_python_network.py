@@ -17,7 +17,8 @@ from typing import Any
 import numpy as np
 import pytest
 
-from indrajala_ml.model.layers.numpy import attention_array_layer, recurrent_array_layer, token_array_layer
+from indrajala_ml.model.layers.numpy import activations, attention_array_layer, recurrent_array_layer, token_array_layer
+from indrajala_ml.model.layers.python import activations as python_activations
 from indrajala_ml.model.layers.python import recurrent_layer
 from indrajala_ml.model.networks.python.sequential_backprop_network import SequentialSequenceBackpropNetwork
 from indrajala_ml.model.networks.python.window_recurrent_backprop_network import WindowRecurrentBackpropNetwork
@@ -49,7 +50,13 @@ WINDOWS = {"plain": WINDOW, "with dropout": DROPOUT_WINDOW}
 # numpy's exps, the attention's, the token-wise output's and the window's parts', as math.exp
 attention_exp = patching(attention_array_layer, "exp", exp_by_math)
 token_exp = patching(token_array_layer, "exp", exp_by_math)
-parts_exp = patching(recurrent_array_layer, "exp", exp_by_math)
+
+
+@pytest.fixture
+def parts_exp(monkeypatch: pytest.MonkeyPatch) -> None:
+    # the window's parts' exp, and the cell's tanh's (activations.py's, shared with GELU-tanh)
+    monkeypatch.setattr(recurrent_array_layer, "exp", exp_by_math)
+    monkeypatch.setattr(activations, "exp", exp_by_math)
 
 
 def _pair(
@@ -321,9 +328,9 @@ def _gradients_of_cell(cell: recurrent_layer.GRULayer) -> tuple[Any, Any, Any]:
 def test_the_cells_tanh_and_sigmoid_take_numpys_values_where_exp_overflows():
     # numpy's exp gives inf there, and its forms exactly -1, 1 and 0
     z = np.array([400.0, -400.0, 800.0, -800.0])
-    assert bits([recurrent_layer.tanh(v) for v in z.tolist()]) == bits(recurrent_array_layer.tanh(z).tolist())
+    assert bits([python_activations.tanh(v) for v in z.tolist()]) == bits(activations.tanh(z).tolist())
     assert bits([recurrent_layer.sigmoid(v) for v in z.tolist()]) == bits(recurrent_array_layer.sigmoid(z).tolist())
-    assert [recurrent_layer.tanh(v) for v in z.tolist()] == [1.0, -1.0, 1.0, -1.0]
+    assert [python_activations.tanh(v) for v in z.tolist()] == [1.0, -1.0, 1.0, -1.0]
 
 
 @pytest.mark.usefixtures("attention_exp", "token_exp", "parts_exp")
