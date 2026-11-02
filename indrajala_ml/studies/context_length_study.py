@@ -52,6 +52,7 @@ from indrajala_ml.measurement import machine_lock
 from indrajala_ml.measurement.benchmark_sweep import run_parameter_sweep
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.persistence.format2 import network_from_json, network_to_json, restore_file
 from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerSpec, Residual
 from indrajala_ml.model.specs.update_rules import Adam
 from indrajala_ml.studies import batch_size_scaling as bss
@@ -185,11 +186,16 @@ def train_packed(
     backend: str = "numpy",
     limit: int | None = None,
     schedule_epochs: int | None = None,
+    start: dict[str, Any] | None = None,
+    save: Path | None = None,
 ) -> dict[str, Any]:
     """
     train_run's run of the model specs(symbols) gives over a packed corpus of symbols characters, at
     windows of tokens: the recipe, the token budget and the records as the module's docstring says.
-    The FFN activations study trains its arms with it (ffn_activation_study.py).
+    The FFN activations study trains its arms with it (ffn_activation_study.py). With start, a
+    format-2 document of that model, training starts from its weights (and optimizer and generator
+    state) instead of a fresh draw; with save, the trained network's format-2 document is written
+    there at the end (the grouped-query attention study's uptraining, gqa_study.py).
     """
     epochs_data, held_out, vocabulary = text_data.load_packed_text_epochs(
         text_data.CORPORA[corpus], tokens, split_by=cast(text_data.Split, split)
@@ -201,6 +207,8 @@ def train_packed(
     )
     network.rng = array_backend.default_rng(seed)
     network.randomize()
+    if start is not None:
+        restore_file(network, network_from_json(start))
     batch = text_data.budget_batch_size(tokens)
     epoch_steps = math.ceil((len(epochs_data) if limit is None else min(limit, len(epochs_data))) / batch)
     rate = rotary_study.RATES[(corpus, "2-layer")]
@@ -230,6 +238,11 @@ def train_packed(
         result["train_cross_entropies"].append(sequence_evaluate(network, train_sample).cross_entropy)
         result["epoch_seconds"].append(seconds)
     result["position_bits"] = position_bits(network, held_out, tokens)
+    if save is not None:
+        save.parent.mkdir(parents=True, exist_ok=True)
+        temporary = save.with_suffix(".partial")
+        temporary.write_text(json.dumps(network_to_json(network)))
+        temporary.rename(save)
     return result
 
 
@@ -304,9 +317,11 @@ def report(
                 if not runs:
                     continue
                 final = [_final_bits(r) for r in runs]
-                fell = (
-                    [ss.bits(r["held_out_cross_entropies"][-4]) - _final_bits(r) for r in runs] if epochs >= 4 else []
-                )
+                fell = [
+                    ss.bits(r["held_out_cross_entropies"][-4]) - _final_bits(r)
+                    for r in runs
+                    if len(r["held_out_cross_entropies"]) >= 4
+                ]
                 train = [ss.bits(r["train_cross_entropies"][-1]) for r in runs]
                 first = [r["position_bits"][0] for r in runs]
                 last = [r["position_bits"][-1] for r in runs]

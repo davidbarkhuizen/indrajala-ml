@@ -200,6 +200,112 @@ Each lists the options considered, with pros and cons, and the choice.
   follow. Stages 2 (numpy) and 3 (the crate) can run in either order; numpy first fixes the
   reference the crate's tests check against.
 
+## The study's registration (stage 8, written before any of its data)
+
+Under the research repo's `docs/protocols/experiment-design.md`. The code is
+`indrajala_ml/studies/gqa_study.py` (its docstring is the protocol; the training is
+`context_length_study.train_packed`, which gained a start document and a save path), and
+`tests/studies/test_gqa_study.py` checks its configuration against this section.
+
+**Cells.** The FFN study's SwiGLU model (D13): the context-length study's `256` model (the 2-layer
+rotary model, `d = 64`, no dropout, the document mask on, windows of 256 on the packed corpora)
+with `GatedDense(170)` FFNs, under the recipe (warmup over the first epoch, then cosine to a tenth
+of the corpus's tuned rate, AdamW 0.1, clipping at 1.0) at the token budget (batches of 8 windows),
+on Rust. Its attention has 8 query heads of `d_k = 8` (D7), sharing `g` key/value heads:
+
+| arm | `g` | training | cache bytes a token | runs |
+| --- | --- | --- | --- | --- |
+| `g8` | 8 (multi-head) | from scratch, 30 epochs; its final network saved | 2,048 | 30 |
+| `g4` | 4 | from scratch, 30 epochs | 1,024 | 30 |
+| `g2` | 2 | from scratch, 30 epochs | 512 | 30 |
+| `g1` | 1 (multi-query) | from scratch, 30 epochs | 256 | 30 |
+| `up4` | 4 | the same seed's `g8` network converted (D5), then 2 epochs | 1,024 | 30 |
+| `up2` | 2 | likewise | 512 | 30 |
+| `up1` | 1 | likewise | 256 | 30 |
+
+The cache is both layers' keys and values, `2 x 2 x g x 8` float64s a token. The three long-form
+corpora (Herodotus, Euclid, the *Muqaddimah*; Tiny Shakespeare is outside this study), both
+held-out splits, 5 seeds (a screen), the same seeds in every arm: 30 runs an arm, 210 in all.
+
+- **Uptraining** (D5, D7): `to_grouped` mean-pools each group's key and value projections from
+  the `g8` network of the same corpus, split and seed (Ainslie et al. 2023, §2.1), with a fresh
+  optimizer state, then trains 2 epochs under the same recipe, its schedule over those 2 epochs
+  (warmup over the first, cosine over the second, from the corpus's tuned peak rate). Two epochs
+  are 7% of the 30, near Ainslie et al.'s 5% (1.5 epochs), at the epoch's grain.
+- **Parameters are not matched.** At `g` below 8 the arms have fewer key and value parameters:
+  each layer's `Wk`, `bk`, `Wv` and `bv` are `g x 8` rows, not 64, so `g1` has 14,560 fewer
+  parameters than `g8` (two layers of 7,280). This is the production comparison: the same
+  architecture with key/value heads dropped, as Ainslie et al.'s conversions do. Llama 2's ablation
+  instead widened the FFN to compensate (its A.2.1); that is a different question, not asked here.
+  A loss at small `g` may therefore include the parameters' share.
+
+**Feasibility** (experiment-design §1, information-flow's register). Every arm is the FFN study's
+SwiGLU model with its key/value heads shared, each query head still attending over every key with
+its own query, so each can represent the character model `g8` does up to its smaller key/value
+width. The exclusion bound and code counts are a finite machine's and don't apply to a character
+model. The learning rates are the ReLU model's tuned ones (`rotary_study.RATES`), as the FFN study
+used, not retuned per arm. An uptraining run starts from the trained `g8` network, which exists
+for every (corpus, split, seed) once the scratch stage ends (the code refuses to start one early).
+
+**Claims** are on the final-epoch held-out bits per character over the counted targets, paired by
+(corpus, split, seed): 30 pairs a comparison, a sign test on the count of pairs lower, and Holm over
+the four at 0.05. The literature measured these at billions of parameters and tokens; this tests
+them at 0.1 million parameters on character corpora.
+
+- **G1, multi-head below multi-query (`g8` < `g1`), one-sided.** The direction is the literature's:
+  Shazeer 2019 reports multi-query attention's "only minor quality degradation"; Ainslie et al. 2023's Table 1
+  has MQA-XXL at 46.6 against MHA-XXL's 47.2 (average dev score, uptrained); Llama 2's Table 18 has
+  MHA ahead of MQA on 9 of 11 tasks at 30B. G1 holds when the Holm-adjusted one-sided p < 0.05, and
+  is refuted otherwise (no loss shown at this scale).
+- **G2, GQA at `g` 2 against multi-head (`g2` vs `g8`), two-sided.** No direction is registered:
+  the literature reports GQA close to multi-head (Ainslie et al.: 47.1 against 47.2; Llama 2:
+  "comparably to the MHA baseline on most evaluation tasks"). G2 differs when the Holm-adjusted
+  two-sided p < 0.05, and is undecided otherwise. Undecided is not shown equal.
+- **G3, GQA at `g` 2 below multi-query (`g2` < `g1`), one-sided.** The direction is the
+  literature's: Ainslie et al. 47.1 against 46.6; Llama 2's GQA "is better than the MQA variant on
+  average". G3 holds when the Holm-adjusted one-sided p < 0.05, and is refuted otherwise.
+- **U1, uptrained against from scratch at `g` 2 (`up2` vs `g2`), two-sided.** No direction is
+  registered: Ainslie et al. didn't compare an uptrained model with one trained from scratch (their
+  Limitations), and the uptrained run has seen 32 epochs against 30. U1 differs when the
+  Holm-adjusted two-sided p < 0.05, and is undecided otherwise.
+- **Descriptive, not tested:** per cell, each arm's final bits (mean ± sd), its last three epochs'
+  fall (scratch arms), its training bits, the held-out bits by position (16 buckets) and its
+  seconds per epoch (each machine's, labelled); `g4`, `up4`, `up1` and the other pairs (`up1` vs
+  `g1`, `up4` vs `g4`, the trend over `g`), post hoc where read as comparisons; and decode
+  characters per second at batch 1 and 16 for each `g` (`generation_timing.py --heads 8
+  --key-value-heads g --context 256 --batch B`, on `jebel` by daylight, after the training).
+
+**What a result does.**
+- If G2 doesn't show `g2` above `g8` (undecided, or `g2` lower), GQA at `h / g = 4` is recommended
+  in the README as the decoding models' default, at a quarter of the cache; otherwise multi-head
+  stays the default and GQA is documented with its measured cost.
+- If U1 doesn't show `up2` above `g2`, `to_grouped` and a short uptraining are documented as the
+  path from an existing multi-head model; otherwise training from scratch is.
+- G1 and G3 say whether the literature's ordering (MHA, then GQA, then MQA) holds at this scale.
+
+No setting changes after the data. A flaw found mid-study is recorded and fixed in a new registered
+experiment.
+
+**Budget, backend and hosts** (measured before launch: `gqa_study.py time`, one epoch of
+Herodotus's contiguous split on Rust, one job at a time on `jebel`, 2026-11-02 about 15:35).
+- **Seconds a training epoch:** `g8` 110, `g1` 106 (`jebel`, one job). Key/value heads barely move
+  training at this size; their saving is in decoding.
+- **Memory:** a peak of 0.47 GB a run.
+- **The work:** 1,200 scratch epochs a corpus (4 arms x 2 splits x 5 seeds x 30) and 60 uptraining
+  epochs. At `jebel`'s single-job speed, per corpus's training windows (Herodotus 5,233, the
+  *Muqaddimah* 3,556, Euclid 2,896): about 36, 25 and 20 hours of one job's scratch work, and 2, 1
+  and 1 of uptraining.
+- **The run** (the owner, 2026-11-02: every machine but `litshe`, from 2026-11-03 05:00): one
+  corpus a machine, the scratch stage (`sweep --epochs 30`), then on the same machine the
+  uptraining stage (`uptrain --epochs 30`): Herodotus on `stone` (8 workers: 12 add about 4%, the
+  working notes; the owner's word covers `stone` at any hour for this study), the *Muqaddimah* on
+  `jebel` (8 workers, PL1 65 W), Euclid on `klip` (4 workers on its 4 cores, 5.3 GB, under its
+  thermal guard at 85 C). Expected about 4 to 6 hours on `jebel` and `stone` and 8 to 10 on
+  `klip`, the slowest. Pinned to the commit this registration merges at; started from `pyramidon`
+  by one controller once each machine is up and its earlier job (the FFN sweep on `stone`, the
+  certificate note's affine pass on `klip`) has ended.
+- **Resuming:** each run's result is written as it ends, so a stopped stage resumes by whole runs.
+
 ## Stages
 
 1. **This workplan** (revised 2026-11-02).
@@ -247,6 +353,6 @@ Each lists the options considered, with pros and cons, and the choice.
    "numpy/rust/python grouped model" (`g = 2`) and "... multi-query model" (`g = 1`), after the FFN
    entries (143 locally, 47 in the Rust reference); no earlier entry moved (checked entry by entry).
    `SequenceGrouped<class>` fixtures for each implementation's sequence class.
-8. **The study** (D7): registered first (claims, cells, feasibility, budget from a probe), then
-   the sweep, then the findings.
+8. **The study** (D7, D13): registered first (claims, cells, feasibility, budget from a probe), then
+   the sweep, then the findings. *Registered 2026-11-02* (above).
 9. **Docs**: README (Layer norm and attention gains GQA); the workplan retired.
