@@ -90,10 +90,15 @@ SINGLE_OUTPUT: dict[str, dict[str, float]] = {
 SEQUENTIAL: dict[str, tuple[Any, ...]] = {
     "SequentialVectorizedMultiClassBackpropClassifierNetwork": (
         (SIDE, SIDE, 1),
-        [*CONV_SPECS, Dense(5, activation="relu"), Dense(4, dropout=0.3), Dense(CLASS_COUNT, output=True)],
+        [
+            *CONV_SPECS,
+            Dense(5, activation="relu"),
+            Dense(4, dropout=0.3),
+            Dense(CLASS_COUNT, output=True, loss="squared"),
+        ],
         SGD(),
     ),
-    "SequentialArrayBackpropClassifierNetwork": ((9,), [Dense(4), Dense(1, output=True)], SGD()),
+    "SequentialArrayBackpropClassifierNetwork": ((9,), [Dense(4), Dense(1, output=True, loss="squared")], SGD()),
     # a causal transformer over 5 ids of a vocabulary of 7: every sequence layer draws
     "SequentialSequenceArrayNetwork": (
         (5,),

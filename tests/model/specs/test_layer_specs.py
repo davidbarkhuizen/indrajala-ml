@@ -44,7 +44,7 @@ from indrajala_ml.model.specs.spec_shapes import InputShape, SpecShape, spec_sha
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from tests.helpers import Backend
 
-OUTPUT = Dense(3, output=True)
+OUTPUT = Dense(3, output=True, loss="squared")
 LINEAR = Dense(5, activation="linear")
 LINEAR_CONV = Conv(3, 2, activation="linear")
 
@@ -66,7 +66,7 @@ INVALID: dict[str, list[LayerSpec]] = {
     "empty": [],
     "no output layer": [Dense(5), Dense(3)],
     "output not last": [OUTPUT, Dense(3)],
-    "two output layers": [Dense(4, output=True), OUTPUT],
+    "two output layers": [Dense(4, output=True, loss="squared"), OUTPUT],
     "conv after dense": [Dense(5), Conv(3, 2), OUTPUT],
     "pool after dense": [Conv(3, 2), Dense(5), Pool(2), OUTPUT],
     "pool without conv": [Pool(2), OUTPUT],
@@ -74,18 +74,20 @@ INVALID: dict[str, list[LayerSpec]] = {
     "softmax hidden": [Dense(5, activation="softmax"), OUTPUT],
     "dropout after relu": [Dense(5, activation="relu", dropout=0.3), OUTPUT],
     "dropout after gelu": [Dense(5, activation="gelu", dropout=0.3), OUTPUT],
-    "gelu output": [Dense(3, output=True, activation="gelu")],
-    "gelu-tanh output": [Dense(3, output=True, activation="gelu_tanh")],
+    "gelu output": [Dense(3, output=True, loss="squared", activation="gelu")],
+    "gelu-tanh output": [Dense(3, output=True, loss="squared", activation="gelu_tanh")],
     "batch norm after gelu": [Dense(5, activation="gelu"), BatchNorm(), OUTPUT],
     "gelu batch norm": [LINEAR, BatchNorm(cast(Any, "gelu")), OUTPUT],
     "gelu conv": [Conv(3, 2, activation=cast(Any, "gelu")), OUTPUT],
     "a flat GatedDense": [Dense(5), GatedDense(4), OUTPUT],
     "hidden loss": [Dense(5, loss="cross_entropy"), OUTPUT],
+    "hidden squared loss": [Dense(5, loss="squared"), OUTPUT],
+    "output without a loss": [Dense(3, output=True)],
     "empty hidden": [Dense(0), OUTPUT],
-    "empty output": [Dense(0, output=True)],
-    "dropout output": [Dense(3, output=True, dropout=0.3)],
-    "relu output": [Dense(3, output=True, activation="relu")],
-    "softmax squared": [Dense(3, output=True, activation="softmax")],
+    "empty output": [Dense(0, output=True, loss="squared")],
+    "dropout output": [Dense(3, output=True, loss="squared", dropout=0.3)],
+    "relu output": [Dense(3, output=True, loss="squared", activation="relu")],
+    "softmax squared": [Dense(3, output=True, loss="squared", activation="softmax")],
     "linear without batch norm": [LINEAR, OUTPUT],
     "linear before sigmoid": [LINEAR, Dense(4), OUTPUT],
     "batch norm first": [BatchNorm(), OUTPUT],
@@ -97,7 +99,7 @@ INVALID: dict[str, list[LayerSpec]] = {
     "softmax batch norm": [LINEAR, BatchNorm(cast(Any, "softmax")), OUTPUT],
     "linear batch norm": [LINEAR, BatchNorm(cast(Any, "linear")), OUTPUT],
     "linear dropout": [Dense(5, activation="linear", dropout=0.3), BatchNorm(), OUTPUT],
-    "linear output": [Dense(3, output=True, activation="linear")],
+    "linear output": [Dense(3, output=True, loss="squared", activation="linear")],
     "zero epsilon": [LINEAR, BatchNorm(epsilon=0.0), OUTPUT],
     "zero running rate": [LINEAR, BatchNorm(running_rate=0.0), OUTPUT],
     "running rate over 1": [LINEAR, BatchNorm(running_rate=1.5), OUTPUT],
@@ -300,12 +302,12 @@ RESIDUAL_INVALID: dict[str, list[LayerSpec]] = {
     "bias on a linear layer outside a block": [Dense(5, activation="linear", bias=True), BatchNorm(), OUTPUT],
     "bias inside the body, not last": [Dense(5), Residual((Dense(8, bias=True), AFFINE_5)), OUTPUT],
     "affine, then a batch norm": [Dense(5), Residual((AFFINE_5, BatchNorm(), AFFINE_5)), OUTPUT],
-    "bias on the output layer": [Dense(3, output=True, bias=True)],
+    "bias on the output layer": [Dense(3, output=True, loss="squared", bias=True)],
     "linear without its batch norm in the body": [Dense(5), Residual((LINEAR, AFFINE_5)), OUTPUT],
     "batch norm first in the body": [Dense(5), Residual((BatchNorm(), AFFINE_5)), OUTPUT],
     "batch norm right after a block": [Dense(5), BLOCK_5, BatchNorm(), OUTPUT],
     "linear right before a block": [LINEAR, BLOCK_5, OUTPUT],
-    "output layer in the body": [Dense(5), Residual((Dense(3, output=True), AFFINE_5)), OUTPUT],
+    "output layer in the body": [Dense(5), Residual((Dense(3, output=True, loss="squared"), AFFINE_5)), OUTPUT],
     "block last": [Dense(5), BLOCK_5],
 }
 
@@ -860,7 +862,7 @@ SEQUENCE_INVALID: dict[str, list[LayerSpec]] = {
     "an embedding in a body": [IDS, Residual((IDS, AFFINE_6)), TOKEN_OUTPUT],
     "an empty vocabulary": [Embedding(0, 6), TOKEN_OUTPUT],
     "an embedding of no features": [Embedding(7, 0), TOKEN_OUTPUT],
-    "a token-wise sigmoid output": [IDS, Dense(7, output=True)],
+    "a token-wise sigmoid output": [IDS, Dense(7, output=True, loss="squared")],
     "a token-wise sigmoid cross-entropy output": [IDS, Dense(7, output=True, loss="cross_entropy")],
     "a causal block outside a token part": [Dense(5), Residual((LayerNorm(), Attention(causal=True))), OUTPUT],
     "causal attention outside a block": [IDS, Attention(causal=True), TOKEN_OUTPUT],

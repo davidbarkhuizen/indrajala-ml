@@ -59,7 +59,7 @@ def _check_hidden_dense(spec: Dense) -> None:
     assert spec.dropout is None or spec.activation == "sigmoid", (
         f"dropout is fused with the sigmoid, so it needs a sigmoid hidden layer; got {spec!r}"
     )
-    assert spec.loss == "squared", f"a loss belongs to the output layer; got {spec!r}"
+    assert spec.loss is None, f"a loss belongs to the output layer (the audit-remedies workplan, D2); got {spec!r}"
 
 
 def _check_layer_norm(spec: LayerNorm) -> None:
@@ -329,6 +329,10 @@ def _check_output(output: LayerSpec, token_wise: bool = False) -> None:
     assert not token_wise or output.activation == "softmax", (
         f"a token-wise output layer is softmax, with the cross-entropy loss (the sequence task workplan, D6); "
         f"got {output!r}"
+    )
+    assert output.loss is not None, (
+        f'the output layer names its loss, loss="squared" or loss="cross_entropy" (the audit-remedies workplan, '
+        f"D2); got {output!r}"
     )
     assert output.size >= 1, f"the output layer needs at least one node; got {output!r}"
     assert output.dropout is None, f"the output layer doesn't drop out; got {output!r}"

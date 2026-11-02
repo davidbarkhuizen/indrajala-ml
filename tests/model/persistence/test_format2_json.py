@@ -4,7 +4,13 @@ were saved without it is left out at its default, so those files are what such a
 The sequence task workplan's (stage 2): an embedding's entry, its table E, and a causal attention's.
 The attention-dropout workplan's (stage 2, D7): an attention's dropout, and a token dropout's entry.
 The rotary-positions workplan's (stage 2, D2): an attention's positions and rotary base.
+The audit-remedies workplan's (stage 2, D2): a dense entry's loss, and every format-2 fixture re-saved.
 """
+
+import json
+from pathlib import Path
+
+import pytest
 
 from indrajala_ml.model.persistence.checkpoint import OptimizerState
 from indrajala_ml.model.persistence.format2_json import (
@@ -15,6 +21,7 @@ from indrajala_ml.model.persistence.format2_json import (
 )
 from indrajala_ml.model.specs.layer_specs import Attention, BatchNorm, Conv, Dense, Dropout, Embedding, Position
 from indrajala_ml.model.specs.update_rules import Adam
+from tests.saved_model_fixtures import FIXTURE_DIR, FIXTURES, fixture_class
 
 
 def test_a_batch_norm_entry_holds_a_group_size_only_when_it_has_one():
@@ -25,6 +32,18 @@ def test_a_batch_norm_entry_holds_a_group_size_only_when_it_has_one():
     assert layer_to_json(BatchNorm("relu", group_size=32)) == {**plain, "group_size": 32}
     assert layer_from_json(plain) == BatchNorm("relu")
     assert layer_from_json({**plain, "group_size": 32}) == BatchNorm("relu", group_size=32)
+
+
+def test_a_dense_entry_holds_its_loss_as_before_the_output_layer_named_it():
+    # a hidden layer has no loss (the audit-remedies workplan, D2) and its entry holds "squared", as
+    # every file saved before it; the reader reads that back as no loss, and an output layer's as named
+    hidden = {"kind": "dense", "size": 5, "activation": "relu", "dropout": None, "output": False, "loss": "squared"}
+    assert layer_to_json(Dense(5, activation="relu")) == hidden
+    assert layer_from_json(hidden) == Dense(5, activation="relu")
+    for loss in ("squared", "cross_entropy"):
+        output = Dense(3, output=True, loss=loss)
+        assert layer_to_json(output) == {**hidden, "size": 3, "activation": "sigmoid", "output": True, "loss": loss}
+        assert layer_from_json(layer_to_json(output)) == output
 
 
 def test_a_relu_conv_entry_is_unchanged():
@@ -87,3 +106,19 @@ def test_an_attention_entry_holds_its_positions_only_when_it_rotates():
     entry = {"kind": "attention", "causal": True, "positions": "rotary", "rotary_base": 500.0}
     assert layer_to_json(Attention(causal=True, positions="rotary", rotary_base=500.0)) == entry
     assert layer_from_json(entry) == Attention(causal=True, positions="rotary", rotary_base=500.0)
+
+
+FORMAT2_FIXTURES = sorted(
+    name for name in FIXTURES if json.loads((FIXTURE_DIR / f"{name}.json").read_text()).get("format") == 2
+)
+
+
+@pytest.mark.parametrize("name", FORMAT2_FIXTURES)
+def test_every_format_2_fixtures_layer_entries_re_save_unchanged(name: str, tmp_path: Path):
+    # the output layer naming its loss (the audit-remedies workplan, D2) moves no file's layers:
+    # every format-2 fixture loads and saves them again as they were written (some fixtures predate
+    # the saved generator state, which a re-save adds, so the layers are compared, not the bytes)
+    path = tmp_path / f"{name}.json"
+    fixture_class(name).load(str(FIXTURE_DIR / f"{name}.json")).save(str(path))
+    saved = json.loads(path.read_text())["layers"]
+    assert saved == json.loads((FIXTURE_DIR / f"{name}.json").read_text())["layers"]

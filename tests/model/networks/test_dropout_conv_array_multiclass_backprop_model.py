@@ -33,7 +33,7 @@ NetworkCls = (
 def _equivalent(sizes: list[int], output: int, drop_probability: float) -> tuple[list[LayerSpec], UpdateRule]:
     # this network's dense layers as layer specs, and its update rule
     return (
-        [*(Dense(size, dropout=drop_probability) for size in sizes), Dense(output, output=True)],
+        [*(Dense(size, dropout=drop_probability) for size in sizes), Dense(output, output=True, loss="squared")],
         SGD(),
     )
 

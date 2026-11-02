@@ -85,7 +85,7 @@ def _as_lists(snapshot: Sequence[tuple[Any, ...]]) -> list[list[Any]]:
 def _specs(architecture: str) -> list[LayerSpec]:
     # the architecture as layer specs, which its pure-Python reference and sequential network share
     conv_specs, dense_layer_sizes = ARCHITECTURES[architecture]
-    return [*conv_specs, *(Dense(size) for size in dense_layer_sizes), Dense(CLASS_COUNT, output=True)]
+    return [*conv_specs, *(Dense(size) for size in dense_layer_sizes), Dense(CLASS_COUNT, output=True, loss="squared")]
 
 
 def _with_reference(architecture: str, backend: Backend, momentum: float) -> tuple[Any, Any]:

@@ -179,7 +179,7 @@ def _gap_after_training(layers: list[LayerSpec], rule: UpdateRule) -> float:
 # no batch norm, the same shapes: the conv and dense layers' own gap
 CONTROLS: dict[str, list[LayerSpec]] = {
     "conv": [Conv(3, 2), SOFTMAX],
-    "conv pool": [Conv(3, 2), Pool(2), Dense(3, output=True)],
+    "conv pool": [Conv(3, 2), Pool(2), Dense(3, output=True, loss="squared")],
     "two convs": [Conv(3, 2), Conv(2, 3), SOFTMAX],
 }
 

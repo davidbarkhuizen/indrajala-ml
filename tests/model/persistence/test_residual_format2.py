@@ -34,7 +34,12 @@ AFFINE = Dense(5, activation="linear", bias=True)
 # examples and batches
 RESIDUAL: tuple[InputShape, list[LayerSpec]] = (
     (4,),
-    [Dense(5), Residual((Dense(3), AFFINE)), Residual((Dense(4, activation="relu"), AFFINE)), Dense(3, output=True)],
+    [
+        Dense(5),
+        Residual((Dense(3), AFFINE)),
+        Residual((Dense(4, activation="relu"), AFFINE)),
+        Dense(3, output=True, loss="squared"),
+    ],
 )
 # a batch-norm pair in a body, after a dropout layer: batches only
 BATCH_NORM_RESIDUAL: tuple[InputShape, list[LayerSpec]] = (

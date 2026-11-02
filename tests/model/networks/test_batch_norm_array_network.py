@@ -192,7 +192,7 @@ INPUT = (4,)
 SOFTMAX = Dense(3, output=True, activation="softmax", loss="cross_entropy")
 Shape = Literal["multiclass", "single_output"]
 NETWORKS: dict[str, tuple[list[LayerSpec], Shape]] = {
-    "sigmoid": ([Dense(5, activation="linear"), BatchNorm(), Dense(3, output=True)], "multiclass"),
+    "sigmoid": ([Dense(5, activation="linear"), BatchNorm(), Dense(3, output=True, loss="squared")], "multiclass"),
     "relu softmax": ([Dense(5, activation="linear"), BatchNorm("relu"), SOFTMAX], "multiclass"),
     "two pairs": (
         [Dense(5, activation="linear"), BatchNorm(), Dense(4, activation="linear"), BatchNorm("relu"), SOFTMAX],

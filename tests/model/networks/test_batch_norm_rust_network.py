@@ -225,7 +225,7 @@ def _gap_after_training(layers: Any, shape: Any, rule: UpdateRule) -> float:
 
 # no batch norm, the same shapes: the dense layers' own gap
 CONTROLS = {
-    "sigmoid": [Dense(5), Dense(3, output=True)],
+    "sigmoid": [Dense(5), Dense(3, output=True, loss="squared")],
     "relu softmax": [
         Dense(6),
         Dense(5, activation="relu"),

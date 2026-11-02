@@ -6,7 +6,7 @@ task workplan, D6), whose output layer is token-wise, is shape="sequence".
 
     network = SequentialArrayNetwork(
         (28, 28, 1),
-        [Conv(5, 8), Pool(2), Dense(30), Dense(10, output=True)],
+        [Conv(5, 8), Pool(2), Dense(30), Dense(10, output=True, loss="squared")],
         Momentum(0.9),
         shape="multiclass",
         backend=RUST,

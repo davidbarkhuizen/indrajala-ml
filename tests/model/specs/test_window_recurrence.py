@@ -81,8 +81,8 @@ WINDOWS_INVALID: dict[str, list[LayerSpec]] = {
     "a state input before the position": [IDS, STATE, Position(), ATTENTION, DIGITS],
     "a state input before the embedding dropout": [IDS, Position(), STATE, Dropout(0.1), ATTENTION, DIGITS],
     "a window of patches": [Patches(1), Dense(16, activation="linear", bias=True), STATE, ATTENTION, DIGITS],
-    "a window ending in a mean": [IDS, STATE, ATTENTION, TokenMean(), Dense(10, output=True)],
-    "a token-wise sigmoid output": [IDS, STATE, ATTENTION, Dense(10, output=True)],
+    "a window ending in a mean": [IDS, STATE, ATTENTION, TokenMean(), Dense(10, output=True, loss="squared")],
+    "a token-wise sigmoid output": [IDS, STATE, ATTENTION, Dense(10, output=True, loss="squared")],
     "a flat window": [Dense(16), DIGITS],
     # the window program's token-wise layers are ReLU, and it has no gated layer (the FFN activations workplan, D5)
     "a SwiGLU FFN": [
@@ -164,14 +164,14 @@ def test_a_state_input_outside_a_window_is_rejected():
     with pytest.raises(AssertionError, match="validate_window_recurrent"):
         validate_layer_specs(WINDOWS["the state before every block"])
     with pytest.raises(AssertionError, match="acts on tokens"):
-        validate_layer_specs([Dense(5), STATE, Dense(2, output=True)])
+        validate_layer_specs([Dense(5), STATE, Dense(2, output=True, loss="squared")])
 
 
 def test_a_state_input_keeps_its_tokens_shape():
     shapes = spec_shapes(WINDOWS["the state once, before the first block"], WINDOW)
     assert shapes[2] == SpecShape((3, 16), (3, 16))
     with pytest.raises(AssertionError, match="reads tokens"):
-        spec_shapes([STATE, Dense(2, output=True)], (4,))
+        spec_shapes([STATE, Dense(2, output=True, loss="squared")], (4,))
 
 
 @pytest.mark.parametrize("specs", WINDOWS.values(), ids=WINDOWS.keys())

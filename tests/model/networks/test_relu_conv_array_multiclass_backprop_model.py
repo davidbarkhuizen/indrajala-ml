@@ -12,7 +12,7 @@ from tests.array_network_contract import ArrayNetworkSpec, conv_network_tests
 def _equivalent(sizes: list[int], output: int) -> tuple[list[LayerSpec], UpdateRule]:
     # this network's dense layers as layer specs, and its update rule
     return (
-        [*(Dense(size, activation="relu") for size in sizes), Dense(output, output=True)],
+        [*(Dense(size, activation="relu") for size in sizes), Dense(output, output=True, loss="squared")],
         SGD(),
     )
 

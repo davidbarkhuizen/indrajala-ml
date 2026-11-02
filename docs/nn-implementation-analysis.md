@@ -710,6 +710,8 @@ Verdicts:
    plateau. *Change:* make the output layer's loss an explicit argument with no default, and have
    the legacy presets name `"squared"`, so no existing bit moves and no new network gets the
    squared error by omission. A classifier should use sigmoid with BCE, or softmax with CE.
+   *Done* (the audit-remedies workplan, stage 2): `Dense.loss` is `None` on a hidden layer and
+   named on the output layer, which validation requires.
 2. **The codebook starts at a scale and place unrelated to the states it quantises, learns only by
    its selected codes' gradients, and never revives an unused code.** Codes are drawn uniformly in
    `±1/√s`, independent of where the GRU's outputs `h` lie, and are stepped only by the codebook

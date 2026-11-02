@@ -30,7 +30,7 @@ def affine(size: int = INPUT) -> Dense:
 
 
 def output(shape: Shape) -> Dense:
-    return Dense(3, output=True) if shape == "multiclass" else Dense(1, output=True)
+    return Dense(3, output=True, loss="squared") if shape == "multiclass" else Dense(1, output=True, loss="squared")
 
 
 def block(*body: LayerSpec) -> Residual:

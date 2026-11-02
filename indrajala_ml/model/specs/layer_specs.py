@@ -66,13 +66,17 @@ class Dense:
     has no bias and no activation, and a BatchNorm follows it. The output layer
     (output=True, the last layer) is sigmoid, with the squared or the cross-entropy loss, or
     softmax, with the cross-entropy loss.
+
+    The output layer names its loss, and a hidden layer has none (the audit-remedies workplan, D2):
+    no network gets the squared error by omission (Glorot & Bengio 2010 find it trains a sigmoid
+    classifier worse than the cross-entropy).
     """
 
     size: int
     activation: Activation = "sigmoid"
     dropout: float | None = None
     output: bool = False
-    loss: Loss = "squared"
+    loss: Loss | None = None
     # an affine layer, W x + b with no activation, ends a residual block's body (the
     # residual-connections workplan, D4): bias=True on a linear layer, and nowhere else
     bias: bool = False

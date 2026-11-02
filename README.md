@@ -125,7 +125,7 @@ from indrajala_ml.model.specs.update_rules import Momentum
 
 network = SequentialArrayNetwork(
     input_shape=(28, 28, 1),
-    layers=[Conv(5, 8), Pool(2), Dense(30), Dense(10, output=True)],
+    layers=[Conv(5, 8), Pool(2), Dense(30), Dense(10, output=True, loss="squared")],
     update_rule=Momentum(0.9),
     shape="multiclass",  # or "single_output", or "sequence"
     backend=RUST,  # or NUMPY
@@ -137,7 +137,8 @@ network = SequentialArrayNetwork(
   `GatedDense(size, activation)` (Activations),
   `Conv(kernel_size, channel_count, stride)`,
   `Pool(pool_size, stride)`, and the output layer `Dense(size, output=True, activation, loss)`
-  (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy), with
+  (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy; the loss is named,
+  never a default), with
   `BatchNorm(activation)` after a linear layer (Batch normalization), `Residual(body)` for a
   residual block (Residual connections), `LayerNorm(epsilon)`, and a patch model's
   `Patches(patch_size)`, `Position()`, `Attention(heads, key_size)` and `TokenMean()` (Layer norm

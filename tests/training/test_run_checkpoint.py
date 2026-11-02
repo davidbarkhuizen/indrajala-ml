@@ -35,12 +35,12 @@ from tests.helpers import bits
 IMPLEMENTATIONS = ["python", "numpy", "rust"]
 ROOT = Path(__file__).resolve().parents[2]
 
-LAYERS: list[LayerSpec] = [Dense(5, dropout=0.25), Dense(1, output=True)]
+LAYERS: list[LayerSpec] = [Dense(5, dropout=0.25), Dense(1, output=True, loss="squared")]
 # a residual block around a dropout layer (the residual-connections workplan, stage 5)
 RESIDUAL_LAYERS: list[LayerSpec] = [
     Dense(5, activation="relu"),
     Residual((Dense(4, dropout=0.25), Dense(5, activation="linear", bias=True))),
-    Dense(1, output=True),
+    Dense(1, output=True, loss="squared"),
 ]
 # flat layer norms after a dropout layer and first in a residual body (the layer-norm and attention
 # workplan, stage 5); a patch model's checkpoints are in tests/model/persistence/test_attention_format2.py, as its
@@ -49,7 +49,7 @@ LAYER_NORM_LAYERS: list[LayerSpec] = [
     Dense(5, dropout=0.25),
     LayerNorm(),
     Residual((LayerNorm(), Dense(4, activation="relu"), Dense(5, activation="linear", bias=True))),
-    Dense(1, output=True),
+    Dense(1, output=True, loss="squared"),
 ]
 EPOCHS, STOPPED_AFTER, BATCH_SIZE = 6, 3, 5  # 24 rows: four batches of 5 and a short one of 4
 
@@ -188,7 +188,9 @@ def test_a_run_file_refuses_another_network():
     student = _student("numpy")
     run = _train(student, 1, Random(7)).run_checkpoint
     assert run is not None
-    other = SequentialArrayNetwork((2,), [Dense(4), Dense(1, output=True)], Adam(), shape="single_output")
+    other = SequentialArrayNetwork(
+        (2,), [Dense(4), Dense(1, output=True, loss="squared")], Adam(), shape="single_output"
+    )
 
     with pytest.raises(ValueError, match="layers"):
         run_from_json(run_to_json(run, student), other)
