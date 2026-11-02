@@ -277,7 +277,12 @@ move), and its timing tier (docs/measurement.md §1).
    pure Python); the `D²` draw shared with stage 3. Tests: a code dead on the sample is re-seeded
    to a sample state, a live one untouched; its Adam rows are zero; Rust and numpy agree. Golden:
    one entry (a re-seed between two steps). Tier 0.
-5. **The codebook rate (D5).** `learning_rate_scale` in `OptimizerBase.step`; the setter. Tests:
+5. **The codebook rate (D5).** *Built:* the optimizer holds the scales,
+   `learning_rate_scales: dict[int, float]` keyed by a layer's index as its state is, rather than
+   each part carrying its own, so `step` reads nothing per layer when none is set (one emptiness
+   check a step) and any layer can carry one; `set_code_learning_rate_scale(scales)` on the window
+   networks fills it, a scale of 1.0 removing the entry. Training state, not in `state()`: a
+   resumed run sets it again. Golden: three entries at a scale of 4. Planned: `learning_rate_scale` in `OptimizerBase.step`; the setter. Tests:
    a scale of 1.0 keeps every bit; a scale of `k` under SGD is a `k`-times step on the codes alone,
    under Adam as Adam at `k·lr`. Golden: unchanged, plus one entry at a scale of 4. Tier 1: one
    A/B of `prepared_dataset_timing`, `--order ONNO` (the step's loop gained a read).

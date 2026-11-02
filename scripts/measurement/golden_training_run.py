@@ -139,6 +139,10 @@ rows, in all three implementations. Their weights are not injected: each network
 from SEED (randomize), so the entries pin He's draw, which all three share by bits. No earlier
 entry moved when they were recorded.
 
+The scaled codebook entries (the audit-remedies workplan, stage 5, D5) are added after the He
+ones: WINDOW_RECURRENCE's window networks, their codes stepped at CODE_RATE_SCALE times the rate
+(set_code_learning_rate_scale) from the start. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -668,6 +672,14 @@ HE_SPECS: list[LayerSpec] = [
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
 ]
 HE_NETWORKS = ["numpy he model", "rust he model", "python he model"]
+# the window networks with their codes at CODE_RATE_SCALE times the rate (the audit-remedies
+# workplan, stage 5, D5)
+SCALED_CODES_NETWORKS = {
+    "numpy scaled codebook window model": WindowRecurrentArrayNetwork,
+    "rust scaled codebook window model": WindowRecurrentRustArrayNetwork,
+    "python scaled codebook window model": WindowRecurrentBackpropNetwork,
+}
+CODE_RATE_SCALE = 4.0
 # the window networks with their dead codes re-seeded between two steps (the audit-remedies
 # workplan, stage 4, D4)
 RESEED_NETWORKS = {
@@ -1180,6 +1192,18 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 conv_rows,
                 "predict_probabilities",
                 inject=False,
+            ),
+        )
+    for name, window_cls in SCALED_CODES_NETWORKS.items():
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(window_cls, (WINDOW_COLUMNS,), WINDOW_SPECS, WINDOW_RECURRENCE, Adam()),
+                sequence_rows,
+                "predict_probabilities",
+                prepare=lambda network: network.set_code_learning_rate_scale([CODE_RATE_SCALE]),
             ),
         )
 
