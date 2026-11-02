@@ -176,6 +176,9 @@ class ArrayOptimizer[A: BackendArray](Protocol):
 
     def apply(self, index: int, layer: ArrayNetworkLayer[A], learning_rate: float, batch_size: int) -> None: ...
 
+    # rows of a layer's parameter whose state is zeroed, a re-seeded code's (the audit-remedies workplan, D4)
+    def reset_rows(self, index: int, parameter: int, rows: Sequence[int]) -> None: ...
+
     # every layer's update after a batch, clipping by the global norm when asked (optimizer_base.py)
     def step(
         self,

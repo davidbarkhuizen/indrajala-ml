@@ -357,14 +357,35 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         outputs, states, cells, _ = self._run_windows(X, C, True, False, live=live)
         return outputs, [C, *states], [H, *cells]
 
-    def cell_outputs(self, rows: Sequence[Sequence[float]]) -> list[list[list[float]]]:
+    def cell_outputs(self, rows: Sequence[Sequence[float]], first: bool = False) -> list[list[list[float]]]:
         """
         Each window's cells' outputs before the snap, W of them, (N, state_size) each, in inference:
-        window_states's after the initial state's, as lists (codes.py reads them on every
-        implementation; the audit-remedies workplan, D3).
+        window_states's after the initial state's (first: with it, the initial state before its
+        snap, a row per example), as lists (codes.py reads them on every implementation; the
+        audit-remedies workplan, D3, D4).
         """
         _, _, cells = self.window_states(self.backend.matrix([list(row) for row in rows]))
-        return [cell.tolist() for cell in cells[1:]]
+        return [cell.tolist() for cell in (cells if first else cells[1:])]
+
+    def factor_codes(self, factor: int) -> list[list[float]]:
+        """Factor factor's codes E, (count, state_size), as lists."""
+        part = self.recurrence_layer.factors[factor].codes
+        assert part is not None, f"factor {factor} is continuous: it has no codes"
+        return part.E.tolist()
+
+    def reseed_codes(self, factor: int, rows: dict[int, list[float]]) -> None:
+        """
+        Factor factor's codes rows set to the vectors given and their optimizer state zeroed
+        (codes.reseed_dead_codes; the audit-remedies workplan, D4); the other rows by bits.
+        """
+        part = self.recurrence_layer.factors[factor].codes
+        assert part is not None, f"factor {factor} is continuous: it has no codes"
+        E = part.E.tolist()
+        for row, code in rows.items():
+            assert len(code) == part.size, f"a code of factor {factor} has {part.size} features; got {len(code)}"
+            E[row] = list(code)
+        part.E = self.backend.matrix(E)
+        self.optimizer.reset_rows(len(self.layers) + self.parts.index(part), 0, sorted(rows))
 
     def set_codes(self, factor: int, codes: list[list[float]]) -> None:
         """Factor factor's codes E, (count, state_size): codes.py's k-means codes (D3)."""

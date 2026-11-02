@@ -124,6 +124,11 @@ implementations, each factor's codes set by initialise_codes from the cells' out
 sequence rows of BATCHES (KMEANS_ITERATIONS Lloyd's iterations, a generator seeded from SEED) after
 the weights are injected and before training. No earlier entry moved when they were recorded.
 
+The re-seeded codes entries (the audit-remedies workplan, stage 4, D4) are added after the k-means
+ones: the same window networks, their dead codes over those batches re-seeded (reseed_dead_codes,
+a generator seeded from SEED) between the single-example steps and the batch steps, so the moved
+codes' Adam rows are zeroed mid-run. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -150,7 +155,7 @@ import numpy as np
 from indrajala_ml.data.prepared_dataset import PreparedDataset
 from indrajala_ml.data.text_data import Vocabulary, pack, paragraphs, windows
 from indrajala_ml.measurement import benchmark_archive
-from indrajala_ml.model.codes import initialise_codes
+from indrajala_ml.model.codes import initialise_codes, reseed_dead_codes
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
 )
@@ -638,6 +643,13 @@ KMEANS_NETWORKS = {
     "python k-means codes window model": WindowRecurrentBackpropNetwork,
 }
 KMEANS_ITERATIONS = 10
+# the window networks with their dead codes re-seeded between two steps (the audit-remedies
+# workplan, stage 4, D4)
+RESEED_NETWORKS = {
+    "numpy re-seeded codes window model": WindowRecurrentArrayNetwork,
+    "rust re-seeded codes window model": WindowRecurrentRustArrayNetwork,
+    "python re-seeded codes window model": WindowRecurrentBackpropNetwork,
+}
 
 
 def _packed_rows() -> list[Example[tuple[int, ...]]]:
@@ -746,9 +758,11 @@ def _train(
     backend: str,
     learning_rate: LearningRate = LEARNING_RATE,
     clip_norm: float | None = None,
+    between: Callable[[Any], None] | None = None,
 ) -> tuple[dict[str, Any], PreparedDataset | None]:
     # learning_rate is read per learn call, at the count of calls before it, as the trainer reads
-    # a schedule; clip_norm reaches the batch calls only, and only when set
+    # a schedule; clip_norm reaches the batch calls only, and only when set; between, when given,
+    # runs after the single-example calls (the optimizer has state) and before the batch calls
     steps = iter(range(1_000))
     clip: dict[str, float] = {} if clip_norm is None else {"clip_norm": clip_norm}
 
@@ -763,6 +777,8 @@ def _train(
         for state, category in rows[:6]:
             network.learn(rate(), state, category)
         checkpoints["learn"] = _bits(network.snapshot())
+        if between is not None:
+            between(network)
         for batch in BATCHES:
             network.learn_batch(rate(), [rows[i] for i in batch], **clip)
         for batch in BATCHES:
@@ -777,6 +793,8 @@ def _train(
     for index in range(3, 6):
         network.learn_row(rate(), prepared, index)
     checkpoints["learn_row"] = _bits(network.snapshot())
+    if between is not None:
+        between(network)
     for batch in BATCHES:
         network.learn_batch(rate(), [rows[i] for i in batch], **clip)
     checkpoints["learn_batch"] = _bits(network.snapshot())
@@ -823,13 +841,14 @@ def _run_network(
     learning_rate: LearningRate = LEARNING_RATE,
     clip_norm: float | None = None,
     prepare: Callable[[Any], None] | None = None,
+    between: Callable[[Any], None] | None = None,
 ) -> dict[str, Any]:
     network = build()
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
     if prepare is not None:
         prepare(network)
     network.rng = default_rng(SEED) if _backend(name) == "python" else network.backend.default_rng(SEED)
-    checkpoints, prepared = _train(network, rows, _backend(name), learning_rate, clip_norm)
+    checkpoints, prepared = _train(network, rows, _backend(name), learning_rate, clip_norm, between)
     result = {
         "snapshots": checkpoints,
         "predictions": _predictions(network, rows, prepared, predict),
@@ -1097,6 +1116,23 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 prepare=lambda network: _kmeans_codes(network, code_batches),
             ),
         )
+    for name, window_cls in RESEED_NETWORKS.items():
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(window_cls, (WINDOW_COLUMNS,), WINDOW_SPECS, WINDOW_RECURRENCE, Adam()),
+                sequence_rows,
+                "predict_probabilities",
+                between=lambda network: _reseed_codes(network, code_batches),
+            ),
+        )
+
+
+def _reseed_codes(network: Any, batches: list[list[list[float]]]) -> None:
+    moved = reseed_dead_codes(network, batches, np.random.default_rng(SEED))
+    assert any(moved), "the re-seeded entries move at least one code"
 
 
 def _kmeans_codes(network: Any, batches: list[list[list[float]]]) -> None:
