@@ -20,6 +20,7 @@ checkpoint resumes training by bits.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
@@ -77,6 +78,19 @@ class ArrayOptimizerBase[A: BackendArray, T, R](OptimizerBase[list[A], T, R, Arr
         self._state = {
             index: [self._backend.owned(values) for values in arrays] for index, arrays in state.layers.items()
         }
+
+    def reset_rows(self, index: int, parameter: int, rows: Sequence[int]) -> None:
+        count = self._state_count()
+        state = self._state.get(index)
+        if state is None or count == 0:
+            return
+        # the parameter's state arrays, count of them, parameter by parameter (_zeros' order); the
+        # other rows' values cross through lists, exact
+        for i in range(parameter * count, (parameter + 1) * count):
+            values: list[Any] = state[i].tolist()
+            for row in rows:
+                values[row] = [0.0] * len(values[row]) if isinstance(values[row], list) else 0.0
+            state[i] = self._backend.owned(values)
 
     def _zeros(self, index: int, layer: TrainedArrayLayer[A], count: int) -> list[A]:
         # count zero arrays shaped as each parameter, parameter by parameter: the rule's state for

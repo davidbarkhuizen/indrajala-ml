@@ -1,6 +1,7 @@
 # Workplan: the implementation audit's remedies
 
-**Status: stages 2 (the explicit loss, #1204) and 3 (the k-means codes) done; stage 4 next.
+**Status: stages 2 (the explicit loss, #1204), 3 (the k-means codes, #1205) and 4 (re-seeding) done;
+stage 5 next.
 Decisions D1-D11 settled 2026-11-02 by building for extensibility, speed and real-world production
 (the owner's standing direction); written at the owner's request ("a detailed workplan to implement
 the two supported changes, and the four optional ones").**
@@ -263,7 +264,15 @@ move), and its timing tier (docs/measurement.md §1).
    cluster's perturbation; a continuous factor untouched. Golden: one entry (a window network,
    codes from its states, one step). Tier 0. Then the indrajala-studies PR: bump `ml`, call the
    library, delete `kmeans`, its golden replay unchanged.
-4. **Re-seeding dead codes (D4).** `reseed_dead_codes`; the optimisers' `reset_rows` (numpy, Rust,
+4. **Re-seeding dead codes (D4).** *Built:* `codes.reseed_dead_codes(network, batches, rng,
+   min_use=0)`, a function beside `initialise_codes` rather than a network method, so its
+   arithmetic is written once for the three implementations. A code's uses count the sample's
+   initial states and windows' states (`cell_outputs(first=True)`), snapped as the network snaps
+   (`snap_indices`, the left fold); the dead codes move in index order, each drawn by `d2_draw`
+   (k-means++'s seeding now calls it, its bits unchanged) against the live codes and those already
+   moved; the network writes them and zeroes their optimizer rows (`reseed_codes`, then
+   `reset_rows`). Golden: three entries, one per implementation, re-seeded between the
+   single-example and the batch steps. Planned: `reseed_dead_codes`; the optimisers' `reset_rows` (numpy, Rust,
    pure Python); the `D²` draw shared with stage 3. Tests: a code dead on the sample is re-seeded
    to a sample state, a live one untouched; its Adam rows are zero; Rust and numpy agree. Golden:
    one entry (a re-seed between two steps). Tier 0.

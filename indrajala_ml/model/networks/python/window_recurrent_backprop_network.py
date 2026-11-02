@@ -168,13 +168,14 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
                 row.extend(output)
         return outputs
 
-    def cell_outputs(self, states: Sequence[Sequence[float]]) -> list[list[list[float]]]:
+    def cell_outputs(self, states: Sequence[Sequence[float]], first: bool = False) -> list[list[list[float]]]:
         """
-        Each window's cells' outputs before the snap, W of them, (N, state_size) each, in inference
-        (the array network's cell_outputs; codes.py reads them, the audit-remedies workplan, D3).
+        Each window's cells' outputs before the snap, W of them (first: the initial states' before
+        them), (N, state_size) each, in inference (the array network's cell_outputs; codes.py reads
+        them, the audit-remedies workplan, D3, D4).
         """
         C = self._first_state(len(states))
-        cells: list[list[list[float]]] = []
+        cells: list[list[list[float]]] = [self.recurrence_layer.H] if first else []
         for w in range(self._windows(states)):
             _, C = self._window_forward(self._window(states, w), C)
             cells.append(self.recurrence_layer.H)
@@ -189,6 +190,21 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
         )
         for row, code in zip(part.codes, codes, strict=True):
             row.set_weights(list(code))
+
+    def factor_codes(self, factor: int) -> list[list[float]]:
+        """Factor factor's codes, (count, state_size), as lists."""
+        part = self.recurrence_layer.factors[factor].codes
+        assert part is not None, f"factor {factor} is continuous: it has no codes"
+        return [list(code.weights) for code in part.codes]
+
+    def reseed_codes(self, factor: int, rows: dict[int, list[float]]) -> None:
+        """The array network's reseed_codes: the rows given set, their optimizer state zeroed (D4)."""
+        part = self.recurrence_layer.factors[factor].codes
+        assert part is not None, f"factor {factor} is continuous: it has no codes"
+        for row, code in rows.items():
+            assert len(code) == part.size, f"a code of factor {factor} has {part.size} features; got {len(code)}"
+            part.codes[row].set_weights(list(code))
+        self.optimizer.reset_rows(len(self.trainable_layers) + self.parts.index(part), 0, sorted(rows))
 
     def _forward(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> list[float]:
         # forward_windows builds each window's own context

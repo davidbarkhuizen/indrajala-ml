@@ -73,6 +73,26 @@ class OptimizerBase[S, T, R, L]:
     def apply(self, index: int, layer: L, learning_rate: float, batch_size: int) -> None:
         raise NotImplementedError
 
+    def reset_rows(self, index: int, parameter: int, rows: Sequence[int]) -> None:
+        """
+        The rule's state for the rows given of layer index's parameter parameter set to zero, as at
+        its first step (momentum's velocity; Adam's m and v): a row whose weights were replaced, a
+        re-seeded code (the audit-remedies workplan, D4), doesn't inherit the old row's moments.
+        Nothing for a layer not yet stepped, or a rule without state.
+        """
+        raise NotImplementedError
+
+    def _state_count(self) -> int:
+        # the rule's state arrays per parameter: momentum's velocity; Adam's m and v; none for SGD
+        # and weight decay
+        match self.rule:
+            case Momentum():
+                return 1
+            case Adam():
+                return 2
+            case SGD() | WeightDecay():
+                return 0
+
     def _squared_gradient(self, layer: L) -> float:
         # the sum of squares of the layer's accumulated gradients, its gradients in order; 0 for a
         # layer with nothing trained

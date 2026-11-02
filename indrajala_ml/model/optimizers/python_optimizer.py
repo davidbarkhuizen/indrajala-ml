@@ -87,6 +87,17 @@ class PythonOptimizer(OptimizerBase[list[WeightSetState], Sequence[WeightSet], N
         layer.accumulate_gradients(context=context)
         self.apply(index, layer, learning_rate, 1)
 
+    def reset_rows(self, index: int, parameter: int, rows: Sequence[int]) -> None:
+        # a pure-Python layer's rows are its weight sets (a code is one), so its one parameter's
+        # rows are its weight sets' states
+        assert parameter == 0, f"a pure-Python layer's rows are its weight sets, one parameter; got {parameter}"
+        state = self._state.get(index)
+        if state is None:
+            return
+        for row in rows:
+            weight_state, bias_state = state[row]
+            state[row] = ([[0.0] * len(values) for values in weight_state], [0.0] * len(bias_state))
+
     def _zeros(self, index: int, weight_sets: Sequence[WeightSet], count: int) -> list[WeightSetState]:
         # per weight set, count zero lists shaped as its weights and count zeros for its bias: the
         # rule's state for a layer, made on the layer's first step
