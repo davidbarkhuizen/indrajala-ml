@@ -33,30 +33,37 @@ def _pair(arrays: Sequence[pa.Array]) -> tuple[pa.Array, pa.Array]:
 @dataclass(frozen=True)
 class _Pair:
     """
-    A layer's parameters first and first + 1, or first alone (the last of an odd count), with their
-    gradients: what one fused call steps. Every layer but attention is one pair, its first 0;
-    attention's eight parameters are its four projections' (W, b) pairs.
+    A layer's parameters first and first + 1, or first alone, with their gradients: what one fused
+    call steps. Most layers are one pair, its first 0; attention's eight parameters are its four
+    projections' (W, b) pairs, and the GRU cell's (W, U, b) are W alone, then (U, b).
     """
 
     layer: TrainedArrayLayer[pa.Array]
     first: int
     parameters: Sequence[pa.Array]
     gradients: Sequence[pa.Array]
-    # whether WeightDecay decays the pair: a weight and its bias are stepped together, the bias as
-    # the fused L2 op steps it, so only the first parameter's flag counts
+    # whether WeightDecay and AdamW decay the pair's first parameter: the fused ops never decay the
+    # second, as a bias, so _pairs gives a pair a second parameter only when it isn't decayed
     decayed: bool
 
 
 def _pairs(layer: TrainedArrayLayer[pa.Array], scale: float | None) -> list[_Pair]:
     # scale: the clip factor the gradients are read times during a step that clips
-    # (OptimizerBase.step), None otherwise
+    # (OptimizerBase.step), None otherwise. A parameter takes the next one as its pair's second
+    # only when the next isn't decayed (a bias, beta), since the fused ops step the second as a
+    # bias; a decayed next parameter (the GRU's U after its W) starts a pair of its own, so every
+    # parameter is decayed by its own flag, as NumpyOptimizer decays it
     parameters, gradients = layer.parameters(), layer.gradients()
     if scale is not None:
         gradients = tuple(gradient * scale for gradient in gradients)
-    return [
-        _Pair(layer, first, parameters[first : first + 2], gradients[first : first + 2], layer.decayed[first])
-        for first in range(0, len(parameters), 2)
-    ]
+    decayed = layer.decayed
+    pairs: list[_Pair] = []
+    first = 0
+    while first < len(parameters):
+        end = first + 2 if first + 1 < len(parameters) and not decayed[first + 1] else first + 1
+        pairs.append(_Pair(layer, first, parameters[first:end], gradients[first:end], decayed[first]))
+        first = end
+    return pairs
 
 
 class RustOptimizer(ArrayOptimizerBase[pa.Array, _Pair, tuple[pa.Array, pa.Array]]):
