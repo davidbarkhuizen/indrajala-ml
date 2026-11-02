@@ -53,7 +53,7 @@ def test_the_arms_are_at_equal_parameters_d4():
 def test_the_registered_comparisons():
     assert fas.COMPARISONS == [
         ("F1 SwiGLU < ReLU", "swiglu", "relu", "one"),
-        ("F2 GELU < ReLU", "gelu", "relu", "one"),
+        ("F2 GELU vs ReLU", "gelu", "relu", "two"),
         ("F3 SwiGLU vs GELU", "swiglu", "gelu", "two"),
     ]
     assert fas.NEW_ARMS == ["gelu", "swiglu"] and fas.SEEDS == 5
@@ -68,7 +68,7 @@ def test_the_claims_are_computed_over_the_long_form_corpora():
             results[(corpus, split, "swiglu")] = [low] * fas.SEEDS
     claims = cls.claims(results, fas.COMPARISONS)
     assert "F1 SwiGLU < ReLU (one-sided): 30 of 30 pairs lower" in claims and "holds" in claims
-    assert "F2 GELU < ReLU: no pairs" in claims
+    assert "F2 GELU vs ReLU: no pairs" in claims
 
 
 def test_the_control_is_refused_unless_its_hash_is_the_recorded_one(tmp_path: Path):

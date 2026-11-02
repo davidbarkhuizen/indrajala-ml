@@ -64,7 +64,7 @@ Results = dict[Config, list[dict[str, Any]]]
 # the registered comparisons (the workplan's stage 6): (name, arm, against, sided)
 COMPARISONS = [
     ("F1 SwiGLU < ReLU", "swiglu", "relu", "one"),
-    ("F2 GELU < ReLU", "gelu", "relu", "one"),
+    ("F2 GELU vs ReLU", "gelu", "relu", "two"),
     ("F3 SwiGLU vs GELU", "swiglu", "gelu", "two"),
 ]
 
