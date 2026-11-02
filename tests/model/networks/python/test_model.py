@@ -233,36 +233,50 @@ def test_learn_converges_under_or_combination():
     assert disagreement_after < 0.2
 
 
-def test_learn_updates_only_the_single_closest_to_flipping_node():
+def test_learn_adapts_as_many_nodes_as_the_output_needs_nearest_zero_first():
 
-    # the convergence tests could pass with a wrong selection: given known z() values, only the
-    # responsible node with the smallest |z| may change
+    # MRI (Widrow & Lehr 1990; the audit-remedies workplan, D10): the convergence tests could pass
+    # with a wrong selection, so given known z() values, exactly the nodes the output needs, those
+    # with the smallest |z|, may change. Zero input weights: each node's z() is its threshold
 
     dimension = 2
     bounds = square_bounds(10.0)
     learning_rate = 0.25
     state = (2.0, 3.0)
 
-    # false negative: of two inactive nodes, the one at |z|=0.5 moves, not the one at |z|=5.0;
-    # the active third node is untouched
+    # false negative under AND (3 of 3), one active: both inactive nodes must turn on, so both move;
+    # the active third is untouched
     network = network_with_hidden_thresholds(dimension, bounds, [-5.0, -0.5, 2.0])
     far, near, active = network.hidden_layer.nodes
     network.learn(learning_rate, state, 1)
+    assert (near.input_node_weights, near.threshold) == ([0.5, 0.75], -0.25)
+    assert (far.input_node_weights, far.threshold) == ([0.5, 0.75], -4.75)
+    assert (list(active.input_node_weights), active.threshold) == ([0.0, 0.0], 2.0)
 
-    assert near.input_node_weights == [0.5, 0.75]
-    assert near.threshold == -0.25
+    # false negative at 2 of 3, one active: one more must turn on, the nearest (|z|=0.5)
+    network = network_with_hidden_thresholds(dimension, bounds, [-5.0, -0.5, 2.0], required_active=2)
+    far, near, active = network.hidden_layer.nodes
+    network.learn(learning_rate, state, 1)
+    assert (near.input_node_weights, near.threshold) == ([0.5, 0.75], -0.25)
     assert (list(far.input_node_weights), far.threshold) == ([0.0, 0.0], -5.0)
     assert (list(active.input_node_weights), active.threshold) == ([0.0, 0.0], 2.0)
 
-    # false positive: all three nodes active; the closest-to-flipping one (threshold 0.4,
-    # |z|=0.4) should be updated, not the other two
+    # false positive under AND, all three active: one must turn off, the nearest (|z|=0.4)
     network = network_with_hidden_thresholds(dimension, bounds, [3.0, 0.4, 6.0])
     far, near, farther = network.hidden_layer.nodes
     network.learn(learning_rate, state, 0)
-
     assert near.input_node_weights == [-0.5, -0.75]
     assert near.threshold == approx(0.15)
     assert (list(far.input_node_weights), far.threshold) == ([0.0, 0.0], 3.0)
+    assert (list(farther.input_node_weights), farther.threshold) == ([0.0, 0.0], 6.0)
+
+    # false positive at 2 of 3, all three active: two must turn off, the two nearest (0.4, then 3.0)
+    network = network_with_hidden_thresholds(dimension, bounds, [3.0, 0.4, 6.0], required_active=2)
+    far, near, farther = network.hidden_layer.nodes
+    network.learn(learning_rate, state, 0)
+    assert near.input_node_weights == [-0.5, -0.75]
+    assert near.threshold == approx(0.15)
+    assert (far.input_node_weights, far.threshold) == ([-0.5, -0.75], 2.75)
     assert (list(farther.input_node_weights), farther.threshold) == ([0.0, 0.0], 6.0)
 
     # already correct: all three active and category=1 means the output already matches -

@@ -315,6 +315,8 @@ move), and its timing tier (docs/measurement.md §1).
    window program against the per-layer path by bits. Golden: one entry. Tier 1: the window
    program's timing (indrajala-studies' `window_study_timing.py` through `ab.py`'s `cmd`), since
    the op changed.
-10. **MRI (D10).** `LinearClassifierNetwork.learn`; its tests. Tier 0 (pure Python, never timed).
+10. **MRI (D10).** *Built:* the units the output needs, chosen together before any step, nearest
+   zero first by a stable sort (so one unit is today's choice); the selection test and the pocket
+   test's measured trajectory moved with it (best epoch 6 of 10, still not the last). Planned: `LinearClassifierNetwork.learn`; its tests. Tier 0 (pure Python, never timed).
 11. **Retire.** The hand-off (D11) into the state-formation workplan's options; the workplans
     README; next-steps; this plan deleted.

@@ -62,18 +62,23 @@ class LinearClassifierNetwork:
         if output == category:
             return
 
+        # MRI (Widrow & Lehr 1990; the audit-remedies workplan, D10): as many hidden units adapt as
+        # the output needs to change, those nearest zero first (minimal disturbance), each by its
+        # perceptron step. The output fires at required_active active units or more, and is a
+        # non-decreasing function of their count, so:
+        active = sum(1 for node in self.hidden_layer.nodes if node.value() == 1.0)
         if category == 1:
-            # false negative: too few hidden nodes are active - flipping any inactive one
-            # to active can only increase the count, moving the output toward firing.
+            # false negative: required_active - active inactive units must turn on
             candidates = [node for node in self.hidden_layer.nodes if node.value() == 0.0]
+            needed = self.required_active - active
         else:
-            # false positive: flipping an active node to inactive can only move the output
-            # toward silent. Both branches hold for any required_active: the output is a
-            # non-decreasing function of how many hidden nodes are active.
+            # false positive: active - required_active + 1 active units must turn off
             candidates = [node for node in self.hidden_layer.nodes if node.value() == 1.0]
+            needed = active - self.required_active + 1
 
-        responsible_node = min(candidates, key=lambda node: abs(node.z()))
-        responsible_node.learn(learning_rate, category)
+        # chosen together, before any steps; a stable sort, so ties go to the lower index (as min's)
+        for node in sorted(candidates, key=lambda node: abs(node.z()))[:needed]:
+            node.learn(learning_rate, category)
 
     def half_widths(self) -> list[float]:
         return _half_widths(self.input_bounds)

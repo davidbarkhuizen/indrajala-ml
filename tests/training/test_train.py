@@ -20,9 +20,9 @@ def _training_accuracy(student: StateClassifier[float], training_data: Sequence[
 
 def test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last():
 
-    # measured per-epoch accuracy without pocket tracking, from weight seed 0: 0.826, 0.745,
-    # 0.870, 0.816, 0.814, 0.850, 0.835, 0.842, 0.808, 0.827, so the best epoch (2) isn't the last,
-    # on training data from random.Random(0)
+    # measured per-epoch accuracy without pocket tracking, from weight seed 0, under MRI (the
+    # audit-remedies workplan, D10): 0.724, 0.707, 0.840, 0.782, 0.750, 0.854, 0.861, 0.843, 0.832,
+    # 0.821, so the best epoch (6) isn't the last, on training data from random.Random(0)
 
     # XOR isn't representable by an AND/OR/k-of-n gate over cardinality=3 half-planes
     bounds = square_bounds(10.0)
@@ -31,15 +31,15 @@ def test_train_linear_classifier_network_keeps_the_best_epoch_not_the_last():
     student = LinearClassifierNetwork.randomized(3, 2, bounds, required_active=2, seed=0)
     result = train_linear_classifier_network(student, training_data, learning_rate=0.25, epochs=10)
 
-    assert _training_accuracy(student, training_data) == approx(0.87)
+    assert _training_accuracy(student, training_data) == approx(0.861)
 
-    # best epoch index 2, last 9: a plateau
+    # best epoch index 6, last 9: a plateau
     diagnostic = result.diagnostic
     assert diagnostic.epoch_training_accuracies == [
-        approx(a) for a in [0.826, 0.745, 0.870, 0.816, 0.814, 0.850, 0.835, 0.842, 0.808, 0.827]
+        approx(a) for a in [0.724, 0.707, 0.840, 0.782, 0.750, 0.854, 0.861, 0.843, 0.832, 0.821]
     ]
-    assert diagnostic.best_epoch_index == 2
-    assert diagnostic.best_training_accuracy == approx(0.87)
+    assert diagnostic.best_epoch_index == 6
+    assert diagnostic.best_training_accuracy == approx(0.861)
     assert diagnostic.plateaued is True
     assert diagnostic.converged is False
     assert diagnostic.still_improving is False
