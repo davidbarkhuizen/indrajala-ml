@@ -13,8 +13,10 @@ from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray
 from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer
 from indrajala_ml.model.layers.numpy.max_pool_array_layer import MaxPoolArrayLayer
+from indrajala_ml.model.layers.numpy.relu_array_layer import ReLUArrayLayer
 from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.layers.rust.max_pool_rust_array_layer import MaxPoolRustArrayLayer
+from indrajala_ml.model.layers.rust.relu_rust_array_layer import ReLURustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.specs.update_rules import SGD
 
@@ -31,6 +33,14 @@ DENSE_SHAPES = [
     ("dense 30 x 784", 30, 784),
     ("dense 10 x 30", 10, 30),
 ]
+# (label, size, input_size): ReLU hidden layers, whose forward and hidden delta are the crate's fused
+# ReLU ops (the FFN activations workplan's activation family, D9): the dense production network's
+# hidden layer, and a sequence model's FFN (d 64, size 256)
+RELU_SHAPES = [
+    ("relu 30 x 784", 30, 784),
+    ("relu 256 x 64", 256, 64),
+]
+RELU_OPS = ("forward", "hidden_delta", "forward_batch", "hidden_delta_batch")
 # (label, side, input_channels, stride): a ConvSpec(3, 8) layer on MNIST 28x28 and on UCI digits
 # 8x8, then the second ConvSpec(3, 8) layer of conv-pool-conv (13x13x8 in), conv-conv-stride2
 # (26x26x8 in, stride 2) and conv-conv (26x26x8 in) on MNIST
@@ -52,6 +62,7 @@ POOL_SIZE = 2
 
 BACKENDS = ("numpy", "rust")
 DENSE_LAYERS = {"numpy": ArrayLayer, "rust": RustArrayLayer}
+RELU_LAYERS = {"numpy": ReLUArrayLayer, "rust": ReLURustArrayLayer}
 CONV_LAYERS = {"numpy": ConvArrayLayer, "rust": ConvRustArrayLayer}
 POOL_LAYERS = {"numpy": MaxPoolArrayLayer, "rust": MaxPoolRustArrayLayer}
 
@@ -88,16 +99,26 @@ def _backend_array(backend: str, values: FloatArray) -> Any:
     return values.copy() if backend == "numpy" else pa.Array(values.tolist())
 
 
-def _dense_layer(backend: str, size: int, input_size: int, rng: np.random.Generator) -> Any:
-    layer = DENSE_LAYERS[backend](size, input_size)
+def _dense_layer(
+    backend: str, size: int, input_size: int, rng: np.random.Generator, layers: dict[str, Any] = DENSE_LAYERS
+) -> Any:
+    layer = layers[backend](size, input_size)
     layer.W = _backend_array(backend, rng.uniform(-0.3, 0.3, size=(size, input_size)))
     layer.b = _backend_array(backend, rng.uniform(-0.3, 0.3, size=size))
     return layer
 
 
-def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[int]) -> list[Case]:
+def dense_cases(
+    label: str,
+    size: int,
+    input_size: int,
+    batch_sizes: Sequence[int],
+    layers: dict[str, Any] = DENSE_LAYERS,
+    ops: Sequence[str] | None = None,
+) -> list[Case]:
     """
-    Every ArrayLayer method at one (size, input_size) shape. Each build draws the same values from
+    Every ArrayLayer method at one (size, input_size) shape, or those of ops, on layers' classes
+    (the sigmoid layer's, or ReLU's: RELU_LAYERS). Each build draws the same values from
     a fresh seeded generator, so both backends time identical inputs. 'hidden_delta' times the
     layer *below* this one (size input_size) calling compute_hidden_delta with this layer as
     next_layer, since that is where this layer's W is read. 'apply_accumulated_gradient' is the
@@ -108,7 +129,7 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[in
     def single(op: str) -> Callable[[str], Callable[[], object]]:
         def build(backend: str) -> Callable[[], object]:
             rng = np.random.default_rng(SEED)
-            layer = _dense_layer(backend, size, input_size, rng)
+            layer = _dense_layer(backend, size, input_size, rng, layers)
             x = _backend_array(backend, rng.uniform(0.0, 1.0, size=input_size))
             layer.forward(x)
             layer.delta = _backend_array(backend, rng.uniform(-0.1, 0.1, size=size))
@@ -117,7 +138,7 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[in
             if op == "downstream":
                 return layer.downstream
             if op == "hidden_delta":
-                below = _dense_layer(backend, input_size, 1, rng)
+                below = _dense_layer(backend, input_size, 1, rng, layers)
                 below.a = x
                 return lambda: below.compute_hidden_delta(layer)
             if op == "accumulate_gradient":
@@ -132,7 +153,7 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[in
     def batched(op: str, batch: int) -> Callable[[str], Callable[[], object]]:
         def build(backend: str) -> Callable[[], object]:
             rng = np.random.default_rng(SEED)
-            layer = _dense_layer(backend, size, input_size, rng)
+            layer = _dense_layer(backend, size, input_size, rng, layers)
             X = _backend_array(backend, rng.uniform(0.0, 1.0, size=(batch, input_size)))
             layer.forward_batch(X)
             layer.delta_batch = _backend_array(backend, rng.uniform(-0.1, 0.1, size=(batch, size)))
@@ -141,7 +162,7 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[in
             if op == "downstream_batch":
                 return layer.downstream_batch
             if op == "hidden_delta_batch":
-                below = _dense_layer(backend, input_size, 1, rng)
+                below = _dense_layer(backend, input_size, 1, rng, layers)
                 below.A = X
                 return lambda: below.compute_hidden_delta_batch(layer)
             return lambda: layer.accumulate_gradient_batch(X)
@@ -159,7 +180,7 @@ def dense_cases(label: str, size: int, input_size: int, batch_sizes: Sequence[in
     batch_ops = ["forward_batch", "downstream_batch", "hidden_delta_batch", "accumulate_gradient_batch"]
     cases = [Case(label, op, None, single(op)) for op in single_ops]
     cases += [Case(label, op, batch, batched(op, batch)) for op in batch_ops for batch in batch_sizes]
-    return cases
+    return cases if ops is None else [case for case in cases if case.op in ops]
 
 
 def conv_cases(label: str, side: int, input_channels: int, stride: int, batch_sizes: Sequence[int]) -> list[Case]:
@@ -263,6 +284,8 @@ def all_cases(batch_sizes: Sequence[int] = BATCH_SIZES) -> list[Case]:
     cases: list[Case] = []
     for label, size, input_size in DENSE_SHAPES:
         cases += dense_cases(label, size, input_size, batch_sizes)
+    for label, size, input_size in RELU_SHAPES:
+        cases += dense_cases(label, size, input_size, batch_sizes, RELU_LAYERS, RELU_OPS)
     for label, side, input_channels, stride in CONV_SHAPES:
         cases += conv_cases(label, side, input_channels, stride, batch_sizes)
     for label, side in POOL_SHAPES:
