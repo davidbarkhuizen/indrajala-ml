@@ -797,9 +797,10 @@ def test_format_2_writes_no_key_value_heads_for_an_ungrouped_attention():
     assert "key_value_heads" not in layer_to_json(Attention(heads=4, causal=True))
 
 
+@pytest.mark.parametrize("backend", ["numpy", "rust"])
 @pytest.mark.parametrize("attention", GROUPED.values(), ids=GROUPED.keys())
-def test_the_numpy_builder_builds_grouped_attention(attention: Attention):
-    layers = build_array_layers(_multi_head(attention), (4, 4, 1), "numpy")
+def test_the_array_builders_build_grouped_attention(attention: Attention, backend: str):
+    layers = build_array_layers(_multi_head(attention), (4, 4, 1), backend)
     layer: Any = next(layer for layer in layers if type(layer).__name__.startswith("Attention"))
     d_k = attention.head_size(32)
     assert (layer.heads, layer.key_value_heads, layer.key_size) == (attention.heads, attention.key_value_heads, d_k)
@@ -811,11 +812,9 @@ def test_the_numpy_builder_builds_grouped_attention(attention: Attention):
     ]
 
 
-def test_the_rust_and_python_builders_refuse_grouped_attention_until_their_stages():
-    # the workplan's stages 4 and 5 (D12)
+def test_the_python_builder_refuses_grouped_attention_until_its_stage():
+    # the workplan's stage 5 (D12)
     specs = _multi_head(GROUPED["four heads sharing two"])
-    with pytest.raises(AssertionError, match="stage 4"):
-        build_array_layers(specs, (4, 4, 1), "rust")
     with pytest.raises(AssertionError, match="stage 5"):
         build_python_layers(specs, (4, 4, 1), StateLayer(16, [(0.0, 1.0)] * 16))
 

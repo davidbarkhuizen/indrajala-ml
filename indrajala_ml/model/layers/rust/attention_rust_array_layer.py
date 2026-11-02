@@ -34,7 +34,8 @@ from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 class AttentionRustCache:
     """
-    One decode's rotated keys K and values V per row of its batch, (c, h * d_k) each: each row's
+    One decode's rotated keys K and values V per row of its batch, (c, g * d_k) each (the key/value
+    heads'): each row's
     current segment's, its last c <= T tokens', oldest first (the segments workplan, D8 (b)), and
     that segment's id (1 for every row of a batch without segments).
     """
@@ -57,9 +58,11 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     AttentionArrayLayer on the Rust backend: per example over its tokens tokens of features
     features (d), in heads heads (h) of key_size features (d_k, d / h when None): Q = X Wq^T + bq,
     K and V likewise, each head's P[i] = softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and
-    H[i] = P[i] V[i], out = H Wo^T + bo with H the heads side by side. Its parameters, also its
-    draw order, are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k),
-    heads as row (Wo: column) blocks; the weights are decayed, the biases not. Attend is tiled, as
+    H[i] = P[i] V[i], out = H Wo^T + bo with H the heads side by side; with key_value_heads g, the
+    heads share g key/value heads, head i reading K[j] and V[j], j = i // (h / g) (the
+    grouped-query attention workplan, D4: the crate reads them in place). Its parameters, also its
+    draw order, are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq (h * d_k, d), Wk, Wv (g * d_k, d) and Wo (d,
+    h * d_k), heads as row (Wo: column) blocks; the weights are decayed, the biases not. Attend is tiled, as
     AttentionArrayLayer's (the context-length workplan, D3): the crate keeps each query's max m and
     sum l, never P, and its backward op recomputes each key block's weights, masked as the forward
     was (causal, the sequence task workplan, D7; by segment, the segments workplan, D4), so the
@@ -72,8 +75,8 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     rotary_table's cos and sin as crate arrays, built once, and passes them to the forward ops, which
     rotate Q and K at the end of project, and to the backward op, which rotates dQ and dK back:
     elementwise, so numpy's bits on the same Q and K. Hidden only, ending a token block's body. The
-    caches are packed as the crate's: Q, K (rotated), V, H (N * T, h * d_k), head i in columns
-    i * d_k.., and m and l (N * T, h).
+    caches are packed as the crate's: Q, H (N * T, h * d_k), K (rotated), V (N * T, g * d_k), head i
+    in columns i * d_k.., and m and l (N * T, h).
 
     The backward pass runs whole when the delta is computed (attention_downstream_batch), since the
     gradients need dQ, dK and dV and the layer before reads dX. A single example is the same ops on
@@ -93,16 +96,12 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         document_mask: bool = True,
         key_value_heads: int | None = None,
     ) -> None:
-        assert key_value_heads is None, (
-            "grouped-query attention reaches the Rust layers at the grouped-query attention workplan's stage 4; "
-            f"got key_value_heads={key_value_heads}"
-        )
         assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.causal = causal
         # False: attention across the paragraphs, pads still masked (the context-length workplan, D8)
         self.document_mask = document_mask
         self.dropout = dropout
-        self._set_up(tokens, features, heads, key_size)
+        self._set_up(tokens, features, heads, key_size, key_value_heads)
         # set by set_training_mode and set_rng, as a dense dropout layer's; the forward pass's copy of
         # the generator before its draws, None when it drew none, is what the backward pass draws
         # the same masks from (the context-length workplan, D12)
@@ -152,6 +151,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             x,
             *self.parameters(),
             heads=self.heads,
+            key_value_heads=self.key_value_heads,
             causal=self.causal,
             dropout=self.dropout,
             training=self.training,
@@ -167,6 +167,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             X,
             *self.parameters(),
             heads=self.heads,
+            key_value_heads=self.key_value_heads,
             causal=self.causal,
             dropout=self.dropout,
             training=self.training,
@@ -191,7 +192,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
 
     def start_decoding(self) -> AttentionRustCache:
         refuse_non_causal_decoding(self.causal)
-        return AttentionRustCache(self.width)
+        return AttentionRustCache(self.kv_width)
 
     def prefill(self, X: pa.Array, cache: AttentionRustCache, context: ForwardContext) -> pa.Array:
         # N prompts' (N * L, d) rows, L <= T, at columns 0 to L - 1: the batch forward op on L
@@ -203,6 +204,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             X.reshape((N, L * self.features)),
             *self.parameters(),
             heads=self.heads,
+            key_value_heads=self.key_value_heads,
             causal=True,
             segments=self._attention_segments(context.segments),
             **self._rows_table(0, L),
@@ -236,6 +238,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
                 k_cache=cache.K[n],
                 v_cache=cache.V[n],
                 heads=self.heads,
+                key_value_heads=self.key_value_heads,
                 window=self.tokens,
                 origin=origin,
                 **table,
@@ -257,6 +260,7 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
             self._m,
             self._l,
             heads=self.heads,
+            key_value_heads=self.key_value_heads,
             causal=self.causal,
             segments=self._segments,
             dropout=self.dropout,
