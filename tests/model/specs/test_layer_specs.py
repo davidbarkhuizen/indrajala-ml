@@ -812,11 +812,11 @@ def test_the_array_builders_build_grouped_attention(attention: Attention, backen
     ]
 
 
-def test_the_python_builder_refuses_grouped_attention_until_its_stage():
-    # the workplan's stage 5 (D12)
-    specs = _multi_head(GROUPED["four heads sharing two"])
-    with pytest.raises(AssertionError, match="stage 5"):
-        build_python_layers(specs, (4, 4, 1), StateLayer(16, [(0.0, 1.0)] * 16))
+def test_the_python_builder_builds_grouped_attention():
+    attention = GROUPED["four heads sharing two"]
+    layers = build_python_layers(_multi_head(attention), (4, 4, 1), StateLayer(16, [(0.0, 1.0)] * 16))
+    layer: Any = next(layer for layer in layers if type(layer).__name__.startswith("Attention"))
+    assert (layer.heads, layer.key_value_heads, len(layer.keys)) == (4, 2, 16)
 
 
 # sequence models (the sequence task workplan, stage 2): over 5 token ids of a vocabulary of 7, an
