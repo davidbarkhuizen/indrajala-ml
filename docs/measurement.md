@@ -380,13 +380,14 @@ What to do next:
   32-byte boundaries, the JCC erratum; aarch64 loops and functions aligned); with both, an A/B moves
   only the rows whose code changed.
 
-- **A numpy module's size moves its rows too.** Adding two unused functions to
-  `attention_array_layer.py` (2026-11-02, the grouped-query attention workplan's stage 2) moved
-  `attention_timing`'s numpy forward rows on jebel by +6.9% (T=256 causal) and -5.1% (T=64
-  packed), as stage 2's A/B had (+7.4%, -5.1%) though its numpy ops at `g = h` are the old ones;
-  an A/A of the old commit showed nothing over 1.3%. The shift is fixed per build, so an A/A
-  can't show it and an extend doesn't remove it. Before reading a numpy row the change can't reach
-  as a regression, A/B a probe branch: the old commit with the new code added unused.
+- **Any change to the loaded code moves two numpy attention rows.** `attention_timing`'s numpy
+  forward rows at T=256 causal and T=64 packed moved on jebel (2026-11-02, the grouped-query
+  attention workplan) by +7.4% and -5.1% with stage 2 (whose numpy ops at `g = h` are the old
+  ones), by +6.9% and -5.1% with only two unused functions added to `attention_array_layer.py`,
+  and by +5.7% and -5.0% with only the crate's `.so` changed (the bump of #93, the same Python on
+  both sides); an A/A of one commit showed nothing over 1.3%. The shift is fixed per build, so an
+  A/A can't show it and an extend doesn't remove it. Before reading those rows as a change's, A/B
+  a probe branch: the old commit with the new code added unused.
 
 - **`ab.py run` checks the machine profile before the load** (fixed 2026-10-14; it was the other
   way round): a host with no profile, or a changed identity, is refused at once, not after waiting
