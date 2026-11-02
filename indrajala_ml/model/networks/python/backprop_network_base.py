@@ -6,6 +6,7 @@ from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
+from indrajala_ml.model.layers.python.fan_in_aware_init import he_weights
 from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
 from indrajala_ml.model.layers.python.python_layer_builder import build_python_layers
 from indrajala_ml.model.layers.python.segments import segment_rows
@@ -16,7 +17,7 @@ from indrajala_ml.model.persistence.format2 import PYTHON
 from indrajala_ml.model.persistence.format2_persistence import Format2Persistence
 from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer, TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_batch, validate_input_bounds
-from indrajala_ml.model.specs.layer_specs import Embedding, LayerSpec
+from indrajala_ml.model.specs.layer_specs import Embedding, LayerSpec, expand_specs
 from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
@@ -308,5 +309,14 @@ def randomize_fan_in_aware(network: BackpropNetworkBase[Any, Any]) -> None:
     saturated at initialization.
     """
 
-    for layer in network.trainable_layers:
-        layer.randomize_fan_in_aware(network.rng)
+    # a dense or conv layer whose spec's init is "he": He's weights, each weight set's in turn, and
+    # zero biases (the audit-remedies workplan, D8), numpy's draws
+    for layer, spec in zip(network.trainable_layers, expand_specs(network.layer_specs), strict=True):
+        if getattr(spec, "init", "fan_in") == "he":
+            sets = layer.weight_sets()
+            for weight_set, weights in zip(sets, he_weights(network.rng, len(sets), len(sets[0].weights)), strict=True):
+                weight_set.set_weights(weights)
+                if weight_set.has_bias:
+                    weight_set.bias = 0.0
+        else:
+            layer.randomize_fan_in_aware(network.rng)

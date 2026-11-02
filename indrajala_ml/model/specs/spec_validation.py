@@ -341,6 +341,9 @@ def _check_output(output: LayerSpec, token_wise: bool = False) -> None:
         f"a softmax output layer's delta is the cross-entropy loss's; got {output!r}"
     )
     assert not output.bias, f"bias=True is a residual block's affine layer only (D4); got {output!r}"
+    assert output.init == "fan_in", (
+        f"He initialisation is a hidden layer's, for its rectifier (the audit-remedies workplan, D8); got {output!r}"
+    )
 
 
 def validate_window_recurrent(

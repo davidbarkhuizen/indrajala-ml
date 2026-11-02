@@ -80,6 +80,11 @@ class Dense:
     # an affine layer, W x + b with no activation, ends a residual block's body (the
     # residual-connections workplan, D4): bias=True on a linear layer, and nowhere else
     bias: bool = False
+    # the weights' draw (the audit-remedies workplan, D8): "fan_in", uniform within 1/sqrt(fan_in)
+    # with the bias drawn alike; "he", uniform within sqrt(6 / fan_in) (He et al. 2015's variance,
+    # 2 / fan_in, for rectifiers) with the bias zero. A hidden layer's choice; the output layer's is
+    # "fan_in"
+    init: Literal["fan_in", "he"] = "fan_in"
 
 
 @dataclass(frozen=True)

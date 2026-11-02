@@ -11,11 +11,13 @@ from indrajala_ml.model.layers.numpy.array_layer import (
     FloatArray,
     fan_in_aware_random_layer,
     fan_in_aware_random_weights,
+    he_random_weights,
 )
 from indrajala_ml.model.layers.numpy.segments import segment_context
 from indrajala_ml.model.layers.rust.rust_array_layer import (
     fan_in_aware_random_rust_layer,
     fan_in_aware_random_rust_weights,
+    he_random_rust_weights,
 )
 from indrajala_ml.model.optimizers.numpy_optimizer import NumpyOptimizer
 from indrajala_ml.model.optimizers.rust_optimizer import RustOptimizer
@@ -42,6 +44,7 @@ class NumpyBackend:
     name = "numpy"
     random_layer = staticmethod(fan_in_aware_random_layer)
     random_weights = staticmethod(fan_in_aware_random_weights)
+    he_weights = staticmethod(he_random_weights)
 
     @staticmethod
     def segment_context(X: FloatArray, separator: int, pad: int) -> ForwardContext:
@@ -134,6 +137,7 @@ class RustBackend:
     name = "rust"
     random_layer = staticmethod(fan_in_aware_random_rust_layer)
     random_weights = staticmethod(fan_in_aware_random_rust_weights)
+    he_weights = staticmethod(he_random_rust_weights)
 
     @staticmethod
     def segment_context(X: pa.Array, separator: int, pad: int) -> ForwardContext:

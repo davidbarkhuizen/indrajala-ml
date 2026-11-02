@@ -30,3 +30,13 @@ def fan_in_aware_weights(rng: Pcg64Generator, rows: int, fan_in: int) -> list[li
     (linear, linear conv, an embedding table; the batch-norm workplan, D2)."""
     limit = 1.0 / math.sqrt(fan_in)
     return [[rng.uniform(-limit, limit) for _ in range(fan_in)] for _ in range(rows)]
+
+
+def he_weights(rng: Pcg64Generator, rows: int, fan_in: int) -> list[list[float]]:
+    """
+    He initialisation's weight rows (the audit-remedies workplan, D8): uniform in [-limit, limit],
+    limit = sqrt(6 / fan_in), every row's weights in row order, as numpy's he_random_weights, so a
+    pure-Python layer seeded alike starts with the array twin's weights.
+    """
+    limit = math.sqrt(6.0 / fan_in)
+    return [[rng.uniform(-limit, limit) for _ in range(fan_in)] for _ in range(rows)]

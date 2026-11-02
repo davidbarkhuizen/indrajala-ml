@@ -132,10 +132,11 @@ network = SequentialArrayNetwork(
 )
 ```
 
-- **Layer specs** (`layer_specs.py`) are backend-free data: `Dense(size, activation, dropout)`
+- **Layer specs** (`layer_specs.py`) are backend-free data: `Dense(size, activation, dropout, init)`
   (sigmoid, ReLU or GELU (Activations), dropout on sigmoid only), the gated FFN
   `GatedDense(size, activation)` (Activations),
-  `Conv(kernel_size, channel_count, stride)`,
+  `Conv(kernel_size, channel_count, stride, init)` (`init="he"`: He's uniform draw, variance
+  2/fan_in, zero bias, for rectifier layers; the default `"fan_in"`),
   `Pool(pool_size, stride)`, and the output layer `Dense(size, output=True, activation, loss)`
   (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy; the loss is named,
   never a default), with

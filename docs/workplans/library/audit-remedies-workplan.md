@@ -300,7 +300,12 @@ move), and its timing tier (docs/measurement.md §1).
    resume refusal. Tests: `None` keeps every bit; a selection set picks its own best epoch; resume
    by bits with it. Golden: unchanged (the golden run trains without one). Tier 1:
    `prepared_dataset_timing`, `--order ONNO`.
-8. **He initialisation (D8).** `init` on `Dense` and `Conv`; `randomize` in all three; format 2.
+8. **He initialisation (D8).** *Built:* each backend's `he_weights` (numpy, Rust) and
+   `fan_in_aware_init.he_weights` (pure Python), the shared uniform draw within `sqrt(6/fan_in)`;
+   `randomize` reads each built layer's expanded spec beside it, so every layer a Dense or Conv
+   builds (flat, token-wise, affine, linear, conv, linear conv) draws He's W and a zero bias. The
+   output layer's `init="he"` is refused. Golden: three entries whose weights aren't injected, so
+   they pin the draw. Planned: `init` on `Dense` and `Conv`; `randomize` in all three; format 2.
    Tests: the draw's bounds and variance; numpy, Rust and pure Python draw the same `W` from one
    seed; `"fan_in"` keeps every bit. Golden: one entry (a ReLU network with `"he"`). Tier 0.
 9. **The FiLM state input (D9).** 9a, in `indrajala-math-rust`: `state_input_forward`/`_backward`
