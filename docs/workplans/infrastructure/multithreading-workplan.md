@@ -27,7 +27,7 @@ next-steps.md's "From the crate kernels" (the pool, the threshold) and "From the
 | D5 | 2026-11-02 | the machine read once | `CpuInfo` (physical cores, caches, ISA) read once per process; thread counts and slab sizes derived from it, every override hook kept |
 | D6 | 2026-11-02 | epochs decide | a threading change is judged on epochs and study runs at training's thread count, not on isolated loops, which flatter threading |
 | D7 | 2026-11-02 | one plan, sub-stages | stage −1's items are sub-stages here, each its own crate PR, bump and A/B, not a workplan each |
-| O1 | 2026-11-02 | after step 13 | the owner: this plan runs after roadmap step 13 (FFN activations) and before steps 14 and 15, or later if `litshe`'s cooler hasn't arrived by then |
+| O1 | 2026-11-02 | at the end | the owner, revised the same day: "let's move multithreading to the end", after roadmap steps 14 and 15 and the work planned after them (first: after step 13, before 14 and 15) |
 | O2 | 2026-11-02 | `litshe` from its response | the owner: `litshe`'s thermal profile with the cooler is based on its measured temperature response |
 
 ## Where things stand (read 2026-11-02 from the code, next-steps.md and the retired plans)
@@ -194,7 +194,9 @@ rule).
     place for the order and the dependencies; the outline's "a workplan each" would make ten small
     plans. Cons: a long plan; each sub-stage still writes its findings here.
 - **Settled by the owner (2026-11-02):**
-  - **O1. Where this sits in the roadmap. Settled: (a)** ("agreed"), and "we may move it out
+  - **O1. Where this sits in the roadmap. Settled: at the end** (revised 2026-11-02 afternoon,
+    while step 13's study ran: "let's move multithreading to the end", after steps 14 and 15 and
+    the work planned after them). First settled as (a) ("agreed"), and "we may move it out
     further if the cooler hasn't arrived": if `litshe`'s cooler isn't in hand when step 13 ends,
     the owner may put steps 14 and 15 first. The primitives roadmap is at step 12 (finishing) and
     step 13 (FFN activations, stage 3 next), with 14 and 15 after; both want jebel's A/Bs. Options:
