@@ -129,6 +129,10 @@ ones: the same window networks, their dead codes over those batches re-seeded (r
 a generator seeded from SEED) between the single-example steps and the batch steps, so the moved
 codes' Adam rows are zeroed mid-run. No earlier entry moved when they were recorded.
 
+The SimVQ entries (the audit-remedies workplan, stage 6, D6) are added after the re-seeded ones:
+the same window networks with LINEAR_RECURRENCE, WINDOW_RECURRENCE's codes as E = Q W, W trained
+from the identity. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -643,6 +647,13 @@ KMEANS_NETWORKS = {
     "python k-means codes window model": WindowRecurrentBackpropNetwork,
 }
 KMEANS_ITERATIONS = 10
+# the window networks with SimVQ's codes, E = Q W (the audit-remedies workplan, stage 6, D6)
+LINEAR_RECURRENCE = WindowRecurrence((Factor(3, Codes(4, parameterisation="linear")),))
+LINEAR_CODES_NETWORKS = {
+    "numpy linear codes window model": WindowRecurrentArrayNetwork,
+    "rust linear codes window model": WindowRecurrentRustArrayNetwork,
+    "python linear codes window model": WindowRecurrentBackpropNetwork,
+}
 # the window networks with their dead codes re-seeded between two steps (the audit-remedies
 # workplan, stage 4, D4)
 RESEED_NETWORKS = {
@@ -1126,6 +1137,17 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 sequence_rows,
                 "predict_probabilities",
                 between=lambda network: _reseed_codes(network, code_batches),
+            ),
+        )
+    for name, window_cls in LINEAR_CODES_NETWORKS.items():
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(window_cls, (WINDOW_COLUMNS,), WINDOW_SPECS, LINEAR_RECURRENCE, Adam()),
+                sequence_rows,
+                "predict_probabilities",
             ),
         )
 

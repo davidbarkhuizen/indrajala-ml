@@ -17,6 +17,7 @@ under momentum and Adam; a live code, its optimizer rows and every other paramet
 """
 
 import ast
+import dataclasses
 import json
 import sys
 from pathlib import Path
@@ -39,11 +40,13 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentArrayNetwork,
     WindowRecurrentRustArrayNetwork,
 )
+from indrajala_ml.model.persistence.format2 import network_to_json
 from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
 from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
 from tests.helpers import bits
 from tests.model.networks.test_window_recurrent_array_network import RECURRENCES, WINDOW, K, _batch
 
+STEP = 1e-6
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "codes" / "harness_kmeans.json"
 NETWORKS: dict[str, Any] = {
     "numpy": WindowRecurrentArrayNetwork,
@@ -353,3 +356,154 @@ def test_the_snap_indices_are_the_networks_own_snaps():
 
 if __name__ == "__main__":
     _record(Path(sys.argv[1]))
+
+
+# SimVQ's codes, E = Q W (stage 6, D6)
+
+LINEAR = {
+    name: WindowRecurrence(
+        tuple(
+            dataclasses.replace(
+                f, codes=None if f.codes is None else dataclasses.replace(f.codes, parameterisation="linear")
+            )
+            for f in recurrence.factors
+        ),
+        cross=recurrence.cross,
+        cell=recurrence.cell,
+        pooling=recurrence.pooling,
+    )
+    for name, recurrence in RECURRENCES.items()
+}
+
+
+def _rows_batch(seed: int = 13) -> list[tuple[tuple[float, ...], tuple[int, ...]]]:
+    X, labels = _batch(3, 4, seed)
+    return [(tuple(x), label) for x, label in zip(X.tolist(), labels, strict=True)]
+
+
+@pytest.mark.parametrize("implementation", NETWORKS)
+@pytest.mark.parametrize("recurrence", RECURRENCES)
+def test_at_the_identity_a_linear_network_is_the_direct_ones_by_bits(implementation: str, recurrence: str):
+    direct = _network(implementation, RECURRENCES[recurrence])
+    linear = _network(implementation, LINEAR[recurrence])
+    assert _codes(linear) == _codes(direct)
+    rows = [state for state, _ in _rows_batch()]
+    assert bits(linear.forward_windows(_inputs(linear, rows))) == bits(direct.forward_windows(_inputs(direct, rows)))
+
+
+def _inputs(network: Any, rows: list[tuple[float, ...]]) -> Any:
+    return rows if isinstance(network, WindowRecurrentBackpropNetwork) else network.backend.matrix(rows)
+
+
+@pytest.mark.parametrize("implementation", NETWORKS)
+def test_one_step_moves_every_linear_code_and_only_the_selected_direct_ones(implementation: str):
+    moved: dict[str, int] = {}
+    for kind, recurrence in (("direct", RECURRENCES["one factor"]), ("linear", LINEAR["one factor"])):
+        network = _network(implementation, recurrence)
+        before = network.factor_codes(0)
+        network.learn_batch(0.01, _rows_batch()[:1])  # one example: few codes selected
+        after = network.factor_codes(0)
+        moved[kind] = sum(a != b for a, b in zip(before, after, strict=True))
+    assert moved["linear"] == 4
+    assert moved["direct"] < 4
+
+
+def test_ws_gradient_is_qt_de_and_matches_central_differences():
+    from indrajala_ml.model.layers.numpy.recurrent_array_layer import LinearCodesArrayLayer
+
+    rng = np.random.default_rng(4)
+    # no commitment: its term, ||h - sg[e]||^2, gives E no gradient, so the loss is the codebook's alone
+    part = LinearCodesArrayLayer(5, 3, commitment=0.0)
+    part.Q = rng.normal(size=(5, 3))
+    part.W = np.eye(3) + 0.1 * rng.normal(size=(3, 3))
+    part.after_step()
+    H = rng.normal(size=(7, 3))
+    weight = 0.5
+
+    def loss() -> float:
+        part.forward_batch(H)
+        return part.loss_batch(weight)
+
+    loss()
+    part.reset_gradient_accum()
+    part.backward_batch(np.zeros((7, 3)), weight)
+    part.before_step()
+    np.testing.assert_array_equal(part.grad_W, part.Q.T @ part.grad_E)
+    numeric = np.zeros((3, 3))
+    for index in np.ndindex(3, 3):
+        kept = part.W[index]
+        part.W[index] = kept + STEP
+        part.after_step()
+        up = loss()
+        part.W[index] = kept - STEP
+        part.after_step()
+        down = loss()
+        part.W[index] = kept
+        part.after_step()
+        numeric[index] = (up - down) / (2 * STEP)
+    np.testing.assert_allclose(part.grad_W, numeric, rtol=1e-6, atol=1e-9)
+
+
+def test_numpy_and_rust_train_linear_codes_alike():
+    networks = [_network(i, LINEAR["two factors"]) for i in ("numpy", "rust")]
+    for seed in (13, 14, 15):
+        for network in networks:
+            network.learn_batch(0.01, _rows_batch(seed))
+    for g in range(2):
+        np.testing.assert_allclose(networks[0].factor_codes(g), networks[1].factor_codes(g), rtol=0, atol=1e-9)
+
+
+@pytest.mark.parametrize("implementation", NETWORKS)
+def test_a_linear_network_saves_and_loads_and_trains_on_by_bits(implementation: str, tmp_path: Path):
+    network = _network(implementation, LINEAR["two factors"])
+    network.learn_batch(0.01, _rows_batch(13))
+    path = tmp_path / "linear.json"
+    network.save(str(path))
+    saved = json.loads(path.read_text())
+    assert [f["codes"]["parameterisation"] for f in saved["recurrence"]["factors"]] == ["linear", "linear"]
+    loaded: Any = NETWORKS[implementation].load(str(path))
+    assert bits(loaded.snapshot()) == bits(network.snapshot())
+    for net in (network, loaded):
+        net.learn_batch(0.01, _rows_batch(14))
+    assert bits(loaded.snapshot()) == bits(network.snapshot())
+
+
+def test_a_direct_codes_entry_is_as_before_it_had_a_parameterisation():
+    network = _network("numpy", RECURRENCES["one factor"])
+    assert network_to_json(network)["recurrence"]["factors"][0]["codes"] == {"count": 4, "commitment": 0.25}
+
+
+@pytest.mark.parametrize("implementation", NETWORKS)
+def test_k_means_codes_set_a_linear_factors_q_and_w_to_the_identity(implementation: str):
+    network = _network(implementation, LINEAR["one factor"])
+    network.learn_batch(0.01, _rows_batch(13))  # W away from the identity
+    batches = _batches()
+    (states,) = factor_states(network, batches)
+    initialise_codes(network, batches, np.random.default_rng(3), ITERATIONS)
+    C, _ = kmeans(states, 4, np.random.default_rng(3), ITERATIONS)
+    np.testing.assert_allclose(network.factor_codes(0), C, rtol=0, atol=1e-12)
+    part = network.recurrence_layer.factors[0].codes
+    W = [list(row.weights) for row in part.basis] if implementation == "python" else part.W.tolist()
+    assert W == np.eye(3).tolist()
+
+
+@pytest.mark.parametrize("implementation", NETWORKS)
+def test_a_reseeded_linear_code_lands_on_its_state_and_w_is_kept(implementation: str):
+    network = _network(implementation, LINEAR["two factors"])
+    network.learn_batch(0.01, _rows_batch(13))
+    codes = network.factor_codes(0)
+    codes[1] = [FAR] * len(codes[1])
+    part = network.recurrence_layer.factors[0].codes
+    # a far code through Q's row, W kept
+    network.reseed_codes(0, {1: codes[1]})
+    W_before = [list(row.weights) for row in part.basis] if implementation == "python" else part.W.tolist()
+    batches = _batches()
+    states = factor_states(network, batches, first=True)
+    moved = reseed_dead_codes(network, batches, np.random.default_rng(3))
+    assert 1 in moved[0]
+    # each moved code on a sample state, within the solve's rounding
+    for i in moved[0]:
+        gaps = np.sum((states[0] - np.array(network.factor_codes(0)[i])) ** 2, axis=1)
+        assert gaps.min() < 1e-20
+    W_after = [list(row.weights) for row in part.basis] if implementation == "python" else part.W.tolist()
+    assert W_after == W_before

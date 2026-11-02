@@ -45,7 +45,8 @@ network resumes training by bits, its dropout masks included.
 - weights is the network's snapshot() as lists, one entry per layer, a residual block's flattened
   into its fork, body and add (layer_specs.expand_specs); a window-recurrent network's window's
   layers, then its own parts, factor by factor: [q], the factor's pooling's query; [W, U, b], its
-  cell's; [E], its codes (none for a continuous factor); [c], its initial state
+  cell's; [E], its codes (none for a continuous factor; [W, Q] for linear ones, SimVQ's E = Q W,
+  the audit-remedies workplan's D6); [c], its initial state
   (format2_json.recurrence_parameters, as in the optimizer state). On numpy and Rust, per layer: [W, b] (an
   affine layer's too); [W] for a linear (bias-free) layer; [gamma, beta, running_mean, running_var]
   for a batch-norm layer; [P] for a position, and for a state input, its (d, s) projection; [E],
@@ -56,7 +57,8 @@ network resumes training by bits, its dropout masks included.
   beta] per layer-norm feature; [weights, bias] per attention row, Wq's, then Wk's, Wv's and Wo's;
   [weights] per row of a state input's P (a feature's); and a window-recurrent network's parts per
   row: [weights], the pooling's one row q; [weights, bias] per cell row, W's row then U's, and b's
-  value; [weights] per code; [weights], the initial state's one row c.
+  value; [weights] per code (for linear codes, [weights] per row of W, then per row of Q); [weights],
+  the initial state's one row c.
 - optimizer_state holds the step count t and, per layer (expanded, as weights), the rule's state or
   null: momentum's velocity, Adam's m and v. On numpy and Rust, per parameter (velocity_W,
   velocity_b; velocity_W alone for a linear layer; velocity_gamma, velocity_beta for batch norm and

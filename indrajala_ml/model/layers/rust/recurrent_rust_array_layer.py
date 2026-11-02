@@ -18,6 +18,8 @@ from collections.abc import Sequence
 from typing import Any, ClassVar
 
 import indrajala_math_rust as pa
+import numpy as np
+import numpy.typing as npt
 
 from indrajala_ml.model.layers.rust.rust_array_layer import (
     fan_in_aware_random_rust_layer,
@@ -176,6 +178,7 @@ class CodesRustArrayLayer:
     """CodesArrayLayer's codes on the Rust backend: RecurrenceRustArrayLayer snaps to them, numpy's by bits."""
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
+    linear: ClassVar[bool] = False  # E itself trained (LinearCodesRustArrayLayer's is Q W)
 
     def __init__(self, count: int, size: int, commitment: float = 0.25) -> None:
         self.count = count
@@ -198,6 +201,87 @@ class CodesRustArrayLayer:
 
     def draw(self, rng: pa.Generator) -> None:
         self.E = fan_in_aware_random_rust_weights(rng, self.count, self.size)
+
+    def before_step(self) -> None:
+        """Nothing: E's gradient is the optimizer's (LinearCodesRustArrayLayer's isn't)."""
+
+    def after_step(self) -> None:
+        """Nothing: the optimizer stepped E itself."""
+
+    def write_codes(self, rows: dict[int, list[float]], full: bool) -> None:
+        """E's rows given set to the vectors given (full: every row)."""
+        E = self.E.tolist()
+        for i, e in rows.items():
+            E[i] = list(e)
+        self.E = pa.Array(E)
+
+class LinearCodesRustArrayLayer(CodesRustArrayLayer):
+    """
+    LinearCodesArrayLayer's codes on the Rust backend, E = Q W (the audit-remedies workplan, D6):
+    E and its gradient are the direct codes' for the crate's ops and the window program; W's
+    gradient (before_step) and E (after_step, _form) are formed through numpy's matmul once a step,
+    as LinearCodesArrayLayer forms them, so numpy's E by bits. No crate change.
+    """
+
+    linear: ClassVar[bool] = True
+
+    def __init__(self, count: int, size: int, commitment: float = 0.25) -> None:
+        super().__init__(count, size, commitment)
+        self.Q: pa.Array = pa.Array.zeros((count, size))
+        self.W: pa.Array = pa.Array(np.eye(size).tolist())
+        self.grad_W: pa.Array = pa.Array.zeros((size, size))
+
+    def parameters(self) -> tuple[pa.Array, ...]:
+        return (self.W,)
+
+    def gradients(self) -> tuple[pa.Array, ...]:
+        return (self.grad_W,)
+
+    def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
+        (self.W,) = parameters
+        self._form()
+
+    def running_state(self) -> tuple[pa.Array, ...]:
+        return (self.Q,)
+
+    def set_running_state(self, state: Sequence[pa.Array]) -> None:
+        (self.Q,) = state
+        self._form()
+
+    def reset_gradient_accum(self) -> None:
+        super().reset_gradient_accum()
+        self.grad_W = pa.Array.zeros((self.size, self.size))
+
+    def draw(self, rng: pa.Generator) -> None:
+        super().draw(rng)
+        self.Q, self.W = self.E, pa.Array(np.eye(self.size).tolist())
+        self._form()
+
+    def before_step(self) -> None:
+        self.grad_W = pa.Array((_numpy(self.Q).T @ _numpy(self.grad_E)).tolist())
+
+    def after_step(self) -> None:
+        self._form()
+
+    def write_codes(self, rows: dict[int, list[float]], full: bool) -> None:
+        if full:
+            self.Q = pa.Array([list(rows[i]) for i in range(self.count)])
+            self.W = pa.Array(np.eye(self.size).tolist())
+        else:
+            Q, W = _numpy(self.Q), _numpy(self.W)
+            for i, e in rows.items():
+                Q[i] = np.linalg.solve(W.T, np.array(e, dtype=float))
+            self.Q = pa.Array(Q.tolist())
+        self._form()
+
+    def _form(self) -> None:
+        self.E = pa.Array((_numpy(self.Q) @ _numpy(self.W)).tolist())
+
+
+def _numpy(array: pa.Array) -> npt.NDArray[np.float64]:
+    # a crate array as numpy's, exact through lists, for SimVQ's products (numpy's matmul, D6)
+    return np.array(array.tolist(), dtype=np.float64)
+
 
 class InitialStateRustArrayLayer:
     """InitialStateArrayLayer's vector on the Rust backend: RecurrenceRustArrayLayer starts from it."""
@@ -248,9 +332,18 @@ class RecurrenceRustArrayLayer(RecurrenceSchedule):
     """
 
     def __init__(
-        self, sizes: Sequence[tuple[int, int | None, float]], tokens: int, features: int, cross: bool, update_bias: float
+        self,
+        sizes: Sequence[tuple[int, int | None, float]],
+        tokens: int,
+        features: int,
+        cross: bool,
+        update_bias: float,
+        linear_codes: Sequence[bool] | None = None,
     ) -> None:
-        """sizes: each factor's (state size, code count or None, commitment)."""
+        """
+        sizes: each factor's (state size, code count or None, commitment); linear_codes: each
+        factor's codes SimVQ's, E = Q W (the audit-remedies workplan, D6), none by default.
+        """
         self.sizes = [s for s, _, _ in sizes]
         self.tokens = tokens
         self.cross = cross
@@ -260,10 +353,12 @@ class RecurrenceRustArrayLayer(RecurrenceSchedule):
             _FactorParts(
                 AttentionPoolingRustArrayLayer(tokens, features),
                 GRURustArrayLayer(features + (self.state_size - s if cross else 0), s, update_bias),
-                None if m is None else CodesRustArrayLayer(m, s, commitment),
+                None
+                if m is None
+                else (LinearCodesRustArrayLayer if linear else CodesRustArrayLayer)(m, s, commitment),
                 InitialStateRustArrayLayer(s),
             )
-            for s, m, commitment in sizes
+            for (s, m, commitment), linear in zip(sizes, linear_codes or [False] * len(sizes), strict=True)
         ]
         self._commitments = [0.0 if f.codes is None else f.codes.commitment for f in self.factors]
         self.consolidation: Consolidation = {}

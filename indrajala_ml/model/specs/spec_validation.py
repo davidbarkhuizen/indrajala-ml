@@ -364,6 +364,9 @@ def validate_window_recurrent(
             assert factor.codes.count >= 2, (
                 f"a factor of one code carries nothing: two codes at least (W4-i); got {recurrence!r}"
             )
+            assert factor.codes.parameterisation in ("direct", "linear"), (
+                f'a factor\'s codes are "direct" or "linear" (the audit-remedies workplan, D6); got {recurrence!r}'
+            )
             commitment = factor.codes.commitment
             assert math.isfinite(commitment) and commitment >= 0.0, (
                 f"a commitment weight is finite and not negative (W14); got {recurrence!r}"
