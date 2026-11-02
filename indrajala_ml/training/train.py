@@ -1,7 +1,7 @@
 import math
 from collections.abc import Sequence
 from random import Random
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 from indrajala_ml.data.prepared_dataset import PreparedDataset
 from indrajala_ml.model.protocols.classifier_protocols import (
@@ -220,6 +220,7 @@ def train_backprop_network_mini_batch[L](
     rng: Random | None = None,
     resume_from: RunCheckpoint | None = None,
     clip_norm: float | None = None,
+    selection: Sequence[Example[L]] | PreparedDataset | None = None,
 ) -> ConvergenceSeries:
     """
     train_linear_classifier_network with mini-batches, for gradient-based students (any network with
@@ -255,9 +256,18 @@ def train_backprop_network_mini_batch[L](
     update rule reads it (Pascanu et al. 2013; the training-recipe workplan, D10;
     optimizer_base.OptimizerBase.step). None, the default, doesn't clip; a student is asked to clip
     only when it is set.
+
+    selection, a held-out set (examples or a PreparedDataset; the audit-remedies workplan, D7):
+    the pocket compares each epoch's accuracy on it in place of the training set's, still keeping
+    an epoch only when strictly better (Gallant's ratchet), so a run whose claims are held-out
+    selects as Prechelt 1998's validation-based selection does; the epoch budget is unchanged. The
+    training accuracy is still measured and recorded each epoch, and the run checkpoint records
+    selected_on="selection" with the selection set's accuracies; a run resumes only as it was
+    selected (refused otherwise). None, the default, selects on the training set, as before.
     """
 
     assert len(training_data) >= 1, "training_data must not be empty"
+    assert selection is None or len(selection) >= 1, "a selection set must not be empty"
     if clip_norm is not None and not (math.isfinite(clip_norm) and clip_norm > 0.0):
         raise ValueError(f"clip_norm must be finite and above 0; got {clip_norm!r}")
     rng = Random() if rng is None else rng
@@ -281,6 +291,13 @@ def train_backprop_network_mini_batch[L](
         prepared = _prepared_for(student, examples)
         drawn = True
 
+    selected_on: Literal["training", "selection"] = "training" if selection is None else "selection"
+    selection_prepared = None if selection is None else _prepared_for(student, selection)
+
+    def selection_accuracy() -> float:
+        assert selection is not None
+        return _training_accuracy(student, selection, selection_prepared)
+
     if resume_from is None:
         first_epoch = 0
         iterations = 0
@@ -291,9 +308,16 @@ def train_backprop_network_mini_batch[L](
         best_training_accuracy = _training_accuracy(student, examples, prepared)
         best_epoch_index = -1  # -1: the untrained starting point was never beaten
         epoch_training_accuracies: list[float] = []
+        best_selection_accuracy = None if selection is None else selection_accuracy()
+        epoch_selection_accuracies: list[float] = []
     else:
         assert epochs >= resume_from.epochs, f"epochs counts the whole run: {epochs} < {resume_from.epochs} done"
         _refuse_another_schedule(learning_rate, resume_from)
+        if resume_from.selected_on != selected_on:
+            raise ValueError(
+                f"this run's pocket selected on its {resume_from.selected_on} set; resumed on its {selected_on} "
+                f"set it would select another way (the audit-remedies workplan, D7)"
+            )
         first_epoch = resume_from.epochs
         iterations = resume_from.iterations
         convergence = list(resume_from.convergence)
@@ -303,6 +327,8 @@ def train_backprop_network_mini_batch[L](
         best_training_accuracy = resume_from.best_training_accuracy
         best_epoch_index = resume_from.best_epoch_index
         epoch_training_accuracies = list(resume_from.epoch_training_accuracies)
+        best_selection_accuracy = resume_from.best_selection_accuracy
+        epoch_selection_accuracies = list(resume_from.epoch_selection_accuracies)
 
     def record_disagreement() -> None:
         if reference_classifier:
@@ -340,10 +366,19 @@ def train_backprop_network_mini_batch[L](
 
         training_accuracy = _training_accuracy(student, examples, prepared)
         epoch_training_accuracies.append(training_accuracy)
-        if training_accuracy > best_training_accuracy:
-            best_training_accuracy = training_accuracy
-            best_epoch_index = epoch_index
-            best_checkpoint = student.checkpoint()
+        if best_selection_accuracy is None:
+            if training_accuracy > best_training_accuracy:
+                best_training_accuracy = training_accuracy
+                best_epoch_index = epoch_index
+                best_checkpoint = student.checkpoint()
+        else:
+            accuracy = selection_accuracy()
+            epoch_selection_accuracies.append(accuracy)
+            if accuracy > best_selection_accuracy:
+                best_selection_accuracy = accuracy
+                best_training_accuracy = training_accuracy  # the pocketed epoch's
+                best_epoch_index = epoch_index
+                best_checkpoint = student.checkpoint()
 
     run_checkpoint = RunCheckpoint(
         network=student.checkpoint(),
@@ -356,6 +391,9 @@ def train_backprop_network_mini_batch[L](
         epoch_training_accuracies=tuple(epoch_training_accuracies),
         convergence=tuple(convergence),
         schedule=schedule_of(learning_rate),
+        selected_on=selected_on,
+        epoch_selection_accuracies=tuple(epoch_selection_accuracies),
+        best_selection_accuracy=best_selection_accuracy,
     )
     student.restore_checkpoint(best_checkpoint)
 

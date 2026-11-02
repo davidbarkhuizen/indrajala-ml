@@ -5,7 +5,9 @@ never stopped. That is the network's checkpoint at the last epoch, before the po
 best one; the pocket's own checkpoint, accuracy and epoch; the per-epoch accuracies and the
 convergence series so far; the shuffle generator's state; the epoch and batch counters, which a
 learning-rate schedule reads; and the schedule itself (the training-recipe workplan, D5), which a
-resumed run must be given again: the trainer refuses another, naming both.
+resumed run must be given again: the trainer refuses another, naming both. A run whose pocket
+selects on a selection set (the audit-remedies workplan, D7) records so, with the selection set's
+accuracies; resuming it without one, or a training-selected run with one, is refused likewise.
 
 The trainer returns one as result.run_checkpoint and takes one as resume_from=. save_run writes it
 as one JSON file holding both networks as format-2 network entries (model/persistence/format2.py); the model
@@ -18,7 +20,7 @@ Backend-free: the networks' checkpoints convert through format2.py, as the model
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from indrajala_ml.model.persistence.checkpoint import Checkpoint
 from indrajala_ml.model.persistence.format2 import (
@@ -56,6 +58,12 @@ class RunCheckpoint:
     epoch_training_accuracies: tuple[float, ...]
     convergence: tuple[tuple[int, float], ...]
     schedule: Schedule | None = None
+    # what the pocket compared (the audit-remedies workplan, D7): the training set's accuracy, or a
+    # selection set's, whose per-epoch accuracies and best (the pocketed epoch's, or the start's)
+    # are then recorded beside the training ones
+    selected_on: Literal["training", "selection"] = "training"
+    epoch_selection_accuracies: tuple[float, ...] = ()
+    best_selection_accuracy: float | None = None
 
 
 def _network(student: object) -> Format2Network:
@@ -74,6 +82,16 @@ def run_to_json(run: RunCheckpoint, student: object) -> dict[str, Any]:
             "train with a float or an lr_schedule.py schedule to save the run"
         )
     version, internal, gauss_next = run.shuffle_state
+    # a selection set's entries only when the pocket selected on one (D7), so other run files don't change
+    selection: dict[str, Any] = (
+        {}
+        if run.selected_on == "training"
+        else {
+            "selected_on": run.selected_on,
+            "epoch_selection_accuracies": list(run.epoch_selection_accuracies),
+            "best_selection_accuracy": run.best_selection_accuracy,
+        }
+    )
     return {
         "run_checkpoint": RUN_CHECKPOINT,
         "epochs": run.epochs,
@@ -84,6 +102,7 @@ def run_to_json(run: RunCheckpoint, student: object) -> dict[str, Any]:
         "epoch_training_accuracies": list(run.epoch_training_accuracies),
         "convergence": [list(pair) for pair in run.convergence],
         "learning_rate": schedule_to_json(run.schedule),
+        **selection,
         "network": checkpoint_to_json(network, run.network),
         "best": checkpoint_to_json(network, run.best),
     }
@@ -109,6 +128,9 @@ def run_from_json(state: dict[str, Any], student: object) -> RunCheckpoint:
         epoch_training_accuracies=tuple(state["epoch_training_accuracies"]),
         convergence=tuple((iteration, rate) for iteration, rate in state["convergence"]),
         schedule=schedule_from_json(state["learning_rate"]) if "learning_rate" in state else None,
+        selected_on=state.get("selected_on", "training"),
+        epoch_selection_accuracies=tuple(state.get("epoch_selection_accuracies", ())),
+        best_selection_accuracy=state.get("best_selection_accuracy"),
     )
 
 

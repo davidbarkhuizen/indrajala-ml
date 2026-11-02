@@ -301,7 +301,10 @@ move), and its timing tier (docs/measurement.md §1).
    the direct codes' by bits; the gradient against a finite difference; Rust against numpy;
    save and load. Golden: one entry. Tier 0 (the default path untouched; the window program's
    call unchanged).
-7. **The selection set (D7).** The trainer's `selection`; `RunCheckpoint`'s fields and JSON; the
+7. **The selection set (D7).** *Built:* `selection=`, prepared once; the pocket compares its
+   accuracy each epoch, strictly better, and records the pocketed epoch's training accuracy as
+   `best_training_accuracy`. `RunCheckpoint` gains `selected_on`, `epoch_selection_accuracies` and
+   `best_selection_accuracy`, in the run file only for a selection run. Planned: The trainer's `selection`; `RunCheckpoint`'s fields and JSON; the
    resume refusal. Tests: `None` keeps every bit; a selection set picks its own best epoch; resume
    by bits with it. Golden: unchanged (the golden run trains without one). Tier 1:
    `prepared_dataset_timing`, `--order ONNO`.
