@@ -657,10 +657,9 @@ load.
 Each decision in §14 and point in §15.1, checked against the paper it rests on, read in full where
 it bears on the decision. Sources are cited by their key in `indrajala-literature/library.bib`.
 The 19 papers fetched for this pass are held in `indrajala-literature-private` (none is openly
-licensed), with their entries and rows in the public repository. One source wasn't obtained: the
-pocket algorithm's own paper (Gallant 1990, *Perceptron-based learning algorithms*, IEEE
-Transactions on Neural Networks, doi:10.1109/72.80230). §16.2's pocket verdict rests on Prechelt
-instead.
+licensed), with their entries and rows in the public repository. The pocket algorithm's own paper
+(`gallant-1990-perceptron-based-learning-algorithms`, doi:10.1109/72.80230), which the owner
+obtained, is held there too; it moved the pocket's verdict from adverse to consistent (16.3.8).
 
 Verdicts:
 
@@ -697,7 +696,8 @@ Verdicts:
 | BPTT over windows with per-window recomputation | `chen-2016-training-deep-nets-sublinear-memory` | consistent |
 | Inverted dropout (scale in training, not at test) | `srivastava-2014-dropout` (scales the weights at test time) | equivalent |
 | Cosine decay to a floor | `loshchilov-2017-sgdr-warm-restarts` | consistent |
-| MRI: the wrong-side unit nearest zero adapts, its weights moved along its input | `widrow-1990-30-years-adaptive-neural-networks`, §V | consistent in kind; see 16.3 |
+| MRI: the wrong-side unit nearest zero adapts, its weights moved along its input | `widrow-1990-30-years-adaptive-neural-networks`, §V | consistent in kind; see 16.3.5 |
+| The pocket: the best epoch's network kept by its training accuracy, replaced only when strictly better, and restored at the end | `gallant-1990-perceptron-based-learning-algorithms`, §III-A and Fig. 1 (the pocket algorithm with ratchet) | consistent; see 16.3.8 |
 
 ### 16.2 Adverse
 
@@ -733,16 +733,6 @@ Verdicts:
    first batch), and add an option to re-seed a code unused for a window of steps, from the
    states. Both are training-state options, like the temperatures and couplings already there,
    and are judged by their fresh-seed success rates.
-3. **The trainer keeps the epoch with the best *training* accuracy.** The pocket idea is the
-   perceptron's (Gallant 1990, not obtained). For gradient training, the literature's selection
-   is on a held-out set: `prechelt-1998-early-stopping-but-when` defines early stopping by the
-   validation error, and its basic procedure ("split the training data into a training set and a
-   validation set … stop … as soon as the error on the validation set is higher"). Selecting on
-   training accuracy picks the epoch that fits the training data best. That's harmless where
-   training accuracy is the goal (exact learning of a finite task, later certified), but it biases
-   any held-out claim made from the returned network. *Change:* let the trainer select on a given
-   selection set, and record which set selected. Keep training accuracy for the tasks that
-   certify.
 
 ### 16.3 Divergent (benign), and optional changes
 
@@ -777,6 +767,31 @@ Verdicts:
    scale meets a LayerNorm before every sublayer. Benign.
 7. **AdamW's `λ`** is in PyTorch's units (decay `lr·λ`), not the paper's (`η_t·λ`). Record the
    convention with every run that reports `λ`; no change.
+8. **The pocket selects on training accuracy.** This is the pocket as Gallant defines it
+   (`gallant-1990-perceptron-based-learning-algorithms`, §III-A, Fig. 1).
+   - The pocket keeps the weights that correctly classify the most training examples, which he
+     calls *optimal*.
+   - The ratchet replaces them only when the new count is strictly higher (step 3bb).
+   - Theorem 1 is about the pocket weights becoming optimal on the training set, with probability
+     approaching 1.
+   - Gallant measures generalisation separately: on "new test data" with learning turned off, and
+     by the distribution-free bounds of his §VI. He doesn't select on it.
+
+   The trainer does the same per epoch, the ratchet over whole-training-set accuracy, with a
+   strictly-better test. It differs in two respects, neither adverse:
+   - Gallant first nominates a candidate by its run of consecutive correct classifications, then
+     checks the full count. The trainer checks the full count every epoch.
+   - Gallant's motivation is perceptron learning on nonseparable data, which "can go from an
+     optimal set of weights to a worst-possible set in one iteration". Gradient training is
+     smoother, so the pocket matters less there but costs nothing.
+
+   An earlier draft of this section counted the pocket as adverse, from
+   `prechelt-1998-early-stopping-but-when`. Prechelt's validation-based early stopping answers a
+   different question: when to stop so that the *held-out* error is lowest. For the tasks that
+   certify, fitting the training set is the goal, which is Gallant's criterion. For a held-out
+   claim made from the returned network, Prechelt applies, and the network should be selected on
+   a validation set. *Optional:* a selection-set argument for the trainer, recording which set
+   selected, for runs whose claims are held-out ones.
 
 ### 16.4 What this changes
 
@@ -784,7 +799,7 @@ Verdicts:
 |---|---|---|
 | The output layer's default loss (16.2.1) | adverse | make it explicit; presets name `"squared"`; no bits move |
 | The codebook's start and its unused codes (16.2.2) | adverse, for this code's aim in part | data-dependent initialisation and optional re-seeding, as training options, judged on fresh seeds |
-| The trainer's pocket on training accuracy (16.2.3) | adverse for held-out claims | a selection-set argument; training accuracy kept for certified tasks |
+| The trainer's pocket on training accuracy (16.3.8) | consistent with Gallant; optional for held-out claims | a selection-set argument for runs whose claims are held-out ones |
 | He initialisation (16.3.1) | optional | a spec option |
 | A multiplicative state input (16.3.2) | optional | a variant to test |
 | MRI (16.3.5) | legacy | fix if used again |
