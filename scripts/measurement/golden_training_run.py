@@ -108,6 +108,11 @@ then a twelfth left-padded with three pads. So attention is masked across paragr
 the learned Position reads per-segment rows, the loss counts only its counted targets, and the
 pad's row stays zero. No earlier entry moved when they were recorded.
 
+The FFN entries (the FFN activations workplan, stage 5, D6) are added after the packed ones:
+GELU_SPECS, SEQUENCE_SPECS with the exact GELU in its FFN, and SWIGLU_SPECS, with the gated FFN,
+GatedDense(3) (SwiGLU) at about two thirds of the FFN's width, in all three implementations, on the
+sequence rows. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -350,6 +355,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Dense,
     Dropout,
     Embedding,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -586,6 +592,19 @@ PACKED_SPECS: list[LayerSpec] = [
     Dense(PACKED_VOCABULARY - 1, output=True, activation="softmax", loss="cross_entropy"),
 ]
 PACKED_NETWORKS = ["numpy packed model", "rust packed model", "python packed model"]
+# SEQUENCE_SPECS with GELU in its FFN, and with the gated FFN, SwiGLU (the FFN activations workplan, D6)
+GELU_SPECS: list[LayerSpec] = [
+    *SEQUENCE_SPECS[:3],
+    Residual((LayerNorm(), Dense(5, activation="gelu"), Dense(4, activation="linear", bias=True))),
+    *SEQUENCE_SPECS[4:],
+]
+GELU_NETWORKS = ["numpy gelu model", "rust gelu model", "python gelu model"]
+SWIGLU_SPECS: list[LayerSpec] = [
+    *SEQUENCE_SPECS[:3],
+    Residual((LayerNorm(), GatedDense(3), Dense(4, activation="linear", bias=True))),
+    *SEQUENCE_SPECS[4:],
+]
+SWIGLU_NETWORKS = ["numpy swiglu model", "rust swiglu model", "python swiglu model"]
 
 
 def _packed_rows() -> list[Example[tuple[int, ...]]]:
@@ -1012,6 +1031,18 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 "predict_probabilities",
             ),
         )
+    for names, specs in ((GELU_NETWORKS, GELU_SPECS), (SWIGLU_NETWORKS, SWIGLU_SPECS)):
+        for name in names:
+            yield (
+                name,
+                partial(
+                    _run_network,
+                    name,
+                    partial(_sequential_network, name, (SEQUENCE_CONTEXT,), specs, Adam()),
+                    sequence_rows,
+                    "predict_probabilities",
+                ),
+            )
 
 
 def run_all(backends: Collection[str] = BACKENDS) -> dict[str, Any]:

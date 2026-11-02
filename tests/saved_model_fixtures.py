@@ -29,6 +29,10 @@ tests/model/persistence/test_legacy_saved_models.py loads.
 - The rotary fixtures (the rotary-positions workplan, stage 7) are format-2 files of each
   implementation's sequence class with rotary attention in place of the Position, named
   SequenceRotary<class name>; their attention entries hold "positions" and a "rotary_base".
+- The FFN fixtures (the FFN activations workplan, stage 5, D6) are format-2 files of each
+  implementation's sequence class with a GELU FFN, named SequenceGelu<class name>, and with the
+  gated FFN, SwiGLU, named SequenceSwiGLU<class name>: a dense entry's "gelu" and a "gated_dense"
+  entry.
 - The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
   like the single-output ones: those classes never wrote a legacy envelope.
 - So are the numpy and Rust one-output presets' fixtures (the presets workplan, stage 2).
@@ -92,6 +96,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Dense,
     Dropout,
     Embedding,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -216,6 +221,18 @@ ROTARY_MODEL: list[LayerSpec] = [
     Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
     LayerNorm(epsilon=1e-4),
     Dense(VOCABULARY, output=True, activation="softmax", loss="cross_entropy"),
+]
+# SEQUENCE_MODEL with GELU in its FFN, and with the gated FFN, SwiGLU, at about two thirds the width
+# (the FFN activations workplan, D3, D6)
+GELU_MODEL: list[LayerSpec] = [
+    *SEQUENCE_MODEL[:3],
+    Residual((LayerNorm(), Dense(5, activation="gelu"), Dense(4, activation="linear", bias=True))),
+    *SEQUENCE_MODEL[4:],
+]
+SWIGLU_MODEL: list[LayerSpec] = [
+    *SEQUENCE_MODEL[:3],
+    Residual((LayerNorm(), GatedDense(3), Dense(4, activation="linear", bias=True))),
+    *SEQUENCE_MODEL[4:],
 ]
 # a window of 3 columns of SEQUENCE_MODEL's token ids: a dropout after the Position, and the state
 # entering before each block; its recurrence's every field off its default
@@ -562,6 +579,15 @@ FIXTURES: dict[str, SavedModelFixture] = {
     },
     **{
         f"SequenceRotary{name}": _sequence(implementation, name, ROTARY_MODEL)
+        for name, implementation in (
+            ("SequentialSequenceArrayNetwork", "numpy"),
+            ("SequentialSequenceRustArrayNetwork", "rust"),
+            ("SequentialSequenceBackpropNetwork", "python"),
+        )
+    },
+    **{
+        f"Sequence{kind}{name}": _sequence(implementation, name, model)
+        for kind, model in (("Gelu", GELU_MODEL), ("SwiGLU", SWIGLU_MODEL))
         for name, implementation in (
             ("SequentialSequenceArrayNetwork", "numpy"),
             ("SequentialSequenceRustArrayNetwork", "rust"),
