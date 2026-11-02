@@ -58,9 +58,10 @@ class GammaAndBeta[A]:
 class AttentionProjections[A]:
     """
     Attention's (Wq, bq, Wk, bk, Wv, bv, Wo, bo), each drawn as a dense layer's (W, b) in turn, the
-    weights decayed and the biases not (the multi-head attention workplan, D2): Wq, Wk and Wv are
-    (heads * key_size, d), their rows in head blocks, and Wo (d, heads * key_size), its columns in
-    the same blocks. The order is also the draw, save and step order.
+    weights decayed and the biases not (the multi-head attention workplan, D2): Wq is
+    (heads * key_size, d), its rows in head blocks, Wk and Wv (key_value_heads * key_size, d), theirs
+    in key/value head blocks (the grouped-query attention workplan, D2), and Wo (d, heads *
+    key_size), its columns in Wq's blocks. The order is also the draw, save and step order.
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (True, False) * 4
@@ -69,7 +70,9 @@ class AttentionProjections[A]:
     features: int
     heads: int
     key_size: int
+    key_value_heads: int
     width: int
+    kv_width: int
     size: int
     input_size: int
     Wq: A
@@ -92,16 +95,24 @@ class AttentionProjections[A]:
     @property
     def projection_shapes(self) -> tuple[tuple[int, int], ...]:
         # the projections' (rows, fan_in), each drawn as a dense layer's (W, b), in order
-        return ((self.width, self.features),) * 3 + ((self.features, self.width),)
+        return ((self.width, self.features),) + ((self.kv_width, self.features),) * 2 + ((self.features, self.width),)
 
-    def _set_up(self, tokens: int, features: int, heads: int, key_size: int | None) -> None:
+    def _set_up(
+        self, tokens: int, features: int, heads: int, key_size: int | None, key_value_heads: int | None = None
+    ) -> None:
         # tokens tokens of features features, in heads heads of key_size features (features /
-        # heads when None); the parameters and gradients zero
+        # heads when None), sharing key_value_heads key/value heads (heads when None); the
+        # parameters and gradients zero
+        assert key_value_heads is None or (key_value_heads >= 1 and heads % key_value_heads == 0), (
+            f"an attention's key/value heads divide its heads; got {key_value_heads} of {heads}"
+        )
         self.tokens = tokens
         self.features = features
         self.heads = heads
         self.key_size = features // heads if key_size is None else key_size
+        self.key_value_heads = heads if key_value_heads is None else key_value_heads
         self.width = heads * self.key_size
+        self.kv_width = self.key_value_heads * self.key_size
         self.size = tokens * features
         self.input_size = self.size
         self.set_parameters(self._zeros())

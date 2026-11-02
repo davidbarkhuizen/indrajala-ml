@@ -75,6 +75,15 @@ def _check_attention(spec: Attention) -> None:
     assert spec.positions == "rotary" or spec.rotary_base == Attention().rotary_base, (
         f'a rotary_base is a rotary Attention\'s, positions="rotary" (the rotary-positions workplan, D2); got {spec!r}'
     )
+    g = spec.key_value_heads
+    assert g is None or (g >= 1 and spec.heads % g == 0), (
+        f"an Attention's key_value_heads is at least 1 and divides its heads (the grouped-query attention workplan, "
+        f"D9); got {spec!r}"
+    )
+    assert g != spec.heads, (
+        f"an Attention whose every query head has its own key/value head says key_value_heads=None (the grouped-query "
+        f"attention workplan, D9); got {spec!r}"
+    )
 
 
 def _check_dropout(spec: Dropout) -> None:
@@ -425,6 +434,14 @@ def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -
     assert gelu is None, (
         f"a window's token-wise layers are ReLU: the window program's ops are (the FFN activations workplan, D5, "
         f"D8); got {gelu!r}"
+    )
+    grouped = next(
+        (spec for spec in expand_specs(specs) if isinstance(spec, Attention) and spec.key_value_heads is not None),
+        None,
+    )
+    assert grouped is None, (
+        f"a window's attention gives each query head its own key/value head: the window program's does (the "
+        f"grouped-query attention workplan, D10); got {grouped!r}"
     )
     assert any(isinstance(spec, StateInput) for spec in specs), (
         "the state enters a window through at least one StateInput, right before a residual block (the "

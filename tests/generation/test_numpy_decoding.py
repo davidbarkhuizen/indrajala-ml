@@ -36,9 +36,20 @@ WINDOW = 8
 ATOL = 1e-13
 
 
-def _specs(positions: str, causal: bool = True, dropout: float = 0.0, feed_forward: str = "relu") -> list[LayerSpec]:
+def _specs(
+    positions: str,
+    causal: bool = True,
+    dropout: float = 0.0,
+    feed_forward: str = "relu",
+    heads: int = 2,
+    key_value_heads: int | None = None,
+) -> list[LayerSpec]:
     attention = Attention(
-        heads=2, causal=causal, dropout=dropout, positions="rotary" if positions == "rotary" else "none"
+        heads=heads,
+        causal=causal,
+        dropout=dropout,
+        positions="rotary" if positions == "rotary" else "none",
+        key_value_heads=key_value_heads,
     )
     # a token-wise dropout ends the FFN's body
     # the FFN's hidden layer: ReLU, GELU, or the gated FFN at about two thirds the width (the FFN

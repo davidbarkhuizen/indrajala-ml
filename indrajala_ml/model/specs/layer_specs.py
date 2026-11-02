@@ -196,6 +196,10 @@ class Attention:
     segments (an Embedding's), a token attends within its paragraph (the segments workplan, D4);
     document_mask False lets it attend across paragraphs, every pad still masked, while positions
     and the counted targets keep the segments (the context-length workplan, D8's unmasked arm).
+    With key_value_heads g, the heads share g key/value heads, query head i reading key/value head
+    i // (heads / g), so g divides heads: grouped-query attention, multi-query at g = 1 (Ainslie et
+    al. 2023; Shazeer 2019; the grouped-query attention workplan, D1, D2). None, the default, gives
+    each query head its own; a g equal to heads is spelled None (D9).
     """
 
     heads: int = 1
@@ -205,10 +209,15 @@ class Attention:
     positions: Literal["none", "rotary"] = "none"
     rotary_base: float = 10000.0
     document_mask: bool = True
+    key_value_heads: int | None = None
 
     def head_size(self, features: int) -> int:
         """Each head's width d_k over tokens of features features: key_size, else features / heads."""
         return features // self.heads if self.key_size is None else self.key_size
+
+    def kv_heads(self) -> int:
+        """The key/value heads g: key_value_heads, else heads."""
+        return self.heads if self.key_value_heads is None else self.key_value_heads
 
 
 @dataclass(frozen=True)

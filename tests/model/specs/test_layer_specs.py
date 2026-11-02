@@ -750,6 +750,76 @@ def test_format_2_round_trips_heads_and_key_sizes(attention: Attention):
     assert [layer_from_json(json.loads(json.dumps(layer_to_json(spec)))) for spec in specs] == specs
 
 
+# grouped-query attention (the grouped-query attention workplan, D1, D2, D9): g key/value heads
+# dividing the heads, None (every query head its own) the one spelling of g = heads
+GROUPED = {
+    "four heads sharing two": Attention(heads=4, key_value_heads=2),
+    "four heads sharing one (multi-query)": Attention(heads=4, key_value_heads=1),
+    "three heads of 8 sharing one": Attention(heads=3, key_size=8, key_value_heads=1),
+    "a causal rotary attention sharing two": Attention(heads=4, causal=True, positions="rotary", key_value_heads=2),
+}
+GROUPED_INVALID = {
+    "no key/value heads": Attention(heads=4, key_value_heads=0),
+    "negative key/value heads": Attention(heads=4, key_value_heads=-2),
+    "key/value heads not dividing the heads": Attention(heads=4, key_value_heads=3),
+    "more key/value heads than heads": Attention(heads=2, key_value_heads=4),
+    "key/value heads written out as the heads": Attention(heads=4, key_value_heads=4),
+}
+
+
+@pytest.mark.parametrize("attention", GROUPED.values(), ids=GROUPED.keys())
+def test_grouped_attention_is_accepted_and_keeps_its_shape(attention: Attention):
+    specs = _multi_head(attention)
+    validate_layer_specs(specs)
+    assert spec_shapes(specs, (4, 4, 1))[4] == SpecShape((4, 32), (4, 32))
+
+
+@pytest.mark.parametrize("attention", GROUPED_INVALID.values(), ids=GROUPED_INVALID.keys())
+def test_key_value_heads_that_dont_divide_the_heads_or_spell_out_the_heads_are_rejected(attention: Attention):
+    with pytest.raises(AssertionError, match=re.escape(repr(attention))):
+        validate_layer_specs(_multi_head(attention))
+
+
+def test_the_key_value_heads_are_key_value_heads_else_the_heads():
+    assert Attention(heads=4).kv_heads() == 4
+    assert Attention(heads=4, key_value_heads=2).kv_heads() == 2
+    assert Attention(heads=4, key_value_heads=1).kv_heads() == 1
+
+
+@pytest.mark.parametrize("attention", GROUPED.values(), ids=GROUPED.keys())
+def test_format_2_round_trips_key_value_heads(attention: Attention):
+    assert layer_from_json(json.loads(json.dumps(layer_to_json(attention)))) == attention
+    assert layer_to_json(attention)["key_value_heads"] == attention.key_value_heads
+
+
+def test_format_2_writes_no_key_value_heads_for_an_ungrouped_attention():
+    # every file and fixture written before grouped-query attention stays as it is (D2)
+    assert "key_value_heads" not in layer_to_json(Attention(heads=4, causal=True))
+
+
+@pytest.mark.parametrize("attention", GROUPED.values(), ids=GROUPED.keys())
+def test_the_numpy_builder_builds_grouped_attention(attention: Attention):
+    layers = build_array_layers(_multi_head(attention), (4, 4, 1), "numpy")
+    layer: Any = next(layer for layer in layers if type(layer).__name__.startswith("Attention"))
+    d_k = attention.head_size(32)
+    assert (layer.heads, layer.key_value_heads, layer.key_size) == (attention.heads, attention.key_value_heads, d_k)
+    assert [shape for shape in layer.projection_shapes] == [
+        (attention.heads * d_k, 32),
+        (attention.kv_heads() * d_k, 32),
+        (attention.kv_heads() * d_k, 32),
+        (32, attention.heads * d_k),
+    ]
+
+
+def test_the_rust_and_python_builders_refuse_grouped_attention_until_their_stages():
+    # the workplan's stages 4 and 5 (D12)
+    specs = _multi_head(GROUPED["four heads sharing two"])
+    with pytest.raises(AssertionError, match="stage 4"):
+        build_array_layers(specs, (4, 4, 1), "rust")
+    with pytest.raises(AssertionError, match="stage 5"):
+        build_python_layers(specs, (4, 4, 1), StateLayer(16, [(0.0, 1.0)] * 16))
+
+
 # sequence models (the sequence task workplan, stage 2): over 5 token ids of a vocabulary of 7, an
 # Embedding gives 5 tokens of 6, and a token-wise softmax output 5 tokens of 7
 IDS = Embedding(7, 6)

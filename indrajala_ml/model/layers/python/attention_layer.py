@@ -213,8 +213,13 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         rotary_base: float = 10000.0,
         block: int = BLOCK,
         document_mask: bool = True,
+        key_value_heads: int | None = None,
     ) -> None:
         assert len(input_layer.nodes) == tokens * features
+        assert key_value_heads is None, (
+            "grouped-query attention reaches pure Python at the grouped-query attention workplan's stage 5; "
+            f"got key_value_heads={key_value_heads}"
+        )
         assert block >= 1, f"an attention's key blocks hold at least one key; got {block}"
         # the key blocks' size (the context-length workplan, D3)
         self.block = block

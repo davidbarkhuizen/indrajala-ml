@@ -105,6 +105,7 @@ def _token_layer(
             spec.positions,
             spec.rotary_base,
             document_mask=spec.document_mask,
+            key_value_heads=spec.key_value_heads,
         )
     if isinstance(spec, Dropout):
         return TokenDropoutLayer(input_layer, tokens, features, spec.p)

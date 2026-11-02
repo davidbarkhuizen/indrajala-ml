@@ -90,8 +90,11 @@ Each lists the options considered, with pros and cons, and the choice.
   and `dV` in each key block, is the sum over its group's query heads: a left fold in head order
   from the first head's value (not from zero, so a `-0.0` survives as numpy's fold keeps it), in
   every implementation.
-  - numpy computes each query head's `dK` and `dV` as today, on `K` and `V` expanded to `h` heads,
-    then folds each group over its heads (`np.cumsum` along the head axis, the last entry).
+  - The fold comes before `dK`'s division by the scale: a group's `dK` is `(fold of its heads'
+    dS^T Q) / s`, one division, as the crate divides once at the end (made exact at stage 2).
+  - numpy's `tiled_forward` and `tiled_backward` take `K` and `V` at `g` heads and expand them to
+    `h` (`expand`); the backward computes each query head's `dK` and `dV` as today, then folds each
+    group over its heads (`fold`: `np.cumsum` along the head axis, the last entry), then divides.
   - The crate accumulates per key block: the group's first head assigns, each later head adds.
   - Pure Python folds the same way. Every element's sum is then the same sequence of additions, so
     parity holds by bits where it does today.
