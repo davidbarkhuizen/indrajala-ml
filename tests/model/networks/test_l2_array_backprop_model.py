@@ -10,7 +10,7 @@ from tests.array_network_contract import ArrayNetworkSpec, single_output_network
 def _equivalent(sizes: list[int], output: int, l2_lambda: float) -> tuple[list[LayerSpec], UpdateRule]:
     # this network as layer specs and an update rule
     return (
-        [*(Dense(size) for size in sizes), Dense(output, output=True)],
+        [*(Dense(size) for size in sizes), Dense(output, output=True, loss="squared")],
         WeightDecay(l2_lambda),
     )
 

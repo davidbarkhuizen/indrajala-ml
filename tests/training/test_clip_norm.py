@@ -27,7 +27,7 @@ IMPLEMENTATIONS = ["python", "numpy", "rust"]
 LAYERS: list[LayerSpec] = [
     Dense(5, activation="relu"),
     Residual((LayerNorm(), Dense(5, activation="linear", bias=True))),
-    Dense(1, output=True),
+    Dense(1, output=True, loss="squared"),
 ]
 RULES: list[UpdateRule] = [SGD(), Momentum(0.9), Adam(), WeightDecay(0.01)]
 

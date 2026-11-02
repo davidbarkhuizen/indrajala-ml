@@ -1,8 +1,9 @@
 # Workplan: the implementation audit's remedies
 
-**Status: stage 1 (this plan). Decisions D1-D11 settled 2026-11-02 by building for extensibility,
-speed and real-world production (the owner's standing direction); written at the owner's request
-("a detailed workplan to implement the two supported changes, and the four optional ones").**
+**Status: stage 2 (the explicit loss) done; stage 3 next. Decisions D1-D11 settled 2026-11-02 by
+building for extensibility, speed and real-world production (the owner's standing direction);
+written at the owner's request ("a detailed workplan to implement the two supported changes, and
+the four optional ones").**
 
 The implementation audit ([nn-implementation-analysis.md](../../nn-implementation-analysis.md),
 §16) checked the library's design against the literature. Two changes have the literature's

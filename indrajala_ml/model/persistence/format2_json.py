@@ -103,9 +103,13 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
     if isinstance(spec, Dense):
         # an entry without an affine bias as before Dense had one (the residual-connections
         # workplan, D4), so those files don't change; load_network's Dense takes the default
+        # A hidden layer's loss, None since the output layer names its own (the audit-remedies
+        # workplan, D2), is written "squared", as every file before it holds, so files don't change
         fields = asdict(spec)
         if not spec.bias:
             del fields["bias"]
+        if spec.loss is None:
+            fields["loss"] = "squared"
         return {"kind": "dense", **fields}
     if isinstance(spec, PoolSpec):
         return {"kind": "pool", **asdict(spec)}
@@ -131,6 +135,9 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
     fields = {key: value for key, value in spec.items() if key != "kind"}
     match spec["kind"]:
         case "dense":
+            # a hidden layer's "squared" is the writer's stand-in for no loss (D2)
+            if not fields.get("output", False) and fields.get("loss") == "squared":
+                fields["loss"] = None
             return Dense(**fields)
         case "conv":
             return ConvSpec(**fields)

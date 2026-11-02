@@ -26,8 +26,8 @@ from indrajala_ml.model.specs.update_rules import SGD, Adam
 from tests.helpers import Backend, assert_conv_array_network_weights_match, conv_reference
 from tests.model.networks.test_conv_array_multiclass_backprop_model import PROBABILITY_ATOL, WEIGHT_ATOL
 
-MULTICLASS = [Dense(5), Dense(3, output=True)]
-SINGLE_OUTPUT = [Dense(5), Dense(1, output=True)]
+MULTICLASS = [Dense(5), Dense(3, output=True, loss="squared")]
+SINGLE_OUTPUT = [Dense(5), Dense(1, output=True, loss="squared")]
 
 
 @pytest.mark.parametrize(

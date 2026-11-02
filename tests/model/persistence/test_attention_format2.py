@@ -56,7 +56,7 @@ FLAT_LAYER_NORM: tuple[InputShape, list[LayerSpec]] = (
         Dense(5, dropout=0.25),
         LayerNorm(epsilon=1e-4),
         Residual((LayerNorm(), Dense(8, activation="relu"), AFFINE_5)),
-        Dense(3, output=True),
+        Dense(3, output=True, loss="squared"),
     ],
 )
 # the README's model with two heads of 4 features over its 6-wide tokens: projections 8 wide

@@ -173,7 +173,7 @@ INPUT = (6, 6, 1)
 LINEAR_CONV = Conv(3, 2, activation="linear")
 NETWORKS: dict[str, list[LayerSpec]] = {
     "conv": [LINEAR_CONV, BatchNorm("relu"), SOFTMAX],
-    "conv pool": [LINEAR_CONV, BatchNorm("relu"), Pool(2), Dense(3, output=True)],
+    "conv pool": [LINEAR_CONV, BatchNorm("relu"), Pool(2), Dense(3, output=True, loss="squared")],
     "after a relu conv": [Conv(2, 2), Conv(2, 3, stride=2, activation="linear"), BatchNorm("relu"), SOFTMAX],
     "two conv pairs": [LINEAR_CONV, BatchNorm("relu"), Conv(2, 3, activation="linear"), BatchNorm("relu"), SOFTMAX],
     "conv and dense pairs": [LINEAR_CONV, BatchNorm("relu"), Dense(4, activation="linear"), BatchNorm(), SOFTMAX],

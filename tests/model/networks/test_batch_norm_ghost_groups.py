@@ -249,12 +249,12 @@ def test_a_layer_refuses_a_last_group_of_one(layer_class: str):
 
 # the networks
 
-DENSE: list[LayerSpec] = [Dense(5, activation="linear"), BatchNorm(group_size=2), Dense(3, output=True)]
+DENSE: list[LayerSpec] = [Dense(5, activation="linear"), BatchNorm(group_size=2), Dense(3, output=True, loss="squared")]
 CONV: list[LayerSpec] = [
     Conv(3, 2, activation="linear"),
     BatchNorm("relu", group_size=2),
     Pool(2),
-    Dense(3, output=True),
+    Dense(3, output=True, loss="squared"),
 ]
 ARCHITECTURES = {"dense": ((4,), DENSE), "conv": ((6, 6, 1), CONV)}
 
@@ -323,7 +323,7 @@ def test_train_refuses_a_batch_size_that_leaves_a_group_of_one_before_training(e
     layers: list[LayerSpec] = [
         Dense(5, activation="linear"),
         BatchNorm(group_size=3 if batch_size == 4 else 2),
-        Dense(3, output=True),
+        Dense(3, output=True, loss="squared"),
     ]
     network = _network("numpy", (4,), layers)
     before = bits(network.snapshot())
@@ -350,5 +350,7 @@ def test_train_trains_in_ghost_groups():
 def test_a_group_size_under_2_is_refused(group_size: int):
     with pytest.raises(AssertionError, match="group_size must be 2 or more"):
         _network(
-            "numpy", (4,), [Dense(5, activation="linear"), BatchNorm(group_size=group_size), Dense(3, output=True)]
+            "numpy",
+            (4,),
+            [Dense(5, activation="linear"), BatchNorm(group_size=group_size), Dense(3, output=True, loss="squared")],
         )

@@ -160,7 +160,7 @@ def conv_batch_norm_specs(group_size: int | None) -> list[LayerSpec]:
         BatchNorm("relu", group_size=group_size),
         Dense(dense_size, activation="linear"),
         BatchNorm("sigmoid", group_size=group_size),
-        Dense(CLASS_COUNT, output=True),
+        Dense(CLASS_COUNT, output=True, loss="squared"),
     ]
 
 

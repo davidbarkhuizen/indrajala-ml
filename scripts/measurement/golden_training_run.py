@@ -497,7 +497,7 @@ RESIDUAL_SPECS: list[LayerSpec] = [
     Dense(4, activation="relu"),
     Residual((Dense(3), Dense(4, activation="linear", bias=True))),
     Residual((Dense(3, activation="relu"), Dense(4, activation="linear", bias=True))),
-    Dense(CLASS_COUNT, output=True),
+    Dense(CLASS_COUNT, output=True, loss="squared"),
 ]
 RESIDUAL_NETWORKS = ["numpy residual", "rust residual", "python residual"]
 
@@ -512,7 +512,7 @@ PATCH_SPECS: list[LayerSpec] = [
     Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
     TokenMean(),
     LayerNorm(),
-    Dense(CLASS_COUNT, output=True),
+    Dense(CLASS_COUNT, output=True, loss="squared"),
 ]
 PATCH_NETWORKS = ["numpy patch model", "rust patch model", "python patch model"]
 # the patch model with four heads of 3 features over its 4-wide tokens, under Adam
@@ -524,7 +524,7 @@ MULTI_HEAD_PATCH_SPECS: list[LayerSpec] = [
     Residual((LayerNorm(), Dense(5, activation="relu"), Dense(4, activation="linear", bias=True))),
     TokenMean(),
     LayerNorm(),
-    Dense(CLASS_COUNT, output=True),
+    Dense(CLASS_COUNT, output=True, loss="squared"),
 ]
 MULTI_HEAD_PATCH_NETWORKS = [
     "numpy multi-head patch model",
@@ -539,7 +539,7 @@ LAYER_NORM_SPECS: list[LayerSpec] = [
     Residual((LayerNorm(), Dense(3, activation="relu"), Dense(4, activation="linear", bias=True))),
     Dense(4, activation="relu"),
     LayerNorm(),
-    Dense(CLASS_COUNT, output=True),
+    Dense(CLASS_COUNT, output=True, loss="squared"),
 ]
 LAYER_NORM_NETWORKS = ["numpy layer norm", "rust layer norm", "python layer norm"]
 # a causal transformer over Tiny Shakespeare's first 84 characters, 12 windows of 6 token ids: the

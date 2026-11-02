@@ -184,7 +184,7 @@ def test_conv_batch_norm_specs_put_batch_norm_on_every_hidden_layer(group_size: 
         BatchNorm("relu", group_size=group_size),
         Dense(32, activation="linear"),
         BatchNorm("sigmoid", group_size=group_size),
-        Dense(10, output=True),
+        Dense(10, output=True, loss="squared"),
     ]
 
 

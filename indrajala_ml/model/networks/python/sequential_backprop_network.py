@@ -6,7 +6,7 @@ reference for any array network, preset or sequential. A sequence network (the s
 workplan, D6, D10), whose output layer is token-wise, is SequentialSequenceBackpropNetwork.
 
     network = SequentialMultiClassBackpropClassifierNetwork(
-        (8, 8, 1), [Conv(3, 4), Pool(2), Dense(16), Dense(10, output=True)], Momentum(0.9)
+        (8, 8, 1), [Conv(3, 4), Pool(2), Dense(16), Dense(10, output=True, loss="squared")], Momentum(0.9)
     )
 """
 

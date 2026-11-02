@@ -173,7 +173,9 @@ def test_every_layer_class_a_window_holds_has_an_op():
         assert _program_op(layer)[0]
     # what a window can't hold: patches (an image's) and a token mean (the output is token-wise)
     with pytest.raises(AssertionError):
-        validate_window_specs([Embedding(27, 8), StateInput(), TokenMean(), Dense(3, output=True)], (K,))
+        validate_window_specs(
+            [Embedding(27, 8), StateInput(), TokenMean(), Dense(3, output=True, loss="squared")], (K,)
+        )
     with pytest.raises(AssertionError):
         validate_window_specs([Patches(2), StateInput(), DIGITS], (K,))
 

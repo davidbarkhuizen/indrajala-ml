@@ -12,7 +12,7 @@ def _equivalent(
 ) -> tuple[list[LayerSpec], UpdateRule]:
     # this network as layer specs and an update rule
     return (
-        [*(Dense(size) for size in sizes), Dense(output, output=True)],
+        [*(Dense(size) for size in sizes), Dense(output, output=True, loss="squared")],
         Adam(beta1, beta2, epsilon),
     )
 

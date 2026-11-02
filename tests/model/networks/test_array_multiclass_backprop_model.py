@@ -11,7 +11,7 @@ from tests.array_network_contract import ArrayNetworkSpec, multiclass_network_te
 
 def _equivalent(sizes: list[int], output: int) -> tuple[list[LayerSpec], UpdateRule]:
     # this network as layer specs and an update rule
-    return [*(Dense(size) for size in sizes), Dense(output, output=True)], SGD()
+    return [*(Dense(size) for size in sizes), Dense(output, output=True, loss="squared")], SGD()
 
 
 SPEC = ArrayNetworkSpec(

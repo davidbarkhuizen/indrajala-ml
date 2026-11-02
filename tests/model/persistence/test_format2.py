@@ -161,16 +161,16 @@ def test_a_loaded_network_resumes_training_by_bits(
 # a linear layer and a BatchNorm, dense or conv: every batch-norm entry and parameter pair
 DENSE_BATCH_NORM: tuple[InputShape, list[LayerSpec]] = (
     (4,),
-    [Dense(5, activation="linear"), BatchNorm(), Dense(3, output=True)],
+    [Dense(5, activation="linear"), BatchNorm(), Dense(3, output=True, loss="squared")],
 )
 CONV_BATCH_NORM: tuple[InputShape, list[LayerSpec]] = (
     (6, 6, 1),
-    [Conv(2, 3, activation="linear"), BatchNorm("relu"), Pool(2), Dense(3, output=True)],
+    [Conv(2, 3, activation="linear"), BatchNorm("relu"), Pool(2), Dense(3, output=True, loss="squared")],
 )
 # ghost groups of 2 in _train_batches' batches of 4 (D6)
 GHOST_BATCH_NORM: tuple[InputShape, list[LayerSpec]] = (
     (4,),
-    [Dense(5, activation="linear"), BatchNorm(group_size=2), Dense(3, output=True)],
+    [Dense(5, activation="linear"), BatchNorm(group_size=2), Dense(3, output=True, loss="squared")],
 )
 
 
@@ -504,7 +504,7 @@ def test_load_network_builds_an_ensemble_of_sequential_sub_networks(name: str, e
 
 
 def test_a_sequential_network_saves_without_a_preset(tmp_path: Path):
-    network = SequentialArrayNetwork((4,), [Dense(5), Dense(3, output=True)], SGD(), backend=NUMPY)
+    network = SequentialArrayNetwork((4,), [Dense(5), Dense(3, output=True, loss="squared")], SGD(), backend=NUMPY)
     saved = json.loads(Path(_file(network, tmp_path)).read_text())
     assert "preset" not in saved
     assert saved["layers"][0] == {

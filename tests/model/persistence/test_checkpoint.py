@@ -42,11 +42,11 @@ from tests.helpers import bits
 RULES: list[UpdateRule] = [SGD(), Momentum(0.9), Adam(), WeightDecay(0.01)]
 IMPLEMENTATIONS = ["python", "numpy", "rust"]
 
-DENSE: tuple[InputShape, list[LayerSpec]] = ((4,), [Dense(5), Dense(3, output=True)])
+DENSE: tuple[InputShape, list[LayerSpec]] = ((4,), [Dense(5), Dense(3, output=True, loss="squared")])
 # a pool layer between weighted ones: the optimizers key state by layer index, and skip the pool
-CONV: tuple[InputShape, list[LayerSpec]] = ((6, 6, 1), [Conv(2, 3), Pool(2), Dense(3, output=True)])
+CONV: tuple[InputShape, list[LayerSpec]] = ((6, 6, 1), [Conv(2, 3), Pool(2), Dense(3, output=True, loss="squared")])
 # a dropout layer: its masks draw from the network's generator, which a checkpoint holds
-DROPOUT: tuple[InputShape, list[LayerSpec]] = ((4,), [Dense(5, dropout=0.25), Dense(3, output=True)])
+DROPOUT: tuple[InputShape, list[LayerSpec]] = ((4,), [Dense(5, dropout=0.25), Dense(3, output=True, loss="squared")])
 # a causal sequence model over 5 token ids of a vocabulary of 7: its label is one class per token
 SEQUENCE: tuple[InputShape, list[LayerSpec]] = (
     (5,),

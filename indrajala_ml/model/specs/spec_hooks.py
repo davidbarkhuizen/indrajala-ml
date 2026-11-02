@@ -30,7 +30,7 @@ class SpecHooks:
 
     def _output_spec(self, size: int) -> Dense:
         # the output layer; the softmax and cross-entropy siblings return theirs
-        return Dense(size, output=True)
+        return Dense(size, output=True, loss="squared")
 
     def _dense_specs(self, layer_sizes: Sequence[int], output_size: int) -> list[LayerSpec]:
         return [*(self._hidden_spec(size) for size in layer_sizes), self._output_spec(output_size)]

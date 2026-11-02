@@ -29,13 +29,13 @@ from tests.gradient_check import GradientMismatch, check_gradients, squared_loss
 SOFTMAX = Dense(3, output=True, activation="softmax", loss="cross_entropy")
 
 NETWORKS: dict[str, tuple[InputShape, list[LayerSpec]]] = {
-    "sigmoid": ((4,), [Dense(5), Dense(3, output=True)]),
-    "two_hidden": ((4,), [Dense(5), Dense(4), Dense(3, output=True)]),
+    "sigmoid": ((4,), [Dense(5), Dense(3, output=True, loss="squared")]),
+    "two_hidden": ((4,), [Dense(5), Dense(4), Dense(3, output=True, loss="squared")]),
     "relu_cross_entropy": ((4,), [Dense(5, activation="relu"), Dense(3, output=True, loss="cross_entropy")]),
     "softmax": ((4,), [Dense(5), SOFTMAX]),
-    "single_output": ((4,), [Dense(5), Dense(1, output=True)]),
+    "single_output": ((4,), [Dense(5), Dense(1, output=True, loss="squared")]),
     "single_output_cross_entropy": ((4,), [Dense(5), Dense(1, output=True, loss="cross_entropy")]),
-    "conv": ((5, 5, 1), [Conv(3, 2), Dense(4), Dense(3, output=True)]),
+    "conv": ((5, 5, 1), [Conv(3, 2), Dense(4), Dense(3, output=True, loss="squared")]),
     "conv_pool": ((6, 6, 2), [Conv(3, 2), Pool(2), Dense(5, activation="relu"), SOFTMAX]),
 }
 

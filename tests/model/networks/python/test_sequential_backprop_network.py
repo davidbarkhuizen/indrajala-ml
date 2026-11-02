@@ -91,8 +91,8 @@ SIDE = 6
 CONV_SPECS: list[Conv | Pool] = [Conv(2, 2), Pool(2, stride=1), Conv(2, 2)]
 
 HIDDEN = [Dense(5), Dense(4)]
-OUTPUT = Dense(CLASS_COUNT, output=True)
-SINGLE = Dense(1, output=True)
+OUTPUT = Dense(CLASS_COUNT, output=True, loss="squared")
+SINGLE = Dense(1, output=True, loss="squared")
 
 
 # name -> (the preset, built; its equivalent: input shape, specs and rule; whether randomize is
