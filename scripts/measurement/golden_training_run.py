@@ -118,6 +118,12 @@ after the FFN ones: GROUPED_SPECS and MULTI_QUERY_SPECS, SEQUENCE_SPECS with fou
 3 sharing two key/value heads and one, in all three implementations, on the sequence rows. No
 earlier entry moved when they were recorded.
 
+The k-means codes entries (the audit-remedies workplan, stage 3, D3) are added after the
+grouped-query ones: the window-recurrent networks of WINDOW_RECURRENCE in all three
+implementations, each factor's codes set by initialise_codes from the cells' outputs over the
+sequence rows of BATCHES (KMEANS_ITERATIONS Lloyd's iterations, a generator seeded from SEED) after
+the weights are injected and before training. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -144,6 +150,7 @@ import numpy as np
 from indrajala_ml.data.prepared_dataset import PreparedDataset
 from indrajala_ml.data.text_data import Vocabulary, pack, paragraphs, windows
 from indrajala_ml.measurement import benchmark_archive
+from indrajala_ml.model.codes import initialise_codes
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
     EnsembleArrayBackpropClassifierNetwork,
 )
@@ -624,6 +631,13 @@ MULTI_QUERY_SPECS: list[LayerSpec] = [
     *SEQUENCE_SPECS[3:],
 ]
 MULTI_QUERY_NETWORKS = ["numpy multi-query model", "rust multi-query model", "python multi-query model"]
+# the window networks with their codes from their states (the audit-remedies workplan, stage 3, D3)
+KMEANS_NETWORKS = {
+    "numpy k-means codes window model": WindowRecurrentArrayNetwork,
+    "rust k-means codes window model": WindowRecurrentRustArrayNetwork,
+    "python k-means codes window model": WindowRecurrentBackpropNetwork,
+}
+KMEANS_ITERATIONS = 10
 
 
 def _packed_rows() -> list[Example[tuple[int, ...]]]:
@@ -808,9 +822,12 @@ def _run_network(
     predict: str,
     learning_rate: LearningRate = LEARNING_RATE,
     clip_norm: float | None = None,
+    prepare: Callable[[Any], None] | None = None,
 ) -> dict[str, Any]:
     network = build()
     _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
+    if prepare is not None:
+        prepare(network)
     network.rng = default_rng(SEED) if _backend(name) == "python" else network.backend.default_rng(SEED)
     checkpoints, prepared = _train(network, rows, _backend(name), learning_rate, clip_norm)
     result = {
@@ -1067,6 +1084,23 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                     "predict_probabilities",
                 ),
             )
+    code_batches = [[list(sequence_rows[i][0]) for i in batch] for batch in BATCHES]
+    for name, window_cls in KMEANS_NETWORKS.items():
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(window_cls, (WINDOW_COLUMNS,), WINDOW_SPECS, WINDOW_RECURRENCE, Adam()),
+                sequence_rows,
+                "predict_probabilities",
+                prepare=lambda network: _kmeans_codes(network, code_batches),
+            ),
+        )
+
+
+def _kmeans_codes(network: Any, batches: list[list[list[float]]]) -> None:
+    initialise_codes(network, batches, np.random.default_rng(SEED), KMEANS_ITERATIONS)
 
 
 def run_all(backends: Collection[str] = BACKENDS) -> dict[str, Any]:

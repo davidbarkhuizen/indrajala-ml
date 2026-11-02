@@ -1,9 +1,9 @@
 # Workplan: the implementation audit's remedies
 
-**Status: stage 2 (the explicit loss) done; stage 3 next. Decisions D1-D11 settled 2026-11-02 by
-building for extensibility, speed and real-world production (the owner's standing direction);
-written at the owner's request ("a detailed workplan to implement the two supported changes, and
-the four optional ones").**
+**Status: stages 2 (the explicit loss, #1204) and 3 (the k-means codes) done; stage 4 next.
+Decisions D1-D11 settled 2026-11-02 by building for extensibility, speed and real-world production
+(the owner's standing direction); written at the owner's request ("a detailed workplan to implement
+the two supported changes, and the four optional ones").**
 
 The implementation audit ([nn-implementation-analysis.md](../../nn-implementation-analysis.md),
 §16) checked the library's design against the literature. Two changes have the literature's
@@ -251,8 +251,14 @@ move), and its timing tier (docs/measurement.md §1).
 2. **The explicit loss (D2).** `Dense.loss` optional; validation; the presets' `_output_spec`;
    format 2's writer and reader; every spec list naming its loss. Tests: refusals; every fixture
    and saved model loads and re-saves byte for byte. Golden: unchanged. Tier 0 (no timed path).
-3. **The k-means codes (D3).** `indrajala_ml/model/codes.py` with `initialise_codes`; the window
-   networks (numpy, Rust, pure Python) through `window_states`. Tests: the harness's `kmeans` and
+3. **The k-means codes (D3).** *Built:* `codes.py` splits the harness's `codes_from_states` into
+   `factor_states` (the states, batch by batch then window by window, through each network's new
+   `cell_outputs`) and `fit_codes` (k-means per snapped factor, written through `set_codes`), so
+   the harness keeps its melting curve between them and its draws in order; `initialise_codes` is
+   the two. The bits test is against the harness's own `kmeans` on five cases, a window network's
+   states among them (`tests/fixtures/codes/harness_kmeans.json`, recorded from its source); three
+   golden entries, one per implementation. Planned: `indrajala_ml/model/codes.py` with
+   `initialise_codes`; the window networks (numpy, Rust, pure Python) through `window_states`. Tests: the harness's `kmeans` and
    the library's agree by bits on its saved samples (a fixture of a few runs' states); an empty
    cluster's perturbation; a continuous factor untouched. Golden: one entry (a window network,
    codes from its states, one step). Tier 0. Then the indrajala-studies PR: bump `ml`, call the
