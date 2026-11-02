@@ -1,3 +1,5 @@
+# pyright: reportConstantRedefinition=false
+# (SimVQ's basis is named as in its paper, Q, which strict mode takes for a constant)
 """
 A window-recurrent network's layers in pure Python (the window-recurrent adder workplan, stage 6),
 the counterparts of recurrent_array_layer.py: the StateInputLayer, which stands in the window's
@@ -312,6 +314,8 @@ class CodesLayer(_Part):
     ||h - sg[e_target]||^2; None, to its own.
     """
 
+    linear: ClassVar[bool] = False  # the codes themselves trained (LinearCodesLayer's are Q W)
+
     def __init__(self, count: int, size: int, commitment: float = 0.25) -> None:
         self.count = count
         self.size = size
@@ -325,6 +329,17 @@ class CodesLayer(_Part):
     def draw(self, rng: Pcg64Generator) -> None:
         for code, weights in zip(self.codes, fan_in_aware_weights(rng, self.count, self.size), strict=True):
             code.set_weights(weights)
+
+    def before_step(self) -> None:
+        """Nothing: the codes' gradients are the optimizer's (LinearCodesLayer's aren't)."""
+
+    def after_step(self) -> None:
+        """Nothing: the optimizer stepped the codes themselves."""
+
+    def write_codes(self, rows: dict[int, list[float]], full: bool) -> None:
+        """The codes given set to the vectors given (full: every code)."""
+        for i, e in rows.items():
+            self.codes[i].set_weights([float(v) for v in e])
 
     def nearest(self, h: Sequence[float]) -> int:
         """h's nearest code's index."""
@@ -363,6 +378,98 @@ class CodesLayer(_Part):
             pulled = differences if target == index else [h_j - e_j for h_j, e_j in zip(h, self.codes[target].weights)]
             dH.append([dq_j + (2.0 * weight * self.commitment) * difference for dq_j, difference in zip(dq, pulled)])
         return dH
+
+
+class LinearCodesLayer(CodesLayer):
+    """
+    LinearCodesArrayLayer in pure Python (SimVQ, Zhu et al. 2025; the audit-remedies workplan, D6):
+    the codes E = Q W, each E row a fold over Q's row times W's columns. The snap, its losses and
+    its gradients are CodesLayer's on E's rows; the weight sets stepped are W's rows, their
+    gradients Q^T dE (before_step), E formed anew and its rows' accumulators cleared after the step
+    (after_step). Q is held, saved after W's rows, and never stepped.
+    """
+
+    linear: ClassVar[bool] = True
+
+    def __init__(self, count: int, size: int, commitment: float = 0.25) -> None:
+        super().__init__(count, size, commitment)
+        self.Q = [[0.0] * size for _ in range(count)]
+        self.basis = [EmbeddingRow(size) for _ in range(size)]  # W's rows
+        for j, row in enumerate(self.basis):
+            row.set_weights([1.0 if k == j else 0.0 for k in range(size)])
+
+    def weight_sets(self) -> Sequence[EmbeddingRow]:
+        return self.basis
+
+    def snapshot_state(self) -> list[tuple[list[float], float] | tuple[list[float]]]:
+        return [*((list(row.weights),) for row in self.basis), *((list(q),) for q in self.Q)]
+
+    def restore_state(self, layer_snapshot: Sequence[Sequence[list[float] | float]]) -> None:
+        assert len(layer_snapshot) == self.size + self.count, (
+            f"a LinearCodesLayer restores W's {self.size} rows and Q's {self.count}"
+        )
+        rows: list[list[float]] = []
+        for entry in layer_snapshot:
+            weights = entry[0]
+            assert isinstance(weights, list)
+            rows.append([float(w) for w in weights])
+        for row, weights in zip(self.basis, rows[: self.size], strict=True):
+            row.set_weights(weights)
+        self.Q = rows[self.size :]
+        self._form()
+
+    def draw(self, rng: Pcg64Generator) -> None:
+        super().draw(rng)
+        self.Q = [list(code.weights) for code in self.codes]
+        for j, row in enumerate(self.basis):
+            row.set_weights([1.0 if k == j else 0.0 for k in range(self.size)])
+        self._form()
+
+    def before_step(self) -> None:
+        for j, row in enumerate(self.basis):
+            row.weight_gradient_accum = [
+                fold([q[j] * code.weight_gradient_accum[k] for q, code in zip(self.Q, self.codes, strict=True)])
+                for k in range(self.size)
+            ]
+
+    def after_step(self) -> None:
+        self._form()
+        for code in self.codes:
+            code.reset_gradient_accum()
+
+    def write_codes(self, rows: dict[int, list[float]], full: bool) -> None:
+        if full:
+            self.Q = [[float(v) for v in rows[i]] for i in range(self.count)]
+            for j, row in enumerate(self.basis):
+                row.set_weights([1.0 if k == j else 0.0 for k in range(self.size)])
+        else:
+            # E's row e = q W, so q solves W^T q = e
+            transposed = [[self.basis[j].weights[k] for j in range(self.size)] for k in range(self.size)]
+            for i, e in rows.items():
+                self.Q[i] = _solve(transposed, [float(v) for v in e])
+        self._form()
+
+    def _form(self) -> None:
+        W = [row.weights for row in self.basis]
+        for q, code in zip(self.Q, self.codes, strict=True):
+            code.set_weights([fold([q[j] * W[j][k] for j in range(self.size)]) for k in range(self.size)])
+
+
+def _solve(A: list[list[float]], b: list[float]) -> list[float]:
+    """x with A x = b, by Gaussian elimination with partial pivoting (A square, invertible)."""
+    n = len(b)
+    M = [[*row, value] for row, value in zip(A, b, strict=True)]
+    for c in range(n):
+        p = max(range(c, n), key=lambda r: abs(M[r][c]))
+        assert M[p][c] != 0.0, "W is singular: a code can't be placed through it"
+        M[c], M[p] = M[p], M[c]
+        for r in range(c + 1, n):
+            f = M[r][c] / M[c][c]
+            M[r] = [a - f * b_ for a, b_ in zip(M[r], M[c], strict=True)]
+    x = [0.0] * n
+    for c in range(n - 1, -1, -1):
+        x[c] = (M[c][n] - sum(M[c][k] * x[k] for k in range(c + 1, n))) / M[c][c]
+    return x
 
 
 class InitialStateLayer(_Part):
@@ -415,8 +522,12 @@ class RecurrenceLayer:
         features: int,
         cross: bool,
         update_bias: float,
+        linear_codes: Sequence[bool] | None = None,
     ) -> None:
-        """sizes: each factor's (state size, code count or None, commitment)."""
+        """
+        sizes: each factor's (state size, code count or None, commitment); linear_codes: each
+        factor's codes SimVQ's, E = Q W (the audit-remedies workplan, D6), none by default.
+        """
         self.sizes = [s for s, _, _ in sizes]
         self.cross = cross
         self.features = features
@@ -427,10 +538,10 @@ class RecurrenceLayer:
             _FactorParts(
                 AttentionPoolingLayer(tokens, features),
                 GRULayer(features + (self.state_size - s if cross else 0), s, update_bias),
-                None if m is None else CodesLayer(m, s, commitment),
+                None if m is None else (LinearCodesLayer if linear else CodesLayer)(m, s, commitment),
                 InitialStateLayer(s),
             )
-            for s, m, commitment in sizes
+            for (s, m, commitment), linear in zip(sizes, linear_codes or [False] * len(sizes), strict=True)
         ]
 
     def parts(self) -> list[_Part]:

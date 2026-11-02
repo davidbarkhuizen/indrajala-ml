@@ -275,6 +275,7 @@ class CodesArrayLayer:
     """
 
     decayed: ClassVar[tuple[bool, ...]] = (False,)
+    linear: ClassVar[bool] = False  # E itself trained (LinearCodesArrayLayer's is Q W)
 
     def __init__(
         self, count: int, size: int, commitment: float = 0.25, wall: float = 0.0, wall_ratio: float = WALL_RATIO
@@ -304,6 +305,19 @@ class CodesArrayLayer:
 
     def draw(self, rng: np.random.Generator) -> None:
         self.E = fan_in_aware_random_weights(rng, self.count, self.size)
+
+    def before_step(self) -> None:
+        """Nothing: E's gradient is the optimizer's (LinearCodesArrayLayer's isn't)."""
+
+    def after_step(self) -> None:
+        """Nothing: the optimizer stepped E itself."""
+
+    def write_codes(self, rows: dict[int, FloatArray], full: bool) -> None:
+        """E's rows given set to the vectors given (full: every row)."""
+        E = self.E.copy()
+        for i, e in rows.items():
+            E[i] = e
+        self.E = E
 
     def nearest(self, H: FloatArray) -> npt.NDArray[np.intp]:
         """Each row of H's nearest code's index."""
@@ -411,6 +425,75 @@ class CodesArrayLayer:
         return (dQ if self.straight else scale * S) + (2.0 * weight * self.commitment) * (H - Q)
 
 
+class LinearCodesArrayLayer(CodesArrayLayer):
+    """
+    SimVQ's codes (Zhu et al. 2025; the audit-remedies workplan, D6): E = Q W, Q (count, size) a
+    fixed basis, W (size, size) trained, so a gradient from any selected code moves every code
+    through W. The snap, its losses and its gradients are CodesArrayLayer's on E, formed as Q W once
+    a step: before the optimizer's step, W's gradient Q^T dE (before_step); after it, E formed anew
+    (after_step). parameters() is (W,); Q is running state, saved and never stepped. The draw is
+    the direct codes' into Q, W the identity, so the network starts with their E by bits.
+    write_codes sets E: rows given in full set Q and W back to the identity; rows given in part
+    (a re-seed) set Q's rows so E's rows are the vectors (Q's row x W^-1).
+    """
+
+    linear: ClassVar[bool] = True
+
+    def __init__(
+        self, count: int, size: int, commitment: float = 0.25, wall: float = 0.0, wall_ratio: float = WALL_RATIO
+    ) -> None:
+        super().__init__(count, size, commitment, wall, wall_ratio)
+        self.Q: FloatArray = np.zeros((count, size))
+        self.W: FloatArray = np.eye(size)
+        self.grad_W: FloatArray = np.zeros((size, size))
+
+    def parameters(self) -> tuple[FloatArray, ...]:
+        return (self.W,)
+
+    def gradients(self) -> tuple[FloatArray, ...]:
+        return (self.grad_W,)
+
+    def set_parameters(self, parameters: Sequence[FloatArray]) -> None:
+        (self.W,) = parameters
+        self._form()
+
+    def running_state(self) -> tuple[FloatArray, ...]:
+        return (self.Q,)
+
+    def set_running_state(self, state: Sequence[FloatArray]) -> None:
+        (self.Q,) = state
+        self._form()
+
+    def reset_gradient_accum(self) -> None:
+        super().reset_gradient_accum()
+        self.grad_W = np.zeros(self.W.shape)
+
+    def draw(self, rng: np.random.Generator) -> None:
+        super().draw(rng)
+        self.Q, self.W = self.E, np.eye(self.size)
+        self._form()
+
+    def before_step(self) -> None:
+        """W's gradient from E's, accumulated over the batch: dW = Q^T dE."""
+        self.grad_W = self.Q.T @ self.grad_E
+
+    def after_step(self) -> None:
+        """E formed from the stepped W."""
+        self._form()
+
+    def write_codes(self, rows: dict[int, FloatArray], full: bool) -> None:
+        if full:
+            self.Q = np.array([rows[i] for i in range(self.count)], dtype=float)
+            self.W = np.eye(self.size)
+        else:
+            for i, e in rows.items():
+                self.Q[i] = np.linalg.solve(self.W.T, e)
+        self._form()
+
+    def _form(self) -> None:
+        self.E = self.Q @ self.W
+
+
 class InitialStateArrayLayer:
     """
     The first window's state before it is snapped (the window-recurrent adder workplan, W8): a
@@ -490,8 +573,12 @@ class RecurrenceArrayLayer(RecurrenceSchedule):
         features: int,
         cross: bool,
         update_bias: float,
+        linear_codes: Sequence[bool] | None = None,
     ) -> None:
-        """sizes: each factor's (state size, code count or None, commitment)."""
+        """
+        sizes: each factor's (state size, code count or None, commitment); linear_codes: each
+        factor's codes SimVQ's, E = Q W (the audit-remedies workplan, D6), none by default.
+        """
         self.sizes = [s for s, _, _ in sizes]
         self.cross = cross
         self.features = features
@@ -511,10 +598,10 @@ class RecurrenceArrayLayer(RecurrenceSchedule):
             _FactorParts(
                 AttentionPoolingArrayLayer(tokens, features),
                 GRUArrayLayer(features + (self.state_size - s if cross else 0), s, update_bias),
-                None if m is None else CodesArrayLayer(m, s, commitment),
+                None if m is None else (LinearCodesArrayLayer if linear else CodesArrayLayer)(m, s, commitment),
                 InitialStateArrayLayer(s),
             )
-            for s, m, commitment in sizes
+            for (s, m, commitment), linear in zip(sizes, linear_codes or [False] * len(sizes), strict=True)
         ]
 
     def parts(self) -> list[Any]:

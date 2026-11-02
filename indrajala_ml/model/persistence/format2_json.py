@@ -198,7 +198,7 @@ def recurrence_to_json(recurrence: WindowRecurrence) -> dict[str, Any]:
     # the cell and the pooling under a kind, as layers are, so another cell or pooling can join them
     return {
         "factors": [
-            {"state_size": factor.state_size, "codes": None if factor.codes is None else asdict(factor.codes)}
+            {"state_size": factor.state_size, "codes": None if factor.codes is None else _codes_to_json(factor.codes)}
             for factor in recurrence.factors
         ],
         "cross": recurrence.cross,
@@ -268,17 +268,32 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("W", "b")
 
 
+def _codes_to_json(codes: Codes) -> dict[str, Any]:
+    # the parameterisation only when "linear" (the audit-remedies workplan, D6), so a direct
+    # factor's entry is as before it had one
+    fields = asdict(codes)
+    if codes.parameterisation == "direct":
+        del fields["parameterisation"]
+    return fields
+
+
 def recurrence_parameters(recurrence: WindowRecurrence) -> tuple[tuple[str, ...], ...]:
     """
     A window-recurrent network's own parts' parameters, after its window's layers, in order: each
     factor's in turn (the factored-state workplan, D2), its pooling's query, its cell's, its codes
-    (none for a continuous factor) and its initial state (the window-recurrent adder workplan,
+    (none for a continuous factor; W for a linear one, whose Q is running state, saved after it,
+    the audit-remedies workplan's D6) and its initial state (the window-recurrent adder workplan,
     stage 4).
     """
     return tuple(
         names
         for factor in recurrence.factors
-        for names in (("q",), ("W", "U", "b"), *([] if factor.codes is None else [("E",)]), ("c",))
+        for names in (
+            ("q",),
+            ("W", "U", "b"),
+            *([] if factor.codes is None else [("W",) if factor.codes.parameterisation == "linear" else ("E",)]),
+            ("c",),
+        )
     )
 
 

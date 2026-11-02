@@ -102,7 +102,12 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
             for f in recurrence.factors
         ]
         self.recurrence_layer = RecurrenceLayer(
-            sizes, self.columns, features, recurrence.cross, recurrence.cell.update_bias
+            sizes,
+            self.columns,
+            features,
+            recurrence.cross,
+            recurrence.cell.update_bias,
+            linear_codes=[f.codes is not None and f.codes.parameterisation == "linear" for f in recurrence.factors],
         )
         self.parts: list[Any] = self.recurrence_layer.parts()
         self._state_inputs = [layer for layer in self.trainable_layers if isinstance(layer, StateInputLayer)]
@@ -188,8 +193,10 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
         assert len(codes) == part.count and all(len(code) == part.size for code in codes), (
             f"factor {factor}'s codes are ({part.count}, {part.size}); got {len(codes)} codes"
         )
-        for row, code in zip(part.codes, codes, strict=True):
-            row.set_weights(list(code))
+        part.write_codes(dict(enumerate(codes)), full=True)
+        if part.linear:
+            # W back to the identity (write_codes), so its optimizer state starts again too
+            self.optimizer.reset_rows(len(self.trainable_layers) + self.parts.index(part), 0, range(part.size))
 
     def factor_codes(self, factor: int) -> list[list[float]]:
         """Factor factor's codes, (count, state_size), as lists."""
@@ -201,10 +208,12 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
         """The array network's reseed_codes: the rows given set, their optimizer state zeroed (D4)."""
         part = self.recurrence_layer.factors[factor].codes
         assert part is not None, f"factor {factor} is continuous: it has no codes"
-        for row, code in rows.items():
+        for code in rows.values():
             assert len(code) == part.size, f"a code of factor {factor} has {part.size} features; got {len(code)}"
-            part.codes[row].set_weights(list(code))
-        self.optimizer.reset_rows(len(self.trainable_layers) + self.parts.index(part), 0, sorted(rows))
+        part.write_codes(rows, full=False)
+        if not part.linear:
+            # a linear factor's moved codes are Q's rows, which no optimizer steps (D6)
+            self.optimizer.reset_rows(len(self.trainable_layers) + self.parts.index(part), 0, sorted(rows))
 
     def _forward(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> list[float]:
         # forward_windows builds each window's own context
@@ -227,7 +236,12 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
     def learn_batch(self, learning_rate: float, batch: Batch, clip_norm: float | None = None) -> None:
         validate_batch(batch)
         self._accumulate_batch_gradients([state for state, _ in batch], [label for _, label in batch])
+        codes = [f.codes for f in self.recurrence_layer.factors if f.codes is not None]
+        for part in codes:
+            part.before_step()  # a linear factor's W's gradient from its codes' (D6)
         self.optimizer.step([*self.trainable_layers, *self.parts], learning_rate, len(batch), clip_norm)
+        for part in codes:
+            part.after_step()  # its codes formed from the stepped W
 
     def _accumulate_batch_gradients(self, states: Sequence[Sequence[float]], labels: Sequence[Sequence[int]]) -> None:
         # every layer's and part's gradient of the batch's loss, accumulated (W14, W20)

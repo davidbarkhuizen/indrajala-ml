@@ -1,7 +1,8 @@
 # Workplan: the implementation audit's remedies
 
-**Status: stages 2 (the explicit loss, #1204), 3 (the k-means codes, #1205) and 4 (re-seeding) done;
-stage 5 next.
+**Status: stages 2 (the explicit loss, #1204), 3 (the k-means codes, #1205) and 4 (re-seeding,
+#1206) done; stage 5 (the codebook rate, #1207) built, its jebel A/B after the GQA study; stage 6
+(SimVQ) built.
 Decisions D1-D11 settled 2026-11-02 by building for extensibility, speed and real-world production
 (the owner's standing direction); written at the owner's request ("a detailed workplan to implement
 the two supported changes, and the four optional ones").**
@@ -280,7 +281,16 @@ move), and its timing tier (docs/measurement.md §1).
    a scale of 1.0 keeps every bit; a scale of `k` under SGD is a `k`-times step on the codes alone,
    under Adam as Adam at `k·lr`. Golden: unchanged, plus one entry at a scale of 4. Tier 1: one
    A/B of `prepared_dataset_timing`, `--order ONNO` (the step's loop gained a read).
-6. **SimVQ (D6).** `Codes(parameterisation="linear")`; the codes parts (numpy, Rust, pure Python)
+6. **SimVQ (D6).** *Built:* a linear codes part (numpy, Rust, pure Python) keeps E concrete,
+   formed as `Q W` once a step: before the optimizer's step `dW = Qᵀ dE` (`before_step`), after
+   it E anew (`after_step`); the snap, its losses and the window program read and accumulate E as
+   for the direct codes (the program's E and dE slots, `_program_arrays`), and the optimizer sees
+   `W` alone. Rust forms both products through numpy's matmul, so numpy's E by bits and no crate
+   change. Q is running state, saved after W (numpy, Rust: `[W, Q]`; pure Python: W's rows then
+   Q's). *A change from D6's text:* writing Q's row with W kept would put a k-means or re-seeded
+   code at `x W`, not at the state x; so `set_codes` (D3's) sets Q and W back to the identity
+   (with W's optimizer state), and a re-seed (D4's) solves Q's row so E's row is the state, W kept.
+   Golden: three entries. Planned: `Codes(parameterisation="linear")`; the codes parts (numpy, Rust, pure Python)
    with `Q` as running state and `W` stepped; `E = Q W` before the window program's calls and
    `dW = Qᵀ dE` after; format 2's field; D3 and D4 writing `Q`. Tests: at `W = I` the forward is
    the direct codes' by bits; the gradient against a finite difference; Rust against numpy;

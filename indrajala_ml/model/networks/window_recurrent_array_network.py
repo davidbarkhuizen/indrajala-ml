@@ -183,7 +183,12 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
             for f in recurrence.factors
         ]
         self.recurrence_layer: Any = parts.recurrence(
-            sizes, self.columns, features, recurrence.cross, recurrence.cell.update_bias
+            sizes,
+            self.columns,
+            features,
+            recurrence.cross,
+            recurrence.cell.update_bias,
+            linear_codes=_linear_codes(recurrence),
         )
         self.parts: list[Any] = self.recurrence_layer.parts()
         self._state_inputs: list[Any] = [layer for layer in self.layers if isinstance(layer, parts.state_input)]
@@ -380,12 +385,12 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         """
         part = self.recurrence_layer.factors[factor].codes
         assert part is not None, f"factor {factor} is continuous: it has no codes"
-        E = part.E.tolist()
-        for row, code in rows.items():
+        for code in rows.values():
             assert len(code) == part.size, f"a code of factor {factor} has {part.size} features; got {len(code)}"
-            E[row] = list(code)
-        part.E = self.backend.matrix(E)
-        self.optimizer.reset_rows(len(self.layers) + self.parts.index(part), 0, sorted(rows))
+        part.write_codes(rows, full=False)
+        if not part.linear:
+            # a linear factor's moved codes are Q's rows, which no optimizer steps (D6)
+            self.optimizer.reset_rows(len(self.layers) + self.parts.index(part), 0, sorted(rows))
 
     def set_codes(self, factor: int, codes: list[list[float]]) -> None:
         """Factor factor's codes E, (count, state_size): codes.py's k-means codes (D3)."""
@@ -394,7 +399,10 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         assert len(codes) == part.count and all(len(code) == part.size for code in codes), (
             f"factor {factor}'s codes are ({part.count}, {part.size}); got {len(codes)} codes"
         )
-        part.E = self.backend.matrix(codes)
+        part.write_codes(dict(enumerate(codes)), full=True)
+        if part.linear:
+            # W back to the identity (write_codes), so its optimizer state starts again too
+            self.optimizer.reset_rows(len(self.layers) + self.parts.index(part), 0, range(part.size))
 
     def state_codes(self, X: A) -> list[list[tuple[int, ...]]]:
         """
@@ -456,7 +464,12 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         self, learning_rate: float, X: A, categories: Sequence[Any], clip_norm: float | None = None
     ) -> None:
         self._accumulate_gradients(X, self._target_batch_array(categories))
+        codes = [f.codes for f in self.recurrence_layer.factors if f.codes is not None]
+        for part in codes:
+            part.before_step()  # a linear factor's W's gradient from its codes' (D6)
         self.optimizer.step([*self.layers, *self.parts], learning_rate, len(categories), clip_norm)
+        for part in codes:
+            part.after_step()  # its codes formed from the stepped W
 
     def _accumulate_gradients(self, X: Any, Y: Any) -> None:
         # every layer's and part's gradient of the batch's loss: the per-layer path here, the window
@@ -564,7 +577,8 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
     # the weights: the window's layers', then the parts'
 
     def snapshot(self) -> list[tuple[A, ...]]:
-        return [*super().snapshot(), *(tuple(array.copy() for array in part.parameters()) for part in self.parts)]
+        # each part's parameters, then its running state (a linear factor's Q, D6)
+        return [*super().snapshot(), *(tuple(array.copy() for array in _part_state(part)) for part in self.parts)]
 
     def restore(self, snapshot: Sequence[tuple[Any, ...]]) -> None:
         count = len(self.layers)
@@ -573,9 +587,13 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         )
         super().restore(snapshot[:count])
         for part, entry in zip(self.parts, snapshot[count:]):
-            expected = len(part.parameters())
+            expected = len(_part_state(part))
             assert len(entry) == expected, f"a {type(part).__name__} restores {expected} arrays; got {entry!r}"
-            part.set_parameters([self.backend.owned(values) for values in entry])
+            arrays = [self.backend.owned(values) for values in entry]
+            parameters = len(part.parameters())
+            if parameters < expected:
+                part.set_running_state(arrays[parameters:])
+            part.set_parameters(arrays[:parameters])
 
     @classmethod
     def _from_file(cls, file: NetworkFile) -> Self:
@@ -672,12 +690,12 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
         layers = [
             array for layer in self.layers if isinstance(layer, TrainedArrayLayer) for array in layer.parameters()
         ]
-        return [*layers, *(array for part in self.parts for array in part.parameters())]
+        return [*layers, *(array for part in self.parts for array in _program_arrays(part, gradients=False))]
 
     def _program_gradients(self) -> list[pa.Array]:
         # each parameter's gradient, in _program_parameters' order
         layers = [array for layer in self.layers if isinstance(layer, TrainedArrayLayer) for array in layer.gradients()]
-        return [*layers, *(array for part in self.parts for array in part.gradients())]
+        return [*layers, *(array for part in self.parts for array in _program_arrays(part, gradients=True))]
 
     def _accumulate_gradients(self, X: Any, Y: Any) -> None:
         # the windows forward in training and back in one call, each gradient accumulated in place;
@@ -728,3 +746,21 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             continuous=continuous if live and any(continuous) else None,
             couplings=couplings if live and min(couplings) < 1.0 else None,
         )
+
+
+def _linear_codes(recurrence: WindowRecurrence) -> list[bool]:
+    # each factor's codes SimVQ's, E = Q W (the audit-remedies workplan, D6)
+    return [f.codes is not None and f.codes.parameterisation == "linear" for f in recurrence.factors]
+
+
+def _part_state(part: Any) -> tuple[Any, ...]:
+    # what snapshot() keeps of a part: its parameters, then its running state (a linear factor's Q)
+    return tuple(part.parameters()) + (tuple(part.running_state()) if hasattr(part, "running_state") else ())
+
+
+def _program_arrays(part: Any, gradients: bool) -> tuple[Any, ...]:
+    # a part's arrays as the window program reads them: its parameters (or gradients), but a linear
+    # factor's codes E (or their gradient), which the program snaps to, in place of W (D6)
+    if getattr(part, "linear", False):
+        return (part.grad_E,) if gradients else (part.E,)
+    return tuple(part.gradients()) if gradients else tuple(part.parameters())

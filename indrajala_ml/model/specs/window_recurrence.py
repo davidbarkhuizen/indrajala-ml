@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from indrajala_ml.model.specs.layer_specs import LayerSpec, StateInput
 
@@ -75,6 +75,10 @@ class Codes:
 
     count: int
     commitment: float = 0.25
+    # "linear": SimVQ's codes, E = Q W, Q a fixed basis (the codes' first draw, or k-means'), W
+    # trained from the identity, so every code moves with any selected one (Zhu et al. 2025; the
+    # audit-remedies workplan, D6); "direct": E itself trained, as before
+    parameterisation: Literal["direct", "linear"] = "direct"
 
 
 # A consolidation (the code-consolidation workplan, D1): each duplicate joint code, a code index per
