@@ -24,4 +24,8 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 ## `infrastructure/`: machines, release and repositories
 
-None open. Retired plans are listed in [next-steps.md](../next-steps.md).
+| workplan | scope |
+| --- | --- |
+| [multithreading-workplan.md](infrastructure/multithreading-workplan.md) | the crate's outstanding kernel work (stage −1), then a thread pool, one thread budget a process, and threaded attention, conv and the window program |
+
+Retired plans are listed in [next-steps.md](../next-steps.md).
