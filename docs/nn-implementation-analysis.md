@@ -2,11 +2,13 @@
 
 An audit of the code base on its own terms: what the networks compute, how training is wired, and
 which design decisions the code embodies. It was written from the source alone (`indrajala_ml/`,
-`rust/`), without the repository's docs, workplans or the literature. A later pass will check the
-design against the literature, so the last two sections list the decisions and the points to check.
+`rust/`), without the repository's docs, workplans or the literature. Sections 1-15 are that audit;
+§14 lists the decisions and §15 the points to check.
 
-Where the code names a source (Goyal et al. 2017, Kingma & Ba, Ioffe & Szegedy, FlashAttention-2,
-RoPE, GQA, VQ-VAE, GRU), this doc reports the claim as the code makes it; it doesn't check it.
+§16 is the second pass: each decision checked against the papers themselves (the local library,
+`indrajala-literature` and `indrajala-literature-private`, with 19 papers fetched to fill its gaps),
+and a verdict per decision. Sections 1-15 report each source as the code cites it; §16 is where the
+citations were read.
 
 Contents:
 
@@ -25,6 +27,7 @@ Contents:
 13. [Persistence](#13-persistence)
 14. [Design decisions, summarised](#14-design-decisions-summarised)
 15. [Points to check against the literature, and findings](#15-points-to-check-against-the-literature-and-findings)
+16. [The design against the literature](#16-the-design-against-the-literature)
 
 ---
 
@@ -635,8 +638,10 @@ load.
    (`rust_optimizer.py:186`). `NumpyOptimizer` decays each parameter by its own flag, so it decays
    `U`. Under `Adam(weight_decay > 0)` or `WeightDecay`, a window-recurrent network trains
    differently on Rust and numpy. It's latent: no study in this repo pairs weight decay with a
-   window-recurrent network, and no test covers the combination. A fix would pair parameters by
-   their `decayed` flags (or give the GRU its own pairing), not two at a time.
+   window-recurrent network, and no test covers the combination. **Fixed in #1199:** a parameter
+   takes the next as its pair's second only when the next isn't decayed, so the GRU steps `W`
+   alone, then `(U, b)`; `tests/model/optimizers/test_weight_decay_pairs.py` holds both backends to
+   it.
 2. **A stale crate comment**: `rust/core/src/recurrent.rs:26-27` says the sigmoid and tanh use
    "Rust's `f64::exp`, as `exp` (`ufuncs.rs`) is", but the module imports
    `cr_exp::{exp_in_place, sigmoid_in_place}` and `ufuncs::exp` is the correctly rounded one.
@@ -646,3 +651,140 @@ load.
    should expect last-bit differences between a numpy run and a Rust run.
 4. **The snap wall is numpy-only** and refused by the Rust window program; the code marks it
    retired. It remains a training-path branch in `CodesArrayLayer`.
+
+## 16. The design against the literature
+
+Each decision in §14 and point in §15.1, checked against the paper it rests on, read in full where
+it bears on the decision. Sources are cited by their key in `indrajala-literature/library.bib`.
+The 19 papers fetched for this pass are held in `indrajala-literature-private` (none is openly
+licensed), with their entries and rows in the public repository. One source wasn't obtained: the
+pocket algorithm's own paper (Gallant 1990, *Perceptron-based learning algorithms*, IEEE
+Transactions on Neural Networks, doi:10.1109/72.80230). §16.2's pocket verdict rests on Prechelt
+instead.
+
+Verdicts:
+
+- **Consistent:** the code does what the source says.
+- **Equivalent:** it differs in form but not in what it computes or learns.
+- **Divergent (benign):** it differs from the source, but the source gives no evidence against the
+  difference at this code's scale or use.
+- **Adverse:** the source reports evidence against the code's choice.
+
+### 16.1 Consistent or equivalent
+
+| Decision | Source | Verdict |
+|---|---|---|
+| Adam's moments, bias corrections and `ε` outside the square root; defaults `0.9, 0.999, 1e−8` | `kingma-2015-adam`, Algorithm 1 | consistent |
+| Momentum `u ← m u + g/B; w ← w − lr u`; coupled L2 `w − lr(g/B + λw)` | `goyal-2017-accurate-large-minibatch-sgd`, eqs. (8), (9) | consistent |
+| No weight decay on BN's `γ, β` | Goyal et al. ("we do not apply weight decay on the learnable BN coefficients") | consistent |
+| Linear warmup | Goyal et al. §2.2 | consistent |
+| AdamW: decoupled decay on the weights | `loshchilov-2019-decoupled-weight-decay`, Algorithm 2 | equivalent: the paper decays by `η_t λ θ`, the schedule multiplier without `α`; the code (PyTorch's grouping) by `lr·λ·θ`, so its `λ` is the paper's divided by `α`. Same family, different units for `λ` |
+| Clipping the gradient's global norm | `pascanu-2013-difficulty-training-rnn`, Algorithm 1 | consistent (on the mean gradient, matching a mean loss) |
+| BN: bias dropped before BN, BN before the nonlinearity, biased variance in training, unbiased `m/(m−1)` for inference | `ioffe-2015-batch-normalization`, §3.2 and Algorithm 2 | consistent |
+| Ghost BN: each ghost group normalised alone, the running averages moved group by group | `hoffer-2017-train-longer-generalize-better`, Algorithm 1 and the text after it (the paper reports that frameworks' equal-weight update worsens generalisation; the code doesn't do that) | consistent (the paper tracks a running σ, the code a running variance: equivalent) |
+| Layer norm per token, `γ = 1, β = 0` | `ba-2016-layer-normalization` | consistent |
+| Pre-LN blocks with a final LayerNorm | `xiong-2020-layer-normalization-transformer` (pre-LN's gradients are well behaved at initialisation; warmup becomes optional) | consistent; the recipe's warmup is harmless, not required |
+| Tiled attention: online softmax, `m` and `l` kept, `D = rowsum(dO ∘ O)` in the backward, dropout masks regenerated | `dao-2023-flashattention-2`, Algorithms 1 and 2 | consistent |
+| RoPE, base 10000 | `su-2021-roformer-rotary-position-embedding` | equivalent: RoFormer pairs features `(2i, 2i+1)`; the code pairs `(j, j + d_k/2)` (rotate half). A fixed permutation of the query and key features, absorbed by the learned projections |
+| GELU, exact and the tanh form (`0.044715`) | `hendrycks-2016-gelu` | consistent |
+| GLU FFN (SwiGLU, GEGLU), `size ≈ 8d/3` at equal parameters | `shazeer-2020-glu-variants-improve-transformer` | divergent (benign): Shazeer omits the biases (T5's convention), and the code keeps them |
+| GQA: query head `i` reads key/value head `i // (h/g)`; conversion by mean-pooling K and V heads, then uptraining | `ainslie-2023-gqa-grouped-query-attention`, §2.1 | consistent |
+| GRU equations, reset inside `U_h(r ⊙ c)`, `h = z c + (1−z) h̃` | `cho-2014-rnn-encoder-decoder-gru`, eqs. (5)-(8) | consistent |
+| GRU update-gate bias 1.0, toward keeping the state | `jozefowicz-2015-empirical-exploration-recurrent-architectures` (bias 1 on the LSTM's forget gate) | consistent by analogy: `z` is the GRU's keep gate |
+| VQ: nearest code, straight-through, codebook `‖sg[h] − e‖²` and commitment `β‖h − sg[e]‖²`, `β = 0.25` | `van-den-oord-2017-vq-vae-neural-discrete-representation`, eq. (3) | consistent |
+| Soft codes `softmax(−d/τ)` annealed toward hard | `agustsson-2017-soft-to-hard-vector-quantization`, eq. (7) (`σ = 1/τ`) | consistent |
+| Straight-through estimator | `bengio-2013-straight-through-estimator` | consistent |
+| BPTT over windows with per-window recomputation | `chen-2016-training-deep-nets-sublinear-memory` | consistent |
+| Inverted dropout (scale in training, not at test) | `srivastava-2014-dropout` (scales the weights at test time) | equivalent |
+| Cosine decay to a floor | `loshchilov-2017-sgdr-warm-restarts` | consistent |
+| MRI: the wrong-side unit nearest zero adapts, its weights moved along its input | `widrow-1990-30-years-adaptive-neural-networks`, §V | consistent in kind; see 16.3 |
+
+### 16.2 Adverse
+
+1. **The default output loss is the squared error on a sigmoid.** `Dense(..., output=True)` defaults
+   to `loss="squared"`, and the sigmoid presets train with it. Glorot & Bengio
+   (`glorot-2010-understanding-difficulty-deep-feedforward`, Fig. 5 and the text beside it) find that
+   cross-entropy "worked much better (for classification problems) than the quadratic cost", which
+   shows "more severe plateaus". They note the observation goes back to Solla et al. 1988. The
+   `a(1−a)` factor in the squared-error delta vanishes on a saturated wrong output, which is the
+   plateau. *Change:* make the output layer's loss an explicit argument with no default, and have
+   the legacy presets name `"squared"`, so no existing bit moves and no new network gets the
+   squared error by omission. A classifier should use sigmoid with BCE, or softmax with CE.
+2. **The codebook starts at a scale and place unrelated to the states it quantises, learns only by
+   its selected codes' gradients, and never revives an unused code.** Codes are drawn uniformly in
+   `±1/√s`, independent of where the GRU's outputs `h` lie, and are stepped only by the codebook
+   loss of the codes chosen.
+   - `lancucki-2020-robust-training-vq-bottleneck` finds that codebook learning "can suffer from
+     poor initialization", sensitive to the codebook's scale relative to the encoder outputs (its
+     Fig. 1). It fixes this with data-dependent initialisation, periodic re-initialisation from the
+     encoder outputs, and a higher codebook learning rate.
+   - `dhariwal-2020-jukebox` (§3.1) restarts dead codes near random encoder outputs.
+   - `zheng-2023-online-clustered-codebook` re-anchors unused codes to encoder features.
+   - `huh-2023-straightening-straight-through-estimator` traces instability to codebook gradient
+     sparsity and the commitment loss's asymmetry.
+   - `zhu-2024-simvq-representation-collapse-one-linear-layer` traces collapse to "disjoint
+     codebook optimization, where only a few code vectors are updated".
+
+   For this code the stakes differ from the papers': it wants a *small* set of used codes (a
+   minimal machine), so an unused code isn't by itself a failure. But two parts of the findings
+   carry over directly: a codebook that starts away from the states, and a used code that drifts
+   from the states it serves. *Change, as candidates to test, not defaults:* initialise each
+   factor's codebook from its first states (k-means++ or random distinct samples of `h` over a
+   first batch), and add an option to re-seed a code unused for a window of steps, from the
+   states. Both are training-state options, like the temperatures and couplings already there,
+   and are judged by their fresh-seed success rates.
+3. **The trainer keeps the epoch with the best *training* accuracy.** The pocket idea is the
+   perceptron's (Gallant 1990, not obtained). For gradient training, the literature's selection
+   is on a held-out set: `prechelt-1998-early-stopping-but-when` defines early stopping by the
+   validation error, and its basic procedure ("split the training data into a training set and a
+   validation set … stop … as soon as the error on the validation set is higher"). Selecting on
+   training accuracy picks the epoch that fits the training data best. That's harmless where
+   training accuracy is the goal (exact learning of a finite task, later certified), but it biases
+   any held-out claim made from the returned network. *Change:* let the trainer select on a given
+   selection set, and record which set selected. Keep training accuracy for the tasks that
+   certify.
+
+### 16.3 Divergent (benign), and optional changes
+
+1. **Initialisation.** Uniform `±1/√fan_in` has variance `1/(3·fan_in)`, PyTorch's `nn.Linear`
+   default. `he-2015-delving-deep-rectifiers` derives `2/fan_in` for ReLU and reports that
+   Xavier-scaled initialisation fails to converge at 30 layers. `chowdhery-2022-palm-scaling-pathways`
+   uses `N(0, 1/fan_in)` for kernels and `N(0, 1)` for embeddings, "since layer normalization is
+   not applied to the embeddings". Here the deep networks are pre-LN residual transformers, whose
+   normalisation and identity paths make the initial scale matter much less, and the plain ReLU MLPs
+   and conv nets are a few layers deep. So nothing here is shown to suffer. *Optional:* a He
+   initialiser for ReLU and GELU layers and conv kernels, as a spec option, would let a deep plain
+   network be built correctly.
+2. **State injection is additive** (`x_t + P c`, FiLM with `γ := 1`). In
+   `perez-2018-film` (Table 2) restricting FiLM to `γ := 1` drops CLEVR accuracy to 95.9 against
+   97.4-97.7 for the full model, and the authors find that FiLM "largely conditions through `γ`".
+   The task and the conditioning signal differ, so this is evidence, not proof, for the window. *Optional:* a
+   multiplicative `StateInput` (`x_t ⊙ (1 + G c) + P c`), tested against the additive one on
+   fresh seeds.
+3. **Attention pooling** is one learned query with no key or value projections and no `1/√d`
+   scale. The Set Transformer's pooling (`lee-2019-set-transformer`, PMA) is multi-head attention
+   from learned seeds with projections, followed by a feed-forward layer. The code's pooling is a
+   deliberately minimal summary feeding a GRU, which has its own input projection, and no source
+   shows the simpler form failing. No change suggested.
+4. **The window's FFN is 2× the stream width.** `vaswani-2017-attention` uses `d_ff = 4·d_model`
+   (2048 at 512). A capacity choice for a 16-wide window, not a correctness issue.
+5. **MRI adapts one unit per error.** Widrow & Lehr's MRI adapts every unit needed to correct the
+   output (for an OR output wrongly on, every unit giving +1), choosing the ones nearest zero. The
+   code adapts the single nearest unit per presentation, so an error needing several flips takes
+   several presentations. A legacy, non-gradient demo network; correct it if the network is used
+   again.
+6. **Embedding initialisation** `±1/√d` against PaLM's `N(0, 1)`. Under pre-LN blocks the embedding's
+   scale meets a LayerNorm before every sublayer. Benign.
+7. **AdamW's `λ`** is in PyTorch's units (decay `lr·λ`), not the paper's (`η_t·λ`). Record the
+   convention with every run that reports `λ`; no change.
+
+### 16.4 What this changes
+
+| Item | Kind | Recommendation |
+|---|---|---|
+| The output layer's default loss (16.2.1) | adverse | make it explicit; presets name `"squared"`; no bits move |
+| The codebook's start and its unused codes (16.2.2) | adverse, for this code's aim in part | data-dependent initialisation and optional re-seeding, as training options, judged on fresh seeds |
+| The trainer's pocket on training accuracy (16.2.3) | adverse for held-out claims | a selection-set argument; training accuracy kept for certified tasks |
+| He initialisation (16.3.1) | optional | a spec option |
+| A multiplicative state input (16.3.2) | optional | a variant to test |
+| MRI (16.3.5) | legacy | fix if used again |
