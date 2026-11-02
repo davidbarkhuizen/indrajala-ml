@@ -1,7 +1,8 @@
 # Workplan: grouped- and multi-query attention (roadmap step 14)
 
 **Status: decisions D1-D8 settled 2026-10-10; revised 2026-11-02 against the library as steps 9 to
-13 left it (D1, D4, D6 and D7 corrected, D2, D3 and D5 made exact, D9 to D12 new), settled by
+13 left it (D1, D4, D6 and D7 corrected, D2, D3 and D5 made exact, D9 to D12 new; D13, the study's
+FFN, from the literature), settled by
 building for extensibility, speed and real-world production (the owner's direction, 2026-10-10).
 Started 2026-11-02 at the owner's word, while step 13's study runs; the multithreading workplan
 moved to the end (its O1). Stage 1 (this plan) done.**
@@ -133,8 +134,9 @@ Each lists the options considered, with pros and cons, and the choice.
     configurations of one tree, which is the study's measurement (D7, D11), not an A/B.
 - **D7. The study. Settled (revised 2026-11-02).**
   - **The model:** the context-length study's 256 model (2 layers, `d = 64`, rotary, the
-    document mask, the recipe, the token budget, 30 epochs on Rust), with step 13's chosen FFN, at
-    8 query heads of `d_k = 8`, so `g` has room: 8, 4, 2, 1.
+    document mask, the recipe, the token budget, 30 epochs on Rust), with SwiGLU in every FFN
+    (`GatedDense(170, "silu")`, step 13's equal-parameter width; D13), at 8 query heads of
+    `d_k = 8`, so `g` has room: 8, 4, 2, 1.
   - **The arms:** trained from scratch at each `g`, and uptrained from the `g = 8` model converted
     to each `g < 8` (D5; Ainslie et al.'s 5% of the original steps is 1.5 epochs, so 2 epochs).
   - **Data:** Herodotus, Euclid and the *Muqaddimah*, both splits, 5 seeds.
@@ -144,6 +146,35 @@ Each lists the options considered, with pros and cons, and the choice.
   - **Registration:** claims and a budget from a probe, registered in this plan before the data
     (experiment-design §2), at stage 8. The from-scratch arms alone are 120 runs, so the
     registration sizes them against `stone`'s or `jebel`'s time when it is written.
+- **D13. The study's FFN. Settled: (a) (new 2026-11-02, from the literature, at the owner's
+  word).** D7 first said "step 13's chosen FFN", but step 13's registration has claims (F1-F3) and
+  no adoption rule. The FFN is a background factor here: the same in every arm, the claims
+  comparing `g` with `g`. What matters is that the trade-off is measured where the literature
+  measured it, so it can be compared:
+  - Every published GQA or MQA result is on a gated FFN. Ainslie et al. 2023 (§3.1) ran on T5.1.1,
+    whose FFN is GEGLU (T5's released-checkpoints notes: "GEGLU activation in feed-forward hidden
+    layer, rather than ReLU"). Llama 2's GQA models use SwiGLU (Touvron et al. 2023, §2.2), and its
+    attention ablation (A.2.1) compensates for the smaller attention in the FFN's width. PaLM pairs
+    SwiGLU with multi-query attention (Chowdhery et al. 2022, §2). None used ReLU.
+  - Narang et al. 2021 found that "most modifications do not meaningfully improve performance",
+    but SwiGLU and GEGLU did, across pre-training, fine-tuning and supervised training (§3.1), and
+    the two are indistinguishable (Table 1: final loss 1.789 and 1.792, ReLU 1.838).
+  - Options:
+    - (a) *Chosen.* SwiGLU (`GatedDense(170, "silu")`), whatever step 13 finds. Pros: production's
+      decoder-only form with GQA (Llama 2, PaLM), so the measured quality-against-cache trade-off
+      is comparable with theirs; built and tested (step 13). Cons: its quality edge on our corpora
+      is what step 13 tests and may not show, which doesn't bear on comparing `g` with `g`.
+    - (b) Step 13's winner. Pros: the best FFN on our data. Cons: ties the design to a study whose
+      claims may come out undecided at 5 seeds; a GELU win would put GQA on an FFN no GQA result
+      used.
+    - (c) GEGLU. Pros: the GQA paper's own FFN. Cons: an encoder-decoder model's; Narang et al.
+      find it indistinguishable from SwiGLU, so it buys nothing over production's choice.
+    - (d) ReLU. Pros: our baseline. Cons: no GQA or MQA result uses it; and no existing runs serve
+      as the `g = 8` arm anyway (D7's 8 heads, not the context-length study's 4).
+  - Sources (indrajala-literature): `ainslie-2023-gqa-grouped-query-attention`,
+    `touvron-2023-llama-2-open-foundation-chat`, `chowdhery-2022-palm-scaling-pathways`,
+    `narang-2021-transformer-modifications-transfer`, `shazeer-2020-glu-variants-improve-transformer`,
+    `shazeer-2019-one-write-head-fast-decoding`.
 - **D8. Out of scope.** Multi-head latent attention (DeepSeek-V2's compressed cache) and cache
   quantization: further cache reductions, each its own step if the study shows the cache binding.
 - **D9. Validation. Settled (new 2026-11-02).** `key_value_heads` is `None` or at least 1, and it
