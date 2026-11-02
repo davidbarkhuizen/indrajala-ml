@@ -79,6 +79,7 @@ docs cite them by section:
 | Generation with a key/value cache (roadmap step 9, D1-D9) | #640 | #1143-#1148, crate #85, #1149 | `git show 836e9a3:docs/workplans/library/generation-workplan.md` |
 | The training recipe: schedules, AdamW, clipping (roadmap step 10, D1-D11) | #641 | #1150-#1156, crate #86, #1160 | `git show b446c31:docs/workplans/library/training-recipe-workplan.md` |
 | Segments: packing, document masks and padding (roadmap step 11, D1-D11) | #642 | #1157, #1158, #1162-#1166, crate #87, #1159, this PR | `git show 69e2e93:docs/workplans/library/segments-workplan.md` |
+| Context length: tiled attention, windows cut anew every epoch, the study (roadmap step 12, D1-D13) | #643 | #647, #1168-#1175, crate #88, #1178, this PR | `git show ec20e8c:docs/workplans/library/context-length-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -94,7 +95,32 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/patch_attention_study.py`'s, the multi-head attention study's in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
-`scripts/studies/rotary_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+`scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From context length (retired 2026-11-02)
+
+Done: the end-of-paragraph token's target counted (D11); tiled attention with an online softmax in
+all three implementations and the crate, memory linear in `T`, masked blocks skipped (D3, D12;
+crate #88); the attention benchmark (D7); windows cut anew every epoch and the token budget (D4,
+D5); `Attention(document_mask)`; the study (D8), its findings in
+`scripts/studies/context_length_study.py`'s docstring: 256 below 64 (C2) and 1,024 below 64 (C1)
+hold, 1,024 below 256 is refuted (C3), the document mask is lower at 1,024 (C5) and undecided at
+256 (C4). So later sequence work on the long-form corpora uses windows of 256, and the document
+mask stays the packed default. Left:
+
+- **Per-segment (varlen) tiling** if bitwise position independence is ever needed (D3's
+  refinement: global blocks agree within rounding across a segment's placements).
+- **numpy's backward at `T = 64` is 43-47% slower than the untiled one** (#1171: the recompute plus
+  the dropout redraw); numpy is the reference, not the speed path.
+- **Two unexplained tier 1 rows:** #1174's loader +2.3%, #1175's numpy causal forward +2.5% (the
+  multithreading workplan's K4 rereads them after its placement pin).
+- **A run file doesn't record `clip_norm`.**
+- **Out of scope (D10):** mixed precision, sequence parallelism, sparse or sliding-window
+  attention: each its own step when a context past 1,024 or a larger model needs it.
+- **The study's readings, not planned** (the owner, 2026-11-02: no follow-ups): C3 holds only at
+  this model (2 layers, `d` 64), whose last positions in a 1,024 window predict worse than at 256;
+  at the token budget the 1,024 arm trains on 2 windows a step; Euclid's contiguous split overfits
+  by epoch 30 in every arm.
 
 ## From segments (retired 2026-11-01)
 
@@ -105,7 +131,7 @@ golden entries (D10). Left:
 
 - **The document-mask study is step 12's** (D11): at `T = 64` too few windows cross a paragraph
   boundary; the context-length study has the masked and unmasked arms at 256 and 1,024.
-- **Skipping wholly masked blocks** (the varlen kernels' gain, D9) waits for step 12's tiled
+- **Skipping wholly masked blocks** (the varlen kernels' gain, D9): done in step 12's tiled
   attention, where a block above the diagonal or across segments is skipped whole.
 - **The forward context's cost:** stage 2's keyword context costs Rust's dense B=32 epoch 1.1%
   (D10, accepted); a call path that passes it without the keyword is the place to look if a later

@@ -51,8 +51,10 @@ bits.
 11. **Segments: packing, document masks and padding**: one segment id per token, for packed
     training windows and padded inference batches; done (2026-11-01), in all three
     implementations and the crate (README, Segments; next-steps, From segments).
-12. **Context length**: windows of 256 and 1,024 characters, with tiled attention; planned
-    (2026-10-10, [context-length-workplan.md](workplans/library/context-length-workplan.md)).
+12. **Context length**: windows of 256 and 1,024 characters, with tiled attention; done
+    (2026-11-02), in all three implementations and the crate; the study puts later sequence work on
+    the long-form corpora at windows of 256, the document mask the packed default (next-steps, From
+    context length).
 13. **FFN activations: GELU and SwiGLU**; planned (2026-10-10,
     [ffn-activations-workplan.md](workplans/library/ffn-activations-workplan.md)).
 14. **Grouped- and multi-query attention**; planned (2026-10-10,
