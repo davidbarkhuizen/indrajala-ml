@@ -49,6 +49,14 @@ past T, and attends from its query to every cached key of its row through the sa
 (the query the cache's last column), masking another segment's keys and pads' (D4). So a rotary
 layer's window slides exactly: scores depend on distances up to T - 1, as in training.
 
+A grouped layer (the grouped-query attention workplan, D2, D3) projects K and V to g key/value
+heads, (N * T, g * d_k), and rotates and caches them at that width; the tiled passes expand them
+to the h query heads (np.repeat along the head axis, query head i reading key/value head i // (h /
+g)): numpy is the reference, and the crate reads the shared blocks in place. The backward pass
+folds dK and dV per query head into their group's, a left fold in head order from the group's
+first head (np.cumsum along the head axis), before dK is divided by the scale: the order the crate
+and pure Python add in.
+
 The softmax's exp is this module's exp, which tests replace with another implementation's (it
 isn't correctly rounded), as batch norm's tests replace sigmoid.
 """
@@ -154,6 +162,28 @@ def _scores(Q: FloatArray, K: FloatArray, scale: float, mask: npt.NDArray[np.boo
     return S if mask is None else np.where(mask, S, -np.inf)
 
 
+def expand(shared: FloatArray, heads: int) -> FloatArray:
+    """
+    (N, g, T, d_k) key/value heads as (N, h, T, d_k), query head i's the key/value head i // (h /
+    g) (the grouped-query attention workplan, D2); themselves when g = h.
+    """
+    repeats = heads // shared.shape[1]
+    return shared if repeats == 1 else np.repeat(shared, repeats, axis=1)
+
+
+def fold(per_head: FloatArray, key_value_heads: int) -> FloatArray:
+    """
+    expand's backward: (N, h, T, d_k) as (N, g, T, d_k), each key/value head's the left fold of its
+    group's query heads' in head order, from the first (D3); themselves when g = h.
+    """
+    N, heads, T, d_k = per_head.shape
+    repeats = heads // key_value_heads
+    if repeats == 1:
+        return per_head
+    groups = per_head.reshape(N, key_value_heads, repeats, T, d_k)
+    return np.cumsum(groups, axis=2)[:, :, -1]
+
+
 def tiled_forward(
     Q: FloatArray,
     K: FloatArray,
@@ -167,13 +197,14 @@ def tiled_forward(
 ) -> tuple[FloatArray, FloatArray, FloatArray]:
     """
     H, (N, h, T_q, d_k), and the rows' max m and sum l, (N, h, T_q, 1), from Q (N, h, T_q, d_k) and
-    K and V (N, h, T_k, d_k): per key block, in order, m' = max(m, the block's row max), e = exp(S -
+    K and V (N, g, T_k, d_k), g dividing h, expanded to h heads: per key block, in order, m' = max(m, the block's row max), e = exp(S -
     m') (0 in place of an all-masked row's m'), l = l exp(m - m') + the fold of e, H = H exp(m - m')
     + e V (e dropped: e M / keep, M drawn by draw for the block's every query and key), then H / l.
     The key blocks are key_blocks(T_k, block, origin): origin is key 0's column.
     """
     N, h, queries, d_k = Q.shape
     keys = K.shape[2]
+    K, V = expand(K, h), expand(V, h)
     m = np.full((N, h, queries, 1), -np.inf)
     l = np.zeros((N, h, queries, 1))
     H = np.zeros((N, h, queries, d_k))
@@ -207,14 +238,17 @@ def tiled_backward(
     origin: int = 0,
 ) -> tuple[FloatArray, FloatArray, FloatArray]:
     """
-    dQ, dK and dV from dH and the forward's Q, K, V, H, m and l: per key block, P = exp(S - m) / l
+    dQ, dK and dV from dH and the forward's Q, K, V, H, m and l, K and V (N, g, T_k, d_k) expanded to
+    h heads as in tiled_forward: per key block, P = exp(S - m) / l
     recomputed (M drawn again, the same draws in the same order), dV = (P M / keep)^T dH, dP = (dH
     V^T) M / keep, dS = P (dP - D) with D = the fold of dH H over d_k (FlashAttention-2's), dQ the
-    blocks' dS K summed in key order, dK = dS^T Q; dQ and dK then divided by the scale.
+    blocks' dS K summed in key order, dK = dS^T Q; dK and dV then folded per group (fold), and dQ and
+    dK divided by the scale.
     """
     Q, K, V, H, m, l = saved
     N, h, queries, _ = Q.shape
-    keys = K.shape[2]
+    keys, key_value_heads = K.shape[2], K.shape[1]
+    K, V = expand(K, h), expand(V, h)
     D = np.cumsum(dH * H, axis=-1)[..., -1:]
     dQ, dK, dV = np.zeros_like(Q), np.zeros_like(K), np.zeros_like(V)
     for k0, k1 in key_blocks(keys, block, origin):
@@ -236,7 +270,7 @@ def tiled_backward(
         dS = P * (dP - D[:, :, r0:r1])
         dQ[:, :, r0:r1] += dS @ K[:, :, k0:k1]
         dK[:, :, k0:k1] = _transpose(dS) @ Q[:, :, r0:r1]
-    return dQ / scale, dK / scale, dV
+    return dQ / scale, fold(dK, key_value_heads) / scale, fold(dV, key_value_heads)
 
 
 def _generator_at(state: Mapping[str, Any]) -> np.random.Generator:
@@ -248,7 +282,7 @@ def _generator_at(state: Mapping[str, Any]) -> np.random.Generator:
 
 class AttentionCache:
     """
-    One decode's rotated keys K and values V, (N, c, h * d_k) each, the last c <= T columns' of the
+    One decode's rotated keys K and values V, (N, c, g * d_k) each (the key/value heads'), the last c <= T columns' of the
     batch's N rows, oldest first; and each key's segment, (N, c), or None while the batch has none
     (every key then in segment 1).
     """
@@ -263,7 +297,7 @@ class AttentionCache:
         self.K, self.V, self.segments = K, V, segments
 
     def append(self, K: FloatArray, V: FloatArray, segments: npt.NDArray[np.intp] | None, window: int) -> None:
-        # K and V (N, 1, h * d_k), segments (N, 1) or None
+        # K and V (N, 1, g * d_k), segments (N, 1) or None
         if segments is not None and self.segments is None:
             self.segments = np.ones(self.K.shape[:2], dtype=np.intp)
         if self.segments is not None:
@@ -276,14 +310,14 @@ class AttentionCache:
 class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     """
     Per example over its tokens tokens of features features (d), in heads heads (h) of key_size
-    features (d_k, d / h when None): Q = X Wq^T + bq, K and V likewise, each head's
-    P[i] = softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and H[i] = P[i] V[i], out = H Wo^T + bo with H
-    the heads side by side; a causal one masks S_ij for j > i, and one with dropout drops P's
-    entries in training, and a rotary one rotates Q's and K's heads by their tokens' positions.
-    Its parameters, also its draw order,
-    are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq, Wk, Wv (h * d_k, d) and Wo (d, h * d_k), heads as row
-    (Wo: column) blocks, each drawn as a dense layer's W then b, the weights decayed and the biases
-    not. Hidden only, ending a token block's body.
+    features (d_k, d / h when None), sharing key_value_heads (g, h when None) key/value heads:
+    Q = X Wq^T + bq, K and V likewise, each head's P[i] = softmax_rows((Q[i] K[j]^T) / sqrt(d_k))
+    and H[i] = P[i] V[j], j = i // (h / g), out = H Wo^T + bo with H the heads side by side; a
+    causal one masks S_ij for j > i, and one with dropout drops P's entries in training, and a
+    rotary one rotates Q's and K's heads by their tokens' positions. Its parameters, also its draw
+    order, are Wq, bq, Wk, bk, Wv, bv, Wo, bo: Wq (h * d_k, d), Wk and Wv (g * d_k, d) and Wo (d,
+    h * d_k), heads as row (Wo: column) blocks, each drawn as a dense layer's W then b, the weights
+    decayed and the biases not. Hidden only, ending a token block's body.
 
     The backward pass runs whole in _backward, since the gradients need dQ, dK and dV and the
     layer before reads dX.
@@ -301,8 +335,9 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         rotary_base: float = 10000.0,
         block: int = BLOCK,
         document_mask: bool = True,
+        key_value_heads: int | None = None,
     ) -> None:
-        self._set_up(tokens, features, heads, key_size)
+        self._set_up(tokens, features, heads, key_size, key_value_heads)
         # False: attention across the paragraphs, pads still masked (the context-length workplan, D8)
         self.document_mask = document_mask
         # computed once and divided by, never multiplied by its reciprocal
@@ -358,22 +393,22 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         return batch.reshape(-1, width)
 
     def _heads(self, rows: FloatArray, tokens: int | None = None) -> FloatArray:
-        # (N * T, h * d_k) rows as the (N, h, T, d_k) view: head i's columns, per example; a decode's
-        # tokens given
+        # (N * T, n * d_k) rows, n query or key/value heads, as the (N, n, T, d_k) view: head i's
+        # columns, per example; a decode's tokens given
         T = self.tokens if tokens is None else tokens
-        return rows.reshape(-1, T, self.heads, self.key_size).transpose(0, 2, 1, 3)
+        return rows.reshape(-1, T, rows.shape[-1] // self.key_size, self.key_size).transpose(0, 2, 1, 3)
 
     def _side_by_side(self, heads: FloatArray) -> FloatArray:
-        # _heads' inverse: (N, h, T, d_k) as (N * T, h * d_k) rows (a copy when h > 1)
-        return heads.transpose(0, 2, 1, 3).reshape(-1, self.width)
+        # _heads' inverse: (N, n, T, d_k) as (N * T, n * d_k) rows (a copy when n > 1)
+        return heads.transpose(0, 2, 1, 3).reshape(-1, heads.shape[1] * self.key_size)
 
     def _rotated(
         self, rows: FloatArray, inverse: bool = False, start: int = 0, tokens: int | None = None
     ) -> FloatArray:
-        # (N * T, h * d_k) rows, each head's features j and j + d_k / 2 rotated by the row's token's
-        # angles, or back; a decode's tokens from position start
+        # (N * T, n * d_k) rows, n query or key/value heads, each head's features j and j + d_k / 2
+        # rotated by the row's token's angles, or back; a decode's tokens from position start
         T = self.tokens if tokens is None else tokens
-        x = rows.reshape(-1, T, self.heads, self.key_size)
+        x = rows.reshape(-1, T, rows.shape[-1] // self.key_size, self.key_size)
         half = self.key_size // 2
         c, s = self._angles(start, T)
         a, b = x[..., :half], x[..., half:]
@@ -385,7 +420,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
     def _project(
         self, R: FloatArray, start: int = 0, tokens: int | None = None
     ) -> tuple[FloatArray, FloatArray, FloatArray]:
-        # each the product, then the bias, over all heads: (N * T, h * d_k) each; a rotary layer's
+        # each the product, then the bias, over all heads: Q (N * T, h * d_k), K and V (N * T, g *
+        # d_k); a rotary layer's
         # Q and K then rotated (a decode's tokens from position start)
         Q, K, V = R @ self.Wq.T + self.bq, R @ self.Wk.T + self.bk, R @ self.Wv.T + self.bv
         if self._rotary:
@@ -415,7 +451,7 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         """
         tile = self._masking_now.tile(self.tokens, 0, self.tokens)
         assert tile is not None and tile[:2] == (0, self.tokens), "every query attends to its own key"
-        S = _scores(self._Q, self._K, self.scale, tile[2])
+        S = _scores(self._Q, expand(self._K, self.heads), self.scale, tile[2])
         return exp(S - self._m) / self._l
 
     def dropout_mask(self) -> FloatArray | None:
@@ -446,7 +482,14 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
             self._dropout_state = self.rng.bit_generator.state
             draw = self._draw(self.rng)
         H, self._m, self._l = tiled_forward(
-            self._Q, self._K, self._V, self.scale, self._masking_now, self.block, draw, self._keep
+            self._Q,
+            self._K,
+            self._V,
+            self.scale,
+            self._masking_now,
+            self.block,
+            draw,
+            self._keep,
         )
         self._H_heads = H
         self._H = self._side_by_side(H)
@@ -457,7 +500,7 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
 
     def start_decoding(self) -> AttentionCache:
         refuse_non_causal_decoding(self.causal)
-        return AttentionCache(self.width)
+        return AttentionCache(self.kv_width)
 
     def prefill(self, X: FloatArray, cache: AttentionCache, context: ForwardContext) -> FloatArray:
         # N prompts' (N * L, d) rows, L <= T, at columns 0 to L - 1: the forward pass's blocks on L
@@ -466,10 +509,17 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         L = X.shape[0] // N
         Q, K, V = self._project(X, tokens=L)
         segments = self._attention_segments(context.segments)
-        cache.start(K.reshape(N, L, self.width), V.reshape(N, L, self.width), segments)
+        cache.start(K.reshape(N, L, self.kv_width), V.reshape(N, L, self.kv_width), segments)
         masking = self._masking(segments, segments)
         H, _m, _l = tiled_forward(
-            self._heads(Q, L), self._heads(K, L), self._heads(V, L), self.scale, masking, self.block, None, self._keep
+            self._heads(Q, L),
+            self._heads(K, L),
+            self._heads(V, L),
+            self.scale,
+            masking,
+            self.block,
+            None,
+            self._keep,
         )
         return self._combine(self._side_by_side(H))
 
@@ -480,12 +530,12 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         q, k, v = self._project(x, start=context.column, tokens=1)
         segments = self._attention_segments(context.segments)
         segments = None if segments is None else segments.reshape(N, 1)
-        cache.append(k.reshape(N, 1, self.width), v.reshape(N, 1, self.width), segments, self.tokens)
+        cache.append(k.reshape(N, 1, self.kv_width), v.reshape(N, 1, self.kv_width), segments, self.tokens)
         c = cache.K.shape[1]
         # the query is the cache's last column: every cached key at or before it (offset c - 1)
         query_segments = None if cache.segments is None else cache.segments[:, -1:]
         masking = self._masking(query_segments, cache.segments, offset=c - 1)
-        K, V = cache.K.reshape(N * c, self.width), cache.V.reshape(N * c, self.width)
+        K, V = cache.K.reshape(N * c, self.kv_width), cache.V.reshape(N * c, self.kv_width)
         # the cache's first key is at column context.column - (c - 1): the blocks cut where the
         # full pass's do
         H, _m, _l = tiled_forward(
@@ -508,7 +558,8 @@ class AttentionArrayLayer(BatchShaped, AttentionProjections[FloatArray]):
         return delta @ self.Wo
 
     def _attend_backward(self, dH: FloatArray) -> tuple[FloatArray, FloatArray, FloatArray]:
-        # per example and head, on (N, h, T, d_k) views: dQ, dK and dV, the tiles recomputed
+        # per example and head, on (N, h, T, d_k) views: dQ, and dK and dV, (N, g, T, d_k), the tiles
+        # recomputed
         state = self._dropout_state
         draw = None if state is None else self._draw(_generator_at(state))
         saved = (self._Q, self._K, self._V, self._H_heads, self._m, self._l)

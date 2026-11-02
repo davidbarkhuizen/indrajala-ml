@@ -97,6 +97,9 @@ WINDOWS_INVALID: dict[str, list[LayerSpec]] = {
         Residual((LayerNorm(), Dense(32, activation="gelu"), Dense(16, activation="linear", bias=True))),
         DIGITS,
     ],
+    # the window program's attention gives each query head its own key/value head (the grouped-query
+    # attention workplan, D10)
+    "grouped-query attention": [IDS, STATE, Residual((LayerNorm(), Attention(heads=2, key_value_heads=1))), DIGITS],
 }
 
 

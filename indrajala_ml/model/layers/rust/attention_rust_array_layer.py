@@ -91,7 +91,12 @@ class AttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
         positions: str = "none",
         rotary_base: float = 10000.0,
         document_mask: bool = True,
+        key_value_heads: int | None = None,
     ) -> None:
+        assert key_value_heads is None, (
+            "grouped-query attention reaches the Rust layers at the grouped-query attention workplan's stage 4; "
+            f"got key_value_heads={key_value_heads}"
+        )
         assert 0.0 <= dropout < 1.0, f"an attention's dropout is in [0.0, 1.0); got {dropout}"
         self.causal = causal
         # False: attention across the paragraphs, pads still masked (the context-length workplan, D8)

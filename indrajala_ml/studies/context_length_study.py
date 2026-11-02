@@ -40,6 +40,7 @@ import json
 import math
 import random
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from typing import Any, cast
@@ -91,9 +92,8 @@ def _attention(spec: LayerSpec, document_mask: bool) -> LayerSpec:
     if isinstance(spec, Residual):
         return Residual(tuple(_attention(layer, document_mask) for layer in spec.body))
     if isinstance(spec, Attention):
-        return Attention(
-            spec.heads, spec.key_size, spec.causal, spec.dropout, spec.positions, spec.rotary_base, document_mask
-        )
+        # every other field kept, key_value_heads among them (the grouped-query attention workplan, D7)
+        return replace(spec, document_mask=document_mask)
     return spec
 
 
