@@ -212,6 +212,23 @@ class Attention:
 
 
 @dataclass(frozen=True)
+class GatedDense:
+    """
+    A gated linear unit over each token (the FFN activations workplan, D3; Shazeer 2020, "GLU
+    Variants Improve Transformer"): two projections of a token's features, the gate a = x W_g^T +
+    b_g and the value v = x W_v^T + b_v, and out act(a) * v, of size features. SiLU makes it SwiGLU
+    (PaLM's, LLaMA's), a GELU GEGLU. The two projections are one (2 * size, d) weight, the gate's
+    rows then the value's, and one (2 * size,) bias: one product, and one parameter pair to the
+    optimizers, its weight decayed and its bias not. It stands in a token block's FFN body, right
+    before the affine Dense back to d (D5). At equal parameters with a ReLU FFN of size 4d, size is
+    about 8d/3 (D4: 170 at d 64).
+    """
+
+    size: int
+    activation: Literal["silu", "gelu", "gelu_tanh"] = "silu"
+
+
+@dataclass(frozen=True)
 class Dropout:
     """
     Inverted dropout of each token's features, in training only, p the drop probability: each
@@ -270,6 +287,7 @@ class Branches:
 
 LayerSpec = (
     Dense
+    | GatedDense
     | ConvSpec
     | PoolSpec
     | BatchNorm
@@ -328,12 +346,15 @@ class Merge:
 
 
 # the specs that act on tokens only, from the token part's start to its TokenMean, both included
-TokenSpec = Patches | Embedding | Position | Attention | Dropout | StateInput | TokenMean | Split | Branch | Merge
+TokenSpec = (
+    Patches | Embedding | Position | Attention | Dropout | StateInput | TokenMean | Split | Branch | Merge | GatedDense
+)
 
 
 # a network's layers, one spec each: its specs with every Residual flattened
 ExpandedSpec = (
     Dense
+    | GatedDense
     | ConvSpec
     | PoolSpec
     | BatchNorm

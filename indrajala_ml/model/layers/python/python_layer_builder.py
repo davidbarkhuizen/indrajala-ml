@@ -28,6 +28,7 @@ from indrajala_ml.model.layers.python.residual_layer import AddLayer, AffineLaye
 from indrajala_ml.model.layers.python.softmax_output_layer import SoftmaxOutputLayer
 from indrajala_ml.model.layers.python.token_layer import (
     EmbeddingLayer,
+    GatedDenseLayer,
     PatchesLayer,
     PositionLayer,
     TokenDenseLayer,
@@ -44,6 +45,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Dropout,
     Embedding,
     Fork,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -150,6 +152,9 @@ def build_python_layers(
             # a token-wise dense layer (D4): ReLU or GELU (the FFN activations workplan, D5), or linear with a bias
             activation: TokenActivation = spec.activation if spec.activation in ("relu", *GELUS) else "linear"
             layer = TokenDenseLayer(previous, spec.size, shape.input_shape[0], activation)
+        elif isinstance(spec, GatedDense):
+            # the gated FFN (the FFN activations workplan, D3)
+            layer = GatedDenseLayer(previous, spec.size, shape.input_shape[0], spec.activation)
         elif isinstance(spec, Dense):
             layer = _dense_layer(spec, previous)
         elif isinstance(spec, Patches | Embedding | Position | LayerNorm | Attention | Dropout | TokenMean):

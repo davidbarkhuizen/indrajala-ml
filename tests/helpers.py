@@ -31,6 +31,7 @@ from indrajala_ml.model.networks.python.linear_classifier_network import LinearC
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
+    SequentialSequenceBackpropNetwork,
 )
 from indrajala_ml.model.networks.rust.conv_rust_array_multiclass_backprop_classifier_network import (
     ConvRustArrayMultiClassBackpropClassifierNetwork,
@@ -181,11 +182,11 @@ def randomized(
     """A network of specs on implementation, of shape, randomized from seed."""
     rule = SGD() if rule is None else rule
     if implementation == "python":
-        cls = (
-            SequentialMultiClassBackpropClassifierNetwork
-            if shape == "multiclass"
-            else SequentialBackpropClassifierNetwork
-        )
+        cls = {
+            "multiclass": SequentialMultiClassBackpropClassifierNetwork,
+            "single_output": SequentialBackpropClassifierNetwork,
+            "sequence": SequentialSequenceBackpropNetwork,
+        }[shape]
         built: Any = cls(input_shape, specs, rule)
         built.rng = default_rng(seed)
     else:

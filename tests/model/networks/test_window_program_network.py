@@ -150,11 +150,12 @@ def test_training_runs_the_per_layer_path_and_the_program_refuses_it():
 
 
 def test_every_layer_class_a_window_holds_has_an_op():
-    # every Rust token layer class but those a window can't hold, and the residual block's fork and add
+    # every Rust token layer class but those a window can't hold (patches, the mean, and the gated
+    # FFN: the FFN activations workplan, D5), and the residual block's fork and add
     window_kinds = {
         name: getattr(TOKEN_LAYER_CLASSES["rust"], name)
         for name in TOKEN_LAYER_CLASSES["rust"].__dataclass_fields__
-        if name not in ("patches", "token_mean")
+        if name not in ("patches", "token_mean", "gated_dense")
     }
     held = {
         type(layer)

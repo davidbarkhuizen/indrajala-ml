@@ -1,6 +1,6 @@
 """
-GELU and GELU-tanh, and their derivatives, in all three implementations (the FFN activations
-workplan, D2, D9; README, Activations): pure Python's activations.py, numpy's and the crate's
+GELU, GELU-tanh and SiLU, and their derivatives, in all three implementations (the FFN activations
+workplan, D2, D3, D9; README, Activations): pure Python's activations.py, numpy's and the crate's
 (rust/core/src/activation.rs) take the same steps in the same grouping, through their own exp and
 erf, so each test gives them one exp (the crate's, correctly rounded, or math.exp) and compares by
 bits. The crate's accuracy against an exact reference is its own suite's
@@ -19,10 +19,10 @@ from indrajala_ml.model.layers.numpy import activations as numpy_activations
 from indrajala_ml.model.layers.numpy import erf as numpy_erf
 from indrajala_ml.model.layers.python import activations as python_activations
 from indrajala_ml.model.layers.python import erf as python_erf
-from indrajala_ml.model.layers.python.activations import Gelu
+from indrajala_ml.model.layers.python.activations import Smooth
 from tests.helpers import exp_by_crate, exp_by_math
 
-GELUS: list[Gelu] = ["gelu", "gelu_tanh"]
+SMOOTH: list[Smooth] = ["gelu", "gelu_tanh", "silu"]
 
 
 def _bits(values: list[float]) -> list[int]:
@@ -41,7 +41,7 @@ def _crate_scalar_exp(x: float) -> float:
     return pa.exp(pa.Array([x])).tolist()[0]
 
 
-def _crate(activation: Gelu, values: list[float]) -> tuple[list[float], list[float]]:
+def _crate(activation: Smooth, values: list[float]) -> tuple[list[float], list[float]]:
     # act(z) through the fused forward on z alone (1 * z + 0 is z, but for -0.0), and act'(z) as
     # the mask of a downstream of ones
     rows = pa.Array([[v] for v in values])
@@ -50,20 +50,20 @@ def _crate(activation: Gelu, values: list[float]) -> tuple[list[float], list[flo
     return np.array(a.tolist()).reshape(-1).tolist(), derivative.tolist()
 
 
-def _python(activation: Gelu, values: list[float]) -> tuple[list[float], list[float]]:
+def _python(activation: Smooth, values: list[float]) -> tuple[list[float], list[float]]:
     return (
         [python_activations.activate(activation, z) for z in values],
         [python_activations.derivative(activation, z) for z in values],
     )
 
 
-def _numpy(activation: Gelu, values: list[float]) -> tuple[list[float], list[float]]:
+def _numpy(activation: Smooth, values: list[float]) -> tuple[list[float], list[float]]:
     z = np.array(values)
     return numpy_activations.activate(activation, z).tolist(), numpy_activations.derivative(activation, z).tolist()
 
 
-@pytest.mark.parametrize("activation", GELUS)
-def test_three_implementations_agree_by_bits_on_the_crates_exp(activation: Gelu, monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.parametrize("activation", SMOOTH)
+def test_three_implementations_agree_by_bits_on_the_crates_exp(activation: Smooth, monkeypatch: pytest.MonkeyPatch):
     for module in (python_activations, python_erf):
         monkeypatch.setattr(module, "exp", _crate_scalar_exp)
     for module in (numpy_activations, numpy_erf):
@@ -81,11 +81,12 @@ def test_three_implementations_agree_by_bits_on_the_crates_exp(activation: Gelu,
     assert _bits(numpy_derivatives) == _bits(crate_derivatives)
 
 
-@pytest.mark.parametrize("activation", GELUS)
-def test_python_and_numpy_agree_by_bits_on_math_exp(activation: Gelu, monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.parametrize("activation", SMOOTH)
+def test_python_and_numpy_agree_by_bits_on_math_exp(activation: Smooth, monkeypatch: pytest.MonkeyPatch):
     for module in (numpy_activations, numpy_erf):
         monkeypatch.setattr(module, "exp", exp_by_math)
-    # math.exp raises past exp(709), where GELU-tanh's tanh saturates (|z| above about 20)
+    # math.exp raises past exp(709), where GELU-tanh's tanh saturates (|z| above about 20); SiLU's
+    # sigmoid catches it
     values = [v for v in _inputs() if abs(v) < 20.0]
     python_values, python_derivatives = _python(activation, values)
     numpy_values, numpy_derivatives = _numpy(activation, values)
@@ -93,8 +94,8 @@ def test_python_and_numpy_agree_by_bits_on_math_exp(activation: Gelu, monkeypatc
     assert _bits(numpy_derivatives) == _bits(python_derivatives)
 
 
-@pytest.mark.parametrize("activation", GELUS)
-def test_the_derivative_is_the_values_slope(activation: Gelu):
+@pytest.mark.parametrize("activation", SMOOTH)
+def test_the_derivative_is_the_values_slope(activation: Smooth):
     # central differences of each implementation's value against its derivative, away from 0's
     # cancellation; the exact functions are the crate suite's
     step = 1e-6
@@ -116,6 +117,6 @@ def test_gelu_tanh_approximates_gelu():
 
 def test_numpy_keeps_the_shape():
     z = np.linspace(-3.0, 3.0, 24).reshape(2, 3, 4)
-    for activation in GELUS:
+    for activation in SMOOTH:
         assert numpy_activations.activate(activation, z).shape == (2, 3, 4)
         assert numpy_activations.derivative(activation, z).shape == (2, 3, 4)

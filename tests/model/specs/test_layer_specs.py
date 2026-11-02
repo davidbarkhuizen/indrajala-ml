@@ -23,6 +23,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Dropout,
     Embedding,
     Fork,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -78,6 +79,7 @@ INVALID: dict[str, list[LayerSpec]] = {
     "batch norm after gelu": [Dense(5, activation="gelu"), BatchNorm(), OUTPUT],
     "gelu batch norm": [LINEAR, BatchNorm(cast(Any, "gelu")), OUTPUT],
     "gelu conv": [Conv(3, 2, activation=cast(Any, "gelu")), OUTPUT],
+    "a flat GatedDense": [Dense(5), GatedDense(4), OUTPUT],
     "hidden loss": [Dense(5, loss="cross_entropy"), OUTPUT],
     "empty hidden": [Dense(0), OUTPUT],
     "empty output": [Dense(0, output=True)],
@@ -406,6 +408,10 @@ FFN_BLOCK = Residual((LayerNorm(), Dense(8, activation="relu"), AFFINE_6))
 # GELU in the FFN (the FFN activations workplan, D5): exact, and GPT-2's tanh form
 GELU_FFN_BLOCK = Residual((LayerNorm(), Dense(8, activation="gelu"), AFFINE_6))
 GELU_TANH_FFN_BLOCK = Residual((LayerNorm(), Dense(8, activation="gelu_tanh"), AFFINE_6))
+# the gated FFN (D3): SwiGLU, and GEGLU in each GELU
+SWIGLU_FFN_BLOCK = Residual((LayerNorm(), GatedDense(5), AFFINE_6))
+GEGLU_FFN_BLOCK = Residual((LayerNorm(), GatedDense(5, "gelu"), AFFINE_6))
+GEGLU_TANH_FFN_BLOCK = Residual((LayerNorm(), GatedDense(5, "gelu_tanh"), AFFINE_6))
 SOFTMAX = Dense(3, output=True, activation="softmax", loss="cross_entropy")
 
 TOKENS: dict[str, list[LayerSpec]] = {
@@ -425,6 +431,14 @@ TOKENS: dict[str, list[LayerSpec]] = {
     "the attention block alone": [PATCHES, EMBED, Position(), ATTENTION_BLOCK, TokenMean(), OUTPUT],
     "the FFN block alone": [PATCHES, EMBED, Position(), FFN_BLOCK, TokenMean(), OUTPUT],
     "a GELU FFN block": [PATCHES, EMBED, Position(), GELU_FFN_BLOCK, TokenMean(), OUTPUT],
+    "a SwiGLU FFN block": [PATCHES, EMBED, Position(), ATTENTION_BLOCK, SWIGLU_FFN_BLOCK, TokenMean(), OUTPUT],
+    "a GatedDense first in its body": [
+        PATCHES,
+        EMBED,
+        Residual((GatedDense(4, "gelu"), AFFINE_6)),
+        TokenMean(),
+        OUTPUT,
+    ],
     "GELU-tanh token-wise layers after a block": [
         PATCHES,
         EMBED,
@@ -481,6 +495,31 @@ TOKENS_INVALID: dict[str, list[LayerSpec]] = {
         OUTPUT,
     ],
     "a sigmoid token body": [PATCHES, EMBED, Residual((Dense(8), AFFINE_6)), TokenMean(), OUTPUT],
+    "a GatedDense outside a body": [PATCHES, EMBED, GatedDense(5), TokenMean(), OUTPUT],
+    "a GatedDense ending a body": [PATCHES, EMBED, Residual((LayerNorm(), GatedDense(6))), TokenMean(), OUTPUT],
+    "a GatedDense not right before the affine layer": [
+        PATCHES,
+        EMBED,
+        Residual((GatedDense(5), LayerNorm(), AFFINE_6)),
+        TokenMean(),
+        OUTPUT,
+    ],
+    "a GatedDense before attention": [PATCHES, EMBED, Residual((GatedDense(6), Attention())), TokenMean(), OUTPUT],
+    "a ReLU GatedDense": [
+        PATCHES,
+        EMBED,
+        Residual((GatedDense(5, cast(Any, "relu")), AFFINE_6)),
+        TokenMean(),
+        OUTPUT,
+    ],
+    "a GatedDense of no units": [PATCHES, EMBED, Residual((GatedDense(0), AFFINE_6)), TokenMean(), OUTPUT],
+    "a GatedDense after the mean": [
+        PATCHES,
+        EMBED,
+        TokenMean(),
+        Residual((GatedDense(5), Dense(6, activation="linear", bias=True))),
+        OUTPUT,
+    ],
     "a token body ending ReLU": [
         PATCHES,
         EMBED,
@@ -721,6 +760,16 @@ SEQUENCE: dict[str, list[LayerSpec]] = {
     "a causal transformer": [IDS, Position(), CAUSAL_BLOCK, FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
     "a causal transformer, GELU": [IDS, Position(), CAUSAL_BLOCK, GELU_FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
     "a causal transformer, GELU-tanh": [IDS, Position(), CAUSAL_BLOCK, GELU_TANH_FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
+    "a causal transformer, SwiGLU": [IDS, Position(), CAUSAL_BLOCK, SWIGLU_FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
+    "a causal transformer, GEGLU": [IDS, Position(), CAUSAL_BLOCK, GEGLU_FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
+    "a causal transformer, GEGLU-tanh": [
+        IDS,
+        Position(),
+        CAUSAL_BLOCK,
+        GEGLU_TANH_FFN_BLOCK,
+        LayerNorm(),
+        TOKEN_OUTPUT,
+    ],
     "the embedding, then the output": [IDS, TOKEN_OUTPUT],
     "a token-wise FFN, no attention": [IDS, Position(), FFN_BLOCK, TOKEN_OUTPUT],
     "the leak arm, unmasked": [IDS, Position(), ATTENTION_BLOCK, FFN_BLOCK, TOKEN_OUTPUT],
@@ -827,6 +876,15 @@ DROPPED_FFN = Residual((LayerNorm(), Dense(8, activation="relu"), AFFINE_6, DROP
 
 DROPOUT: dict[str, list[LayerSpec]] = {
     "GPT's three dropouts": [IDS, Position(), DROP, DROPPED_ATTENTION, DROPPED_FFN, LayerNorm(), TOKEN_OUTPUT],
+    "GPT's three dropouts, a SwiGLU FFN": [
+        IDS,
+        Position(),
+        DROP,
+        DROPPED_ATTENTION,
+        Residual((LayerNorm(), GatedDense(5), AFFINE_6, DROP)),
+        LayerNorm(),
+        TOKEN_OUTPUT,
+    ],
     "the attention weights only": [IDS, Position(), Residual((LayerNorm(), Attention(dropout=0.2))), TOKEN_OUTPUT],
     "the residual dropout only": [IDS, Residual((LayerNorm(), Attention(), DROP)), TOKEN_OUTPUT],
     "the embedding dropout only": [IDS, Position(), DROP, FFN_BLOCK, TOKEN_OUTPUT],

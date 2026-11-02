@@ -25,7 +25,7 @@ from typing import Any, ClassVar, cast
 
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python import activations
-from indrajala_ml.model.layers.python.activations import GELUS, TokenActivation
+from indrajala_ml.model.layers.python.activations import GELUS, Smooth, TokenActivation
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
@@ -478,6 +478,107 @@ class TokenDenseLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[TokenNo
             x = token_values(self.input_layer.nodes, t, self.input_size)
             for k, unit in enumerate(self.units):
                 delta = self.nodes[t * self.size + k].delta
+                accum = unit.weight_gradient_accum
+                for j, x_j in enumerate(x):
+                    accum[j] += delta * x_j
+                unit.bias_gradient_accum += delta
+
+    def weight_sets(self) -> Sequence[WeightRow]:
+        return self.units
+
+    def randomize_fan_in_aware(self, rng: Pcg64Generator) -> None:
+        randomize_rows(self.units, rng)
+
+    def snapshot_state(self) -> list[tuple[list[float], float]]:
+        return snapshot_rows(self.units)
+
+    def restore_state(self, layer_snapshot: Sequence[tuple[list[float], float]]) -> None:
+        restore_rows(self.units, layer_snapshot)
+
+
+class GatedTokenNode(TokenNode):
+    """
+    One output of a GatedDenseLayer's token: per example its gate's and value's pre-activations,
+    and the deltas the layer derives for them from its own (example_fields).
+    """
+
+    example_fields: ClassVar[tuple[str, ...]] = (
+        "_activation",
+        "delta",
+        "gate_z",
+        "value_z",
+        "gate_delta",
+        "value_delta",
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.gate_z: float
+        self.value_z: float
+        self.gate_delta: float
+        self.value_delta: float
+
+
+class GatedDenseLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[GatedTokenNode]):
+    """
+    A gated linear unit over each token (the FFN activations workplan, D3), GatedDenseArrayLayer's
+    twin: 2 * size units shared over the tokens, the gate's then the value's, each token's
+    z_k = sum_j(x_tj * W_kj) + b_k, and out act(a_k) * v_k, a_k = z_k and v_k = z_(size + k), act
+    SiLU or a GELU (activations.py). Its units are drawn, stepped and decayed as a dense layer's.
+    A node's delta d gives its gate unit (d * v) * act'(a) and its value unit d * act(a).
+    """
+
+    def __init__(self, input_layer: InputLayer, size: int, tokens: int, activation: Smooth) -> None:
+        self.input_layer = input_layer
+        self.tokens = tokens
+        self.input_size = len(input_layer.nodes) // tokens
+        assert self.input_size * tokens == len(input_layer.nodes)
+        self.size = size
+        self.activation: Smooth = activation
+        self.units = [WeightRow(self.input_size) for _ in range(2 * size)]
+        self.nodes = [GatedTokenNode() for _ in range(tokens * size)]
+
+    def _preactivations(self, x: Sequence[float]) -> list[float]:
+        # one token's z, its 2 * size units', from its features
+        return [fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias for unit in self.units]
+
+    def _token(self, x: Sequence[float]) -> list[float]:
+        z = self._preactivations(x)
+        return [activations.activate(self.activation, z[k]) * z[self.size + k] for k in range(self.size)]
+
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
+        for t in range(self.tokens):
+            z = self._preactivations(token_values(self.input_layer.nodes, t, self.input_size))
+            for k in range(self.size):
+                node = self.nodes[t * self.size + k]
+                node.gate_z, node.value_z = z[k], z[self.size + k]
+                node.activate(activations.activate(self.activation, node.gate_z) * node.value_z)
+
+    def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
+        return [self._token(x) for x in R]
+
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
+        for own_index, node in enumerate(self.nodes):
+            d = next_layer.downstream_sum(own_index)
+            node.delta = d
+            node.gate_delta = (d * node.value_z) * activations.derivative(self.activation, node.gate_z)
+            node.value_delta = d * activations.activate(self.activation, node.gate_z)
+
+    def downstream_sum(self, own_index: int) -> float:
+        # sum over the gate's units, then the value's, of (unit delta) * W_kj, for node t * input_size + j
+        t, j = divmod(own_index, self.input_size)
+        nodes = self.nodes[t * self.size : (t + 1) * self.size]
+        gates = [node.gate_delta * unit.weights[j] for node, unit in zip(nodes, self.units[: self.size])]
+        values = [node.value_delta * unit.weights[j] for node, unit in zip(nodes, self.units[self.size :])]
+        return fold(gates + values)
+
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
+        # over this example's tokens in order, after the examples before it
+        for t in range(self.tokens):
+            x = token_values(self.input_layer.nodes, t, self.input_size)
+            for k, unit in enumerate(self.units):
+                node = self.nodes[t * self.size + k % self.size]
+                delta = node.gate_delta if k < self.size else node.value_delta
                 accum = unit.weight_gradient_accum
                 for j, x_j in enumerate(x):
                     accum[j] += delta * x_j
