@@ -210,7 +210,11 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   has more than one part (`ssh host 'for p in $(pgrep -f PAT) ...'`): the `bash -c` carrying it
   contains PAT, so killing its process group kills the ssh session (exit 255) halfway through
   (2026-10-27, twice). List the targets first (`ps -eo pid,pgid,args`), then kill those process
-  groups by number in a second call; a single-command `ssh host 'pgrep -f PAT'` (a waiter) is safe.
+  groups by number in a second call. Even a waiter's one command isn't safe once it has a
+  redirect or a pipe (`ssh host 'pgrep -f PAT >/dev/null'`): the `bash -c` stays and matches, so
+  the waiter never sees the job end (2026-11-02: the context-length waiter on jebel sat 30 minutes
+  past the sweep's end; klip's `! pgrep -f after-k42.sh` could never fire). Always bracket one
+  character, `pgrep -f "[c]ontext_length_study.py sweep"`, which the pattern's own text can't match.
 - **`jebel.local` sometimes doesn't resolve** (mDNS): try its address (it was `192.168.1.88`). A
   connection that opens but times out "during banner exchange" means `jebel` is thrashing, not
   down.
