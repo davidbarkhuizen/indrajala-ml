@@ -201,6 +201,16 @@ Each lists the options considered, with pros and cons, and the choice.
      - Decoding by bits on Rust and pure Python.
      - D4's counts on all three implementations (`test_gated_dense.py`).
      - Tier 0: new ops only.
-5. **Fixtures, checkpoints and golden entries** (D6), the Rust reference on both architectures.
+5. **Fixtures, checkpoints and golden entries** (D6), the Rust reference on both architectures. *Done
+   2026-11-02.*
+   - **Golden entries:** `numpy/rust/python gelu model` (GELU_SPECS, the sequence model with the
+     exact GELU in its FFN) and `... swiglu model` (SWIGLU_SPECS, `GatedDense(3)`), after the
+     packed ones. The local file has 6 more entries (137), and the committed Rust reference
+     (`golden_run_rust.json`, checked on x86_64 and aarch64 in CI) has 2 more (45). No earlier
+     entry moved.
+   - **Fixtures:** `SequenceGelu<class name>` and `SequenceSwiGLU<class name>` for each
+     implementation's sequence class (12 files), each a format-2 file pinning a dense entry's
+     `"gelu"` and a `"gated_dense"` entry. Checkpoints are format 2's: the fixtures hold the
+     optimizer state after two steps.
 6. **The study** (D7): after step 12's report; registration first, then the sweep.
 7. **Docs**; the workplan retired.
