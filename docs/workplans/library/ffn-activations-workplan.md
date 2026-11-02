@@ -153,7 +153,7 @@ Each lists the options considered, with pros and cons, and the choice.
 3. **GELU** (D1, D5, D9): `"gelu"` and `"gelu_tanh"` in specs and validation, the numpy and
    pure-Python dense and token-wise layers, the crate's activation-parameterised fused family
    (crate PR, bump, tier 1 A/B on `jebel`); persistence; parity. *Done 2026-11-02* (crate #90;
-   ml #1182, the benchmark's ReLU cases, and the bump). What the code settled:
+   ml #1182, the benchmark's ReLU cases, and the bump, #1183). What the code settled:
    - **The expressions and their grouping** are the README's (Activations), the same in
      `python/activations.py`, `numpy/activations.py` and the crate's `core/src/activation.rs`;
      the three agree by bits on the crate's `exp` (`test_gelu_implementations.py`), and the crate is
@@ -172,6 +172,12 @@ Each lists the options considered, with pros and cons, and the choice.
      activation is the `Dense` entry's field.
    - **The benchmark had no ReLU case:** `focused_benchmark`'s dense case timed the sigmoid layer
      only, so #1182 added ReLU's forward and hidden delta (`--shape relu`) before the A/B.
+   - **The tier 1 A/B** (`focused_benchmark --shape relu --shape "conv 28x28"`, 6 passes;
+     #1183's comment): every batched ReLU op and every conv row within noise; one row consistently
+     slower, the single-example ReLU `hidden_delta` at 30 x 784 on Rust, +6.5% (about 0.2 us a
+     call), accepted as D9's cost on the legacy single-example path. A first run had it and the
+     256 x 64 row slower by more; the crate's second commit dropped the mask's repeated shape check,
+     which settled 256 x 64.
 4. **`GatedDense`** (D3): specs, numpy, the crate and a "Bump rust/" PR, Rust, pure Python; row
    decoding; the optimizer pair and its decay flag; persistence; parity.
 5. **Fixtures, checkpoints and golden entries** (D6), the Rust reference on both architectures.
