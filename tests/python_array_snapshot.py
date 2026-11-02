@@ -22,9 +22,12 @@ from indrajala_ml.pcg64 import generator_state
 
 
 def projections(layer: AttentionLayer, entry: list[Any]) -> list[list[Any]]:
-    """An attention layer's weight sets split into Wq's, Wk's, Wv's (h * d_k rows each) and Wo's (d)."""
-    w = layer.width
-    return [entry[:w], entry[w : 2 * w], entry[2 * w : 3 * w], entry[3 * w :]]
+    """
+    An attention layer's weight sets split into Wq's (h * d_k rows), Wk's and Wv's (g * d_k each)
+    and Wo's (d).
+    """
+    w, kv = layer.width, layer.kv_width
+    return [entry[:w], entry[w : w + kv], entry[w + kv : w + 2 * kv], entry[w + 2 * kv :]]
 
 
 def as_array_snapshot(python: Any, entries: list[Any] | None = None) -> list[tuple[Any, ...]]:

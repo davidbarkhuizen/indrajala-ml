@@ -19,7 +19,8 @@ query reaches is skipped, which, every sum a sequential fold, changes no bits.
 
 The layer's per-example caches (Q, K, V, m, l, H, where its dropout draws are, its segments, and
 backward dQ, dK, dV, dX) are its own, not its nodes': Q, K, V, H, dQ, dK and dV are matrices over
-the tokens packed as the crate's, (T, h * d_k), head i's columns i * d_k to (i + 1) * d_k - 1, and
+the tokens packed as the crate's, (T, h * d_k) (K, V, dK and dV (T, g * d_k), g the key/value
+heads), head i's columns i * d_k to (i + 1) * d_k - 1, and
 m and l h lists of T. It names them in example_fields, and the layer-major batch path
 (layer_major.py) keeps them in lanes, as it does the nodes' fields. Every pass assigns new lists,
 never writes into a cached one, so a lane can hold them without a copy.
@@ -151,7 +152,7 @@ Draws = list[list[list[float]]]
 
 class AttentionCache:
     """
-    One decode's rotated keys K and values V per row of its batch, rows of h * d_k: each row's current
+    One decode's rotated keys K and values V per row of its batch, rows of g * d_k: each row's current
     segment's, its last c <= T tokens', oldest first (the segments workplan, D8 (b)), and that
     segment's id (1 for every row of a batch without segments).
     """
@@ -173,10 +174,11 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
     """
     Over tokens tokens of features features (d), in heads heads (h) of key_size features (d_k,
     d / h when None): Q = X Wq^T + bq, K and V likewise, each head's P[i] =
-    softmax_rows((Q[i] K[i]^T) / sqrt(d_k)) and H[i] = P[i] V[i], out = H Wo^T + bo with H the
-    heads side by side; a causal one masks S_ij for j > i, and a rotary one rotates Q's and K's
-    heads by their tokens' positions. Its weight sets, also its draw and
-    snapshot order, are Wq's h * d_k rows of d weights, then Wk's and Wv's, then Wo's d rows of
+    softmax_rows((Q[i] K[j]^T) / sqrt(d_k)) and H[i] = P[i] V[j], j = i // (h / g) with g the
+    key_value_heads (h when None; the grouped-query attention workplan, D2), out = H Wo^T + bo with
+    H the heads side by side; a causal one masks S_ij for j > i, and a rotary one rotates Q's and
+    K's heads by their tokens' positions. Its weight sets, also its draw and snapshot order, are
+    Wq's h * d_k rows of d weights, then Wk's and Wv's g * d_k, then Wo's d rows of
     h * d_k weights, each row with its bias: the weights decayed and the biases not. Each projection
     is drawn as a dense layer, its rows' weights then its biases, Wq, Wk, Wv and Wo in turn. Hidden
     only, ending a token block's body.
@@ -216,9 +218,8 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         key_value_heads: int | None = None,
     ) -> None:
         assert len(input_layer.nodes) == tokens * features
-        assert key_value_heads is None, (
-            "grouped-query attention reaches pure Python at the grouped-query attention workplan's stage 5; "
-            f"got key_value_heads={key_value_heads}"
+        assert key_value_heads is None or (key_value_heads >= 1 and heads % key_value_heads == 0), (
+            f"an attention's key/value heads divide its heads; got {key_value_heads} of {heads}"
         )
         assert block >= 1, f"an attention's key blocks hold at least one key; got {block}"
         # the key blocks' size (the context-length workplan, D3)
@@ -232,6 +233,11 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         self.heads = heads
         self.key_size = features // heads if key_size is None else key_size
         self.width = heads * self.key_size
+        # the key/value heads g (the grouped-query attention workplan, D2): query head i reads
+        # key/value head i // (h / g), in the keys' and values' columns of that head
+        self.key_value_heads = heads if key_value_heads is None else key_value_heads
+        self.kv_width = self.key_value_heads * self.key_size
+        self._group = heads // self.key_value_heads
         # computed once and divided by, never multiplied by its reciprocal
         self.scale = math.sqrt(self.key_size)
         self.causal = causal
@@ -245,7 +251,8 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         self.rotary_base = rotary_base
         # rotary_table's cos and sin, (T, d_k / 2) each, or None unrotated
         self._table = rotary_table(tokens, self.key_size, rotary_base) if positions == "rotary" else None
-        self.queries, self.keys, self.values = ([WeightRow(features) for _ in range(self.width)] for _ in range(3))
+        self.queries = [WeightRow(features) for _ in range(self.width)]
+        self.keys, self.values = ([WeightRow(features) for _ in range(self.kv_width)] for _ in range(2))
         self.outputs = [WeightRow(self.width) for _ in range(features)]
         self.nodes = [TokenNode() for _ in range(tokens * features)]
         self.size = len(self.nodes)
@@ -299,13 +306,13 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         return cos[start : start + tokens], sin[start : start + tokens]
 
     def _rotated(self, A: Matrix, inverse: bool = False, start: int = 0) -> Matrix:
-        # (T, h * d_k), each head's features j and j + d_k / 2 of row t rotated by token t's angles,
-        # or back; a decode's rows from position start
+        # (T, n * d_k), n query or key/value heads, each head's features j and j + d_k / 2 of row t
+        # rotated by token t's angles, or back; a decode's rows from position start
         d_k, half = self.key_size, self.key_size // 2
         out: Matrix = []
         for row, cos, sin in zip(A, *self._angles(start, len(A)), strict=True):
             new = list(row)
-            for i in range(self.heads):
+            for i in range(len(row) // d_k):
                 for j in range(half):
                     a, b, c, s = row[i * d_k + j], row[i * d_k + j + half], cos[j], sin[j]
                     if inverse:
@@ -384,10 +391,12 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
             if rows is None:
                 continue
             for i in range(self.heads):
-                c = i * d_k
+                c, ck = i * d_k, i // self._group * d_k
                 for t in range(*rows):
                     s = [
-                        _dot(Q[t][c : c + d_k], K[u][c : c + d_k]) / self.scale if masking.allowed(t, u) else -math.inf
+                        _dot(Q[t][c : c + d_k], K[u][ck : ck + d_k]) / self.scale
+                        if masking.allowed(t, u)
+                        else -math.inf
                         for u in range(k0, k1)
                     ]
                     m_old = m[i][t]
@@ -400,7 +409,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
                     if masks is not None:
                         e = [x * kept / self._keep for x, kept in zip(e, masks[i][t])]
                     for j in range(d_k):
-                        ev = fold([e_u * V[k0 + u][c + j] for u, e_u in enumerate(e)])
+                        ev = fold([e_u * V[k0 + u][ck + j] for u, e_u in enumerate(e)])
                         H[t][c + j] = H[t][c + j] * alpha + ev
         for t in range(queries):
             for i in range(self.heads):
@@ -481,7 +490,9 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         # dQ, dK and dV, packed (T, h * d_k): per key block in order (the same masks drawn again),
         # per head, the rows reaching it, P = exp(S - m) / l recomputed, dP = dH V^T, with kept = M /
         # keep dV = (P kept)^T dH and dP = dP kept, dS = P (dP - D), D = fold(dH H) over d_k, dQ the
-        # blocks' dS K summed in key order, dK = dS^T Q; dQ and dK then divided by the scale
+        # blocks' dS K summed in key order, dK = dS^T Q; dK and dV (T, g * d_k) per key block a
+        # group's first head's assigned and each later head's added, in head order (D3); dQ and dK
+        # then divided by the scale
         Q, K, V, T, d_k = self._Q, self._K, self._V, self.tokens, self.key_size
         segments = self._segments
         masking = Masking(self.causal, 0, None if segments is None else (segments, segments))
@@ -490,8 +501,8 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
             for i in range(self.heads)
         ]
         dQ = [[0.0] * self.width for _ in range(T)]
-        dK = [[0.0] * self.width for _ in range(T)]
-        dV = [[0.0] * self.width for _ in range(T)]
+        dK = [[0.0] * self.kv_width for _ in range(T)]
+        dV = [[0.0] * self.kv_width for _ in range(T)]
         for k0, k1 in key_blocks(T, self.block):
             masks = None if self._draws is None else self._block_draws(self._draws, k1 - k0, k0)
             rows = masking.rows(T, k0, k1)
@@ -499,17 +510,19 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
                 continue
             r0, r1 = rows
             for i in range(self.heads):
-                c = i * d_k
+                c, ck, first = i * d_k, i // self._group * d_k, i % self._group == 0
                 P: Matrix = []
                 dS: Matrix = []
                 kept_rows: Matrix = []
                 for t in range(r0, r1):
                     s = [
-                        _dot(Q[t][c : c + d_k], K[u][c : c + d_k]) / self.scale if masking.allowed(t, u) else -math.inf
+                        _dot(Q[t][c : c + d_k], K[u][ck : ck + d_k]) / self.scale
+                        if masking.allowed(t, u)
+                        else -math.inf
                         for u in range(k0, k1)
                     ]
                     p = [exp(x - self._m[i][t]) / self._l[i][t] for x in s]
-                    dp = [_dot(dH[t][c : c + d_k], V[u][c : c + d_k]) for u in range(k0, k1)]
+                    dp = [_dot(dH[t][c : c + d_k], V[u][ck : ck + d_k]) for u in range(k0, k1)]
                     kept = [1.0] * len(p) if masks is None else [x / self._keep for x in masks[i][t]]
                     if masks is not None:
                         dp = [x * k for x, k in zip(dp, kept)]
@@ -518,16 +531,21 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
                     dS.append([p_u * (dp_u - D[i][t]) for p_u, dp_u in zip(p, dp)])
                 for t, ds in zip(range(r0, r1), dS):
                     for j in range(d_k):
-                        dQ[t][c + j] += fold([ds_u * K[k0 + u][c + j] for u, ds_u in enumerate(ds)])
+                        dQ[t][c + j] += fold([ds_u * K[k0 + u][ck + j] for u, ds_u in enumerate(ds)])
                 for u in range(k1 - k0):
                     for j in range(d_k):
-                        dK[k0 + u][c + j] = fold([ds[u] * Q[r0 + r][c + j] for r, ds in enumerate(dS)])
+                        dk = fold([ds[u] * Q[r0 + r][c + j] for r, ds in enumerate(dS)])
                         if masks is None:
-                            dV[k0 + u][c + j] = fold([p[u] * dH[r0 + r][c + j] for r, p in enumerate(P)])
+                            dv = fold([p[u] * dH[r0 + r][c + j] for r, p in enumerate(P)])
                         else:
-                            dV[k0 + u][c + j] = fold(
+                            dv = fold(
                                 [(p[u] * kept[u]) * dH[r0 + r][c + j] for r, (p, kept) in enumerate(zip(P, kept_rows))]
                             )
+                        if first:
+                            dK[k0 + u][ck + j], dV[k0 + u][ck + j] = dk, dv
+                        else:
+                            dK[k0 + u][ck + j] += dk
+                            dV[k0 + u][ck + j] += dv
         return (
             [[x / self.scale for x in row] for row in dQ],
             [[x / self.scale for x in row] for row in dK],
