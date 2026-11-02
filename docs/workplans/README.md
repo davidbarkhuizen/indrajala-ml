@@ -17,7 +17,6 @@ The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 
 
 | workplan | roadmap |
 | --- | --- |
-| [context-length-workplan.md](library/context-length-workplan.md) | step 12: context length |
 | [ffn-activations-workplan.md](library/ffn-activations-workplan.md) | step 13: GELU and SwiGLU |
 | [grouped-query-attention-workplan.md](library/grouped-query-attention-workplan.md) | step 14: grouped- and multi-query attention |
 | [cross-attention-workplan.md](library/cross-attention-workplan.md) | step 15: cross-attention and an encoder-decoder model |
