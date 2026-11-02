@@ -113,9 +113,14 @@ def test_kmeans_is_the_harnesss_by_bits(name: str):
 
 
 def test_the_fixtures_inputs_are_this_modules_cases():
-    # the window network's states among them: the library reads them as the fixture was recorded
+    # the drawn points by bits; the window network's states, which the library reads as the fixture
+    # was recorded, within the forward pass's rounding, which a machine's BLAS moves
     for name, (points, k, seed) in _cases().items():
-        assert FIXTURE_CASES[name]["points"] == _hex(points.tolist()), name
+        recorded = np.array(_floats(FIXTURE_CASES[name]["points"]))
+        if name == "a window network's states":
+            np.testing.assert_allclose(points, recorded, rtol=0, atol=1e-12)
+        else:
+            assert FIXTURE_CASES[name]["points"] == _hex(points.tolist()), name
         assert (FIXTURE_CASES[name]["k"], FIXTURE_CASES[name]["seed"]) == (k, seed)
 
 
