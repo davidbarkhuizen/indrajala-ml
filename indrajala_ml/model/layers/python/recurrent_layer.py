@@ -14,8 +14,8 @@ then backward_batch with the gradient of what forward_batch gave, which accumula
 parameters' gradients and returns the inputs'. Each keeps one forward pass's values. Their
 weights are weight sets (token_layer.py's rows), which the optimizer steps as any layer's.
 
-The pooling's softmax and the cell's sigmoid and tanh go through this module's exp, which tests may
-replace, as attention_layer's.
+The pooling's softmax and the cell's sigmoid go through this module's exp, and its tanh through
+activations.py's (shared with GELU-tanh), which tests may replace, as attention_layer's.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ from collections.abc import Sequence
 from typing import ClassVar
 
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
+from indrajala_ml.model.layers.python.activations import tanh
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights, fan_in_aware_weights_and_biases
 from indrajala_ml.model.layers.python.residual_layer import ParameterFreeLayer
@@ -44,14 +45,6 @@ def sigmoid(z: float) -> float:
         return 1.0 / (1.0 + exp(-z))
     except OverflowError:
         return 0.0
-
-
-def tanh(z: float) -> float:
-    """1 - 2 / (exp(2z) + 1) (W15), numpy's form: exactly 1.0 where exp(2z) overflows."""
-    try:
-        return 1.0 - 2.0 / (exp(2.0 * z) + 1.0)
-    except OverflowError:
-        return 1.0
 
 
 def _dot(a: Sequence[float], b: Sequence[float]) -> float:

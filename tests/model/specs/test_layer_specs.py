@@ -51,6 +51,7 @@ VALID: dict[str, list[LayerSpec]] = {
     "output only": [OUTPUT],
     "sigmoid": [Dense(5), Dense(4), OUTPUT],
     "relu": [Dense(5, activation="relu"), OUTPUT],
+    "gelu": [Dense(5, activation="gelu"), Dense(4, activation="gelu_tanh"), OUTPUT],
     "dropout": [Dense(5, dropout=0.3), OUTPUT],
     "softmax output": [Dense(5), Dense(3, output=True, activation="softmax", loss="cross_entropy")],
     "cross-entropy output": [Dense(5), Dense(1, output=True, loss="cross_entropy")],
@@ -71,6 +72,12 @@ INVALID: dict[str, list[LayerSpec]] = {
     "conv last": [Dense(5), Conv(3, 2)],
     "softmax hidden": [Dense(5, activation="softmax"), OUTPUT],
     "dropout after relu": [Dense(5, activation="relu", dropout=0.3), OUTPUT],
+    "dropout after gelu": [Dense(5, activation="gelu", dropout=0.3), OUTPUT],
+    "gelu output": [Dense(3, output=True, activation="gelu")],
+    "gelu-tanh output": [Dense(3, output=True, activation="gelu_tanh")],
+    "batch norm after gelu": [Dense(5, activation="gelu"), BatchNorm(), OUTPUT],
+    "gelu batch norm": [LINEAR, BatchNorm(cast(Any, "gelu")), OUTPUT],
+    "gelu conv": [Conv(3, 2, activation=cast(Any, "gelu")), OUTPUT],
     "hidden loss": [Dense(5, loss="cross_entropy"), OUTPUT],
     "empty hidden": [Dense(0), OUTPUT],
     "empty output": [Dense(0, output=True)],
@@ -396,6 +403,9 @@ EMBED = Dense(6, activation="linear", bias=True)
 AFFINE_6 = Dense(6, activation="linear", bias=True)
 ATTENTION_BLOCK = Residual((LayerNorm(), Attention()))
 FFN_BLOCK = Residual((LayerNorm(), Dense(8, activation="relu"), AFFINE_6))
+# GELU in the FFN (the FFN activations workplan, D5): exact, and GPT-2's tanh form
+GELU_FFN_BLOCK = Residual((LayerNorm(), Dense(8, activation="gelu"), AFFINE_6))
+GELU_TANH_FFN_BLOCK = Residual((LayerNorm(), Dense(8, activation="gelu_tanh"), AFFINE_6))
 SOFTMAX = Dense(3, output=True, activation="softmax", loss="cross_entropy")
 
 TOKENS: dict[str, list[LayerSpec]] = {
@@ -414,6 +424,15 @@ TOKENS: dict[str, list[LayerSpec]] = {
     "no embedding": [PATCHES, Position(), Residual((LayerNorm(), Attention())), TokenMean(), OUTPUT],
     "the attention block alone": [PATCHES, EMBED, Position(), ATTENTION_BLOCK, TokenMean(), OUTPUT],
     "the FFN block alone": [PATCHES, EMBED, Position(), FFN_BLOCK, TokenMean(), OUTPUT],
+    "a GELU FFN block": [PATCHES, EMBED, Position(), GELU_FFN_BLOCK, TokenMean(), OUTPUT],
+    "GELU-tanh token-wise layers after a block": [
+        PATCHES,
+        EMBED,
+        ATTENTION_BLOCK,
+        Dense(5, activation="gelu_tanh"),
+        TokenMean(),
+        OUTPUT,
+    ],
     "two layers' blocks": [PATCHES, EMBED, ATTENTION_BLOCK, FFN_BLOCK, ATTENTION_BLOCK, FFN_BLOCK, TokenMean(), OUTPUT],
     "a ReLU embedding": [PATCHES, Dense(6, activation="relu"), Position(), ATTENTION_BLOCK, TokenMean(), OUTPUT],
     "attention alone in its body": [PATCHES, EMBED, Residual((Attention(),)), TokenMean(), OUTPUT],
@@ -494,6 +513,12 @@ FLAT_LAYER_NORM: dict[str, list[LayerSpec]] = {
     "after sigmoid": [Dense(5), LayerNorm(), Dense(4), OUTPUT],
     "before sigmoid": [LayerNorm(), Dense(5), OUTPUT],
     "after ReLU": [Dense(5, activation="relu"), LayerNorm(), OUTPUT],
+    "after GELU": [Dense(5, activation="gelu"), LayerNorm(), OUTPUT],
+    "GELU-tanh before a block starting with it": [
+        Dense(5, activation="gelu_tanh"),
+        Residual((LayerNorm(), Dense(8, activation="gelu"), AFFINE_5)),
+        OUTPUT,
+    ],
     "before ReLU": [Dense(5), LayerNorm(), Dense(4, activation="relu"), OUTPUT],
     "after dropout": [Dense(5, dropout=0.3), LayerNorm(), OUTPUT],
     "before dropout": [Dense(5), LayerNorm(), Dense(4, dropout=0.3), OUTPUT],
@@ -694,6 +719,8 @@ TOKEN_OUTPUT = Dense(7, output=True, activation="softmax", loss="cross_entropy")
 
 SEQUENCE: dict[str, list[LayerSpec]] = {
     "a causal transformer": [IDS, Position(), CAUSAL_BLOCK, FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
+    "a causal transformer, GELU": [IDS, Position(), CAUSAL_BLOCK, GELU_FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
+    "a causal transformer, GELU-tanh": [IDS, Position(), CAUSAL_BLOCK, GELU_TANH_FFN_BLOCK, LayerNorm(), TOKEN_OUTPUT],
     "the embedding, then the output": [IDS, TOKEN_OUTPUT],
     "a token-wise FFN, no attention": [IDS, Position(), FFN_BLOCK, TOKEN_OUTPUT],
     "the leak arm, unmasked": [IDS, Position(), ATTENTION_BLOCK, FFN_BLOCK, TOKEN_OUTPUT],

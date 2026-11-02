@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
+from indrajala_ml.model.layers.python.activations import GELUS
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.specs.layer_specs import (
@@ -51,7 +52,9 @@ def _check_batch_norm(spec: BatchNorm, before: LayerSpec | None) -> None:
 def _check_hidden_dense(spec: Dense) -> None:
     assert not spec.output, f"only the last layer is the output layer; got {spec!r} before it"
     assert spec.size >= 1, f"a dense layer needs at least one node; got {spec!r}"
-    assert spec.activation in ("sigmoid", "relu", "linear"), f"a hidden layer is sigmoid, ReLU or linear; got {spec!r}"
+    assert spec.activation in ("sigmoid", "relu", *GELUS, "linear"), (
+        f"a hidden layer is sigmoid, ReLU, GELU or linear; got {spec!r}"
+    )
     assert spec.dropout is None or spec.activation == "sigmoid", (
         f"dropout is fused with the sigmoid, so it needs a sigmoid hidden layer; got {spec!r}"
     )
@@ -203,8 +206,9 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool, window: bool
                 f"Attention ending a block's body (D1, D4); got {spec!r}"
             )
             _check_hidden_dense(spec)
-            assert spec.activation == "relu" or (spec.activation == "linear" and spec.bias), (
-                f"a token-wise Dense is ReLU, or linear with bias=True, with no dropout (D4); got {spec!r}"
+            assert spec.activation in ("relu", *GELUS) or (spec.activation == "linear" and spec.bias), (
+                f"a token-wise Dense is ReLU or GELU, or linear with bias=True, with no dropout (D4; the FFN "
+                f"activations workplan, D5); got {spec!r}"
             )
     assert sum(isinstance(spec, Position) for spec in tokens) <= 1, f"one Position at most (D7); got {list(tokens)!r}"
     rotary = next((s for s in expand_specs(tokens) if isinstance(s, Attention) and s.positions == "rotary"), None)
@@ -396,6 +400,11 @@ def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -
         f"network); got {list(specs)!r}"
     )
     _validate_layer_specs(specs, window=True)
+    gelu = next((spec for spec in expand_specs(specs) if isinstance(spec, Dense) and spec.activation in GELUS), None)
+    assert gelu is None, (
+        f"a window's token-wise layers are ReLU: the window program's ops are (the FFN activations workplan, D5, "
+        f"D8); got {gelu!r}"
+    )
     assert any(isinstance(spec, StateInput) for spec in specs), (
         "the state enters a window through at least one StateInput, right before a residual block (the "
         f"window-recurrent adder workplan, W1b-ii, W18); got {list(specs)!r}"

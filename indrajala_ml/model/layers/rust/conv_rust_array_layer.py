@@ -103,11 +103,11 @@ class ConvRustArrayLayer(WeightAndBias[pa.Array], ConvGeometryRustArrayLayer):
         self.compute_output_delta(reference_batch, context=context)
 
     def compute_hidden_delta_batch(self, next_layer: ArrayNetworkLayer[pa.Array], *, context: ForwardContext = NO_CONTEXT) -> None:
-        # array_relu_mask: derivative 0 at exactly z == 0, the same convention as ConvArrayLayer
-        self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(context=context), self.A)
+        # array_activation_mask's ReLU arm: derivative 0 at exactly z == 0, the same convention as ConvArrayLayer
+        self.delta_batch = pa.array_activation_mask(next_layer.downstream_batch(context=context), self.A, "relu")
 
     def compute_hidden_delta(self, next_layer: ArrayNetworkLayer[pa.Array], *, context: ForwardContext = NO_CONTEXT) -> None:
-        self.delta = pa.array_relu_mask(next_layer.downstream(context=context), self.a)
+        self.delta = pa.array_activation_mask(next_layer.downstream(context=context), self.a, "relu")
 
     def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.conv_downstream_batch(self.W, self.delta, self.geometry)

@@ -15,11 +15,12 @@ bits.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar
 
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
+from indrajala_ml.model.layers.python.activations import TokenActivation
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
@@ -276,22 +277,24 @@ class PositionRustArrayLayer(Hidden[pa.Array], DeltaIsDownstream[pa.Array]):
 class TokenDenseRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], WeightAndBias[pa.Array]):
     """
     TokenDenseArrayLayer on the Rust backend: a dense layer acting on each token, its W (size,
-    input_size) and b shared over the tokens (D4), as the existing dense ops (layer_relu_forward_batch,
-    affine_forward_batch, layer_downstream_batch, layer_accumulate_gradient_batch) on the rows of
-    tokens. Its delta is the next layer's downstream, masked by array_relu_mask for ReLU: no token
-    layer after it has a W to read (D5's mask path).
+    input_size) and b shared over the tokens (D4), as the existing dense ops (the crate's activation
+    family, layer_activation_forward_batch, affine_forward_batch, layer_downstream_batch,
+    layer_accumulate_gradient_batch) on the rows of tokens. Its delta is the next layer's
+    downstream, masked by array_activation_mask for ReLU (on a) or GELU (on z, which the forward
+    keeps): no token layer after it has a W to read (D5's mask path).
 
     Not a RustArrayLayer: the optimizer's fused single-example SGD step is a flat dense layer's.
     """
 
-    def __init__(self, size: int, input_size: int, tokens: int, activation: Literal["relu", "linear"]) -> None:
+    def __init__(self, size: int, input_size: int, tokens: int, activation: TokenActivation) -> None:
         self.size = size
         self.input_size = input_size
         self.tokens = tokens
-        self.activation = activation
-        self._forward_op = pa.layer_relu_forward_batch if activation == "relu" else pa.affine_forward_batch
+        self.activation: TokenActivation = activation
         self.W = pa.Array.zeros((size, input_size))
         self.b = pa.Array.zeros(size)
+        self.z: pa.Array | None = None
+        self.Z: pa.Array | None = None
         self.reset_gradient_accum()
 
     def _rows(self, values: pa.Array, features: int) -> pa.Array:
@@ -299,26 +302,38 @@ class TokenDenseRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], WeightAn
         examples = 1 if len(values.shape) == 1 else values.shape[0]
         return values.reshape((examples * self.tokens, features))
 
+    def _forward_rows(self, R: pa.Array) -> tuple[pa.Array, pa.Array | None]:
+        # (rows, input_size) to the (rows, size) activations, and z where the derivative reads it
+        if self.activation == "linear":
+            return pa.affine_forward_batch(self.W, R, self.b), None
+        return pa.layer_activation_forward_batch(self.W, R, self.b, self.activation)
+
     def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
-        self.a = self._forward_op(self.W, self._rows(x, self.input_size), self.b).reshape(self.tokens * self.size)
+        a, z = self._forward_rows(self._rows(x, self.input_size))
+        self.a = a.reshape(self.tokens * self.size)
+        self.z = None if z is None else z.reshape(self.tokens * self.size)
         return self.a
 
     def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
-        rows = self._forward_op(self.W, self._rows(X, self.input_size), self.b)
-        self.A = rows.reshape((X.shape[0], self.tokens * self.size))
+        A, Z = self._forward_rows(self._rows(X, self.input_size))
+        self.A = A.reshape((X.shape[0], self.tokens * self.size))
+        self.Z = None if Z is None else Z.reshape((X.shape[0], self.tokens * self.size))
         return self.A
 
     def decode_rows(self, R: pa.Array) -> pa.Array:
         # the new tokens' (L, input_size) rows, the forward op's on its rows
-        return self._forward_op(self.W, R, self.b)
+        return self._forward_rows(R)[0]
+
+    def _masked(self, downstream: pa.Array, a: pa.Array, z: pa.Array | None) -> pa.Array:
+        if self.activation == "linear":
+            return downstream
+        return pa.array_activation_mask(downstream, a if z is None else z, self.activation)
 
     def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
-        downstream = next_layer.downstream(context=context)
-        self.delta = pa.array_relu_mask(downstream, self.a) if self.activation == "relu" else downstream
+        self.delta = self._masked(next_layer.downstream(context=context), self.a, self.z)
 
     def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
-        downstream = next_layer.downstream_batch(context=context)
-        self.delta_batch = pa.array_relu_mask(downstream, self.A) if self.activation == "relu" else downstream
+        self.delta_batch = self._masked(next_layer.downstream_batch(context=context), self.A, self.Z)
 
     def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         rows = pa.layer_downstream_batch(self.W, self._rows(self.delta, self.size))
@@ -355,7 +370,9 @@ class TokenSoftmaxRustArrayLayer(TokenDenseRustArrayLayer):
     def __init__(self, size: int, input_size: int, tokens: int) -> None:
         assert size >= 2, f"a softmax layer needs at least 2 nodes to normalize over; got size={size}"
         super().__init__(size, input_size, tokens, "linear")
-        self._forward_op = pa.layer_softmax_forward_batch
+
+    def _forward_rows(self, R: pa.Array) -> tuple[pa.Array, pa.Array | None]:
+        return pa.layer_softmax_forward_batch(self.W, R, self.b), None
 
     def compute_output_delta(self, reference: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
         if context.counted is not None:

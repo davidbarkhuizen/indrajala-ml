@@ -31,7 +31,7 @@ class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBet
     which has no W, whose downstream it masks (before_layer_norm). A ReLU's masks the next
     layer's downstream, which may be a dense, conv, pool or layer-norm layer's (a conv layer's
     output can be one position, so positions doesn't tell); after a dense layer that is the fused
-    layer_relu_hidden_delta_batch's bits.
+    layer_activation_hidden_delta_batch's ReLU bits.
 
     training is set by set_training_mode. The backward pass reads _was_training, training as
     forward_batch saw it, since the network switches training off before the backward pass.
@@ -132,7 +132,7 @@ class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBet
         elif self.activation == "sigmoid":
             self.delta_batch = pa.layer_hidden_delta_batch(next_layer.W, next_layer.delta_batch, self.A)
         else:
-            self.delta_batch = pa.array_relu_mask(next_layer.downstream_batch(context=context), self.A)
+            self.delta_batch = pa.array_activation_mask(next_layer.downstream_batch(context=context), self.A, "relu")
 
     def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # dl/dx, the linear layer's delta: the paper's § 3 chain rule, term by term

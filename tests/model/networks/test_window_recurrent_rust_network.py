@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
-from indrajala_ml.model.layers.numpy import attention_array_layer, recurrent_array_layer
+from indrajala_ml.model.layers.numpy import activations, attention_array_layer, recurrent_array_layer
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentArrayNetwork,
@@ -50,7 +50,13 @@ WINDOWS = {"plain": WINDOW, "with dropout": DROPOUT_WINDOW}
 
 # numpy's exp as the crate's in both the attention and the window's parts
 crate_exp_attention = patching(attention_array_layer, "exp", exp_by_crate)
-crate_exp_parts = patching(recurrent_array_layer, "exp", exp_by_crate)
+
+
+@pytest.fixture
+def crate_exp_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    # the window's parts' exp, and the cell's tanh's (activations.py's, shared with GELU-tanh)
+    monkeypatch.setattr(recurrent_array_layer, "exp", exp_by_crate)
+    monkeypatch.setattr(activations, "exp", exp_by_crate)
 
 
 def _pair(

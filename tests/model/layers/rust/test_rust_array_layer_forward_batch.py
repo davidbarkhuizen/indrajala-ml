@@ -14,7 +14,7 @@ import pytest
 from indrajala_ml.model.layers.rust.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.layers.rust.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustArrayLayer
-from indrajala_ml.model.layers.rust.relu_rust_array_layer import ReLURustArrayLayer
+from indrajala_ml.model.layers.rust.relu_rust_array_layer import ActivationRustArrayLayer, ReLURustArrayLayer
 from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.layers.rust.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from tests.helpers import all_subclasses, model_modules
@@ -23,6 +23,8 @@ from tests.helpers import all_subclasses, model_modules
 LAYER_CLASSES: dict[str, Callable[[int, int], RustArrayLayer]] = {
     "plain": lambda size, input_size: RustArrayLayer(size, input_size),
     "relu": lambda size, input_size: ReLURustArrayLayer(size, input_size),
+    "gelu": lambda size, input_size: ActivationRustArrayLayer(size, input_size, "gelu"),
+    "gelu_tanh": lambda size, input_size: ActivationRustArrayLayer(size, input_size, "gelu_tanh"),
     "softmax": lambda size, input_size: SoftmaxRustArrayLayer(size, input_size),
     "cross-entropy": lambda size, input_size: CrossEntropyRustArrayLayer(size, input_size),
     "dropout": lambda size, input_size: DropoutRustArrayLayer(size, input_size, 0.5),

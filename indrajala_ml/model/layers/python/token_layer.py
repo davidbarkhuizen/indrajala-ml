@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, cast
 
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
+from indrajala_ml.model.layers.python import activations
+from indrajala_ml.model.layers.python.activations import GELUS, TokenActivation
 from indrajala_ml.model.layers.python.base_node import AbstractNode
 from indrajala_ml.model.layers.python.batch_norm_layer import fold
 from indrajala_ml.model.layers.python.fan_in_aware_init import fan_in_aware_weights_and_biases
@@ -41,6 +43,20 @@ class TokenNode(PassNode):
 
     def activate(self, value: float) -> None:
         self._activation = value
+
+
+class GELUTokenNode(TokenNode):
+    """A GELU token-wise layer's node: its pre-activation z too, which the derivative reads."""
+
+    example_fields: ClassVar[tuple[str, ...]] = ("_activation", "_z", "delta")
+
+    def activate_from(self, z: float, value: float) -> None:
+        self._z = z
+        self._activation = value
+
+    @property
+    def z(self) -> float:
+        return self._z
 
 
 class PositionRow:
@@ -394,29 +410,47 @@ class PositionLayer(ParameterFreeLayer[TokenNode]):
 class TokenDenseLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[TokenNode]):
     """
     A dense layer acting on each token (D4), its units (W's rows and b) shared over the tokens:
-    z_tk = sum_j(x_tj * W_kj) + b_k, then ReLU or the identity. Its units are drawn as a dense
-    layer's nodes, every unit's weights then every bias, and stepped and decayed as theirs.
+    z_tk = sum_j(x_tj * W_kj) + b_k, then ReLU, GELU (activations.py; its nodes keep z) or the
+    identity. Its units are drawn as a dense layer's nodes, every unit's weights then every bias,
+    and stepped and decayed as theirs.
     """
 
-    def __init__(self, input_layer: InputLayer, size: int, tokens: int, activation: Literal["relu", "linear"]) -> None:
+    def __init__(self, input_layer: InputLayer, size: int, tokens: int, activation: TokenActivation) -> None:
         self.input_layer = input_layer
         self.tokens = tokens
         self.input_size = len(input_layer.nodes) // tokens
         assert self.input_size * tokens == len(input_layer.nodes)
         self.size = size
-        self.activation = activation
+        self.activation: TokenActivation = activation
         self.units = [WeightRow(self.input_size) for _ in range(size)]
-        self.nodes = [TokenNode() for _ in range(tokens * size)]
+        node_cls = GELUTokenNode if activation in GELUS else TokenNode
+        self.nodes = [node_cls() for _ in range(tokens * size)]
+
+    def _preactivations(self, x: Sequence[float]) -> list[float]:
+        # one token's z from its features
+        return [fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias for unit in self.units]
+
+    def _activate(self, z: list[float]) -> list[float]:
+        if self.activation == "relu":
+            return [relu_activation(z_k) for z_k in z]
+        if self.activation == "linear":
+            return z
+        return [activations.activate(self.activation, z_k) for z_k in z]
 
     def _token(self, x: Sequence[float]) -> list[float]:
         # one token's outputs from its features
-        z = [fold([x_j * w_j for x_j, w_j in zip(x, unit.weights)]) + unit.bias for unit in self.units]
-        return [relu_activation(z_k) for z_k in z] if self.activation == "relu" else z
+        return self._activate(self._preactivations(x))
 
     def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         for t in range(self.tokens):
-            outputs = self._token(token_values(self.input_layer.nodes, t, self.input_size))
-            for k, value in enumerate(outputs):
+            x = token_values(self.input_layer.nodes, t, self.input_size)
+            if self.activation in GELUS:
+                # GELU's derivative reads z: its nodes keep it
+                z = self._preactivations(x)
+                for k, (z_k, value) in enumerate(zip(z, self._activate(z), strict=True)):
+                    cast("GELUTokenNode", self.nodes[t * self.size + k]).activate_from(z_k, value)
+                continue
+            for k, value in enumerate(self._token(x)):
                 self.nodes[t * self.size + k].activate(value)
 
     def decode_rows(self, R: list[list[float]]) -> list[list[float]]:
@@ -425,7 +459,12 @@ class TokenDenseLayer(RowDecoding[list[list[float]]], ParameterFreeLayer[TokenNo
     def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):
             downstream = next_layer.downstream_sum(own_index)
-            node.delta = relu_delta(downstream, node.value()) if self.activation == "relu" else downstream
+            if self.activation == "relu":
+                node.delta = relu_delta(downstream, node.value())
+            elif self.activation in GELUS:
+                node.delta = downstream * activations.derivative(self.activation, cast("GELUTokenNode", node).z)
+            else:
+                node.delta = downstream
 
     def downstream_sum(self, own_index: int) -> float:
         # sum_k(delta_tk * W_kj), for node t * input_size + j before this layer
