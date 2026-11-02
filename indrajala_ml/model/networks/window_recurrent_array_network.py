@@ -357,6 +357,24 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         outputs, states, cells, _ = self._run_windows(X, C, True, False, live=live)
         return outputs, [C, *states], [H, *cells]
 
+    def cell_outputs(self, rows: Sequence[Sequence[float]]) -> list[list[list[float]]]:
+        """
+        Each window's cells' outputs before the snap, W of them, (N, state_size) each, in inference:
+        window_states's after the initial state's, as lists (codes.py reads them on every
+        implementation; the audit-remedies workplan, D3).
+        """
+        _, _, cells = self.window_states(self.backend.matrix([list(row) for row in rows]))
+        return [cell.tolist() for cell in cells[1:]]
+
+    def set_codes(self, factor: int, codes: list[list[float]]) -> None:
+        """Factor factor's codes E, (count, state_size): codes.py's k-means codes (D3)."""
+        part = self.recurrence_layer.factors[factor].codes
+        assert part is not None, f"factor {factor} is continuous: it has no codes"
+        assert len(codes) == part.count and all(len(code) == part.size for code in codes), (
+            f"factor {factor}'s codes are ({part.count}, {part.size}); got {len(codes)} codes"
+        )
+        part.E = self.backend.matrix(codes)
+
     def state_codes(self, X: A) -> list[list[tuple[int, ...]]]:
         """
         Each state, per example, as a machine's, a code per factor: the initial state's, then each

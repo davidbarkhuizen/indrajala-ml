@@ -168,6 +168,28 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
                 row.extend(output)
         return outputs
 
+    def cell_outputs(self, states: Sequence[Sequence[float]]) -> list[list[list[float]]]:
+        """
+        Each window's cells' outputs before the snap, W of them, (N, state_size) each, in inference
+        (the array network's cell_outputs; codes.py reads them, the audit-remedies workplan, D3).
+        """
+        C = self._first_state(len(states))
+        cells: list[list[list[float]]] = []
+        for w in range(self._windows(states)):
+            _, C = self._window_forward(self._window(states, w), C)
+            cells.append(self.recurrence_layer.H)
+        return cells
+
+    def set_codes(self, factor: int, codes: list[list[float]]) -> None:
+        """Factor factor's codes, (count, state_size): codes.py's k-means codes (D3)."""
+        part = self.recurrence_layer.factors[factor].codes
+        assert part is not None, f"factor {factor} is continuous: it has no codes"
+        assert len(codes) == part.count and all(len(code) == part.size for code in codes), (
+            f"factor {factor}'s codes are ({part.count}, {part.size}); got {len(codes)} codes"
+        )
+        for row, code in zip(part.codes, codes, strict=True):
+            row.set_weights(list(code))
+
     def _forward(self, state: tuple[float, ...], *, context: ForwardContext | None = None) -> list[float]:
         # forward_windows builds each window's own context
         return self.forward_windows([state])[0]
