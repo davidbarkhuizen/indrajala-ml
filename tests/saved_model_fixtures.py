@@ -33,6 +33,9 @@ tests/model/persistence/test_legacy_saved_models.py loads.
   implementation's sequence class with a GELU FFN, named SequenceGelu<class name>, and with the
   gated FFN, SwiGLU, named SequenceSwiGLU<class name>: a dense entry's "gelu" and a "gated_dense"
   entry.
+- The grouped-query attention fixtures (the grouped-query attention workplan, stage 7, D6) are
+  format-2 files of each implementation's sequence class with four causal heads of 3 sharing two
+  key/value heads, named SequenceGrouped<class name>: an attention entry's "key_value_heads".
 - The pure-Python multiclass presets' fixtures (the presets workplan, stage 1) are format 2 only,
   like the single-output ones: those classes never wrote a legacy envelope.
 - So are the numpy and Rust one-output presets' fixtures (the presets workplan, stage 2).
@@ -233,6 +236,13 @@ SWIGLU_MODEL: list[LayerSpec] = [
     *SEQUENCE_MODEL[:3],
     Residual((LayerNorm(), GatedDense(3), Dense(4, activation="linear", bias=True))),
     *SEQUENCE_MODEL[4:],
+]
+# SEQUENCE_MODEL at four heads of 3 sharing two key/value heads (the grouped-query attention
+# workplan, D6)
+GROUPED_MODEL: list[LayerSpec] = [
+    *SEQUENCE_MODEL[:2],
+    Residual((LayerNorm(), Attention(heads=4, key_size=3, causal=True, key_value_heads=2))),
+    *SEQUENCE_MODEL[3:],
 ]
 # a window of 3 columns of SEQUENCE_MODEL's token ids: a dropout after the Position, and the state
 # entering before each block; its recurrence's every field off its default
@@ -587,7 +597,7 @@ FIXTURES: dict[str, SavedModelFixture] = {
     },
     **{
         f"Sequence{kind}{name}": _sequence(implementation, name, model)
-        for kind, model in (("Gelu", GELU_MODEL), ("SwiGLU", SWIGLU_MODEL))
+        for kind, model in (("Gelu", GELU_MODEL), ("SwiGLU", SWIGLU_MODEL), ("Grouped", GROUPED_MODEL))
         for name, implementation in (
             ("SequentialSequenceArrayNetwork", "numpy"),
             ("SequentialSequenceRustArrayNetwork", "rust"),

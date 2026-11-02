@@ -181,19 +181,41 @@ Each lists the options considered, with pros and cons, and the choice.
    - Tests: `g = h` bit-identical (golden run, unchanged); gradient checks at `g` in {1, 2, h} on the
      shared spec tables (`MULTI_HEAD`, `SEQUENCE`, `TOKENS`); the fold order (a test that pins D3's
      order against a different one); decoding at each `g` against the full pass; refusals.
+   *Done 2026-11-02* (#1190). What the code settled:
+   - **D3's order, made exact:** each group's `dK` is folded, then divided by the scale once, as the
+     crate divides at the end; numpy's tiled passes take `K` and `V` at `g` heads (`expand`, `fold`).
+   - **The context-length study** rebuilt `Attention` field by field, dropping any new field; it now
+     uses `dataclasses.replace` (D7's model is that study's).
+   - **The tier 1 A/B** moved two numpy forward rows (+7.4% at T=256 causal, -5.1% at T=64 packed)
+     though the numpy ops at `g = h` are the old ones. An A/A was quiet (1.3%); the old commit with
+     `expand` and `fold` added unused moved the same rows by the same amounts. A loaded-code
+     effect, recorded in measurement.md §7 (the bump moved them again with only the `.so` changed).
 3. **The crate** (D4): the ops' `key_value_heads`, block `i / (h / g)` in `scores` and attend, the
    group's tiles cut once per block, the backward's fold, `K`'s rotation by `g` heads,
    `attention_step`'s cache at `g * d_k`. Its tests: by bits against numpy's expressions at
    `g` in {1, 2, h}, and new `bits.txt` families. Then a "Bump rust/" PR, with tier 1 on `jebel`
-   (`attention_timing`, `g = h`, `--order ONNO`).
+   (`attention_timing`, `g = h`, `--order ONNO`). *Done 2026-11-02* (crate #93, bump #1191): the
+   crate's tests check each op by bits against its tiled composition at multi-query and groups of 2
+   and 3; `bits.txt` gains attention's forward and downstream at 4 heads, sharing 2 and sharing 1;
+   the golden run held. Tier 1: no slower Rust row (every consistent one faster, -2.9% to -6.8%,
+   no speedup claimed).
 4. **The Rust layers:** `key_value_heads` through `AttentionRustArrayLayer` and
-   `AttentionRustCache`; parity with numpy (crate `exp`).
+   `AttentionRustCache`; parity with numpy (crate `exp`). *Done 2026-11-02* (#1192; tier 1 within
+   1.2%).
 5. **Pure Python:** `AttentionLayer` (its `_tiled`, backward fold, rotary and cache); parity.
+   *Done 2026-11-02* (#1193): the layer-major path is the example-major loop by bits;
+   `python_array_snapshot.projections` splits `Wk` and `Wv` at `kv_width`.
 6. **The conversion and the decode tool** (D5, D11): `to_grouped`, tested on each implementation
    (a converted `g = h` model is the original, bit for bit; a converted model's `Wk` rows are its
-   heads' means); `generation_timing.py`'s options.
+   heads' means); `generation_timing.py`'s options. *Done 2026-11-02* (#1194):
+   `persistence/grouping.py`; a converted document's optimizer state is fresh (`t` 0, each layer's
+   made on its first step); a batch above 1 decodes cached only (the uncached path is one row's
+   full pass).
 7. **Fixtures and golden entries** (D6): `SequenceGrouped<class>` fixtures (`g = 2` of 4 heads);
-   the 4-head golden entries at `g = 2` and `g = 1`, and the Rust reference.
+   the 4-head golden entries at `g = 2` and `g = 1`, and the Rust reference. *Done 2026-11-02*:
+   "numpy/rust/python grouped model" (`g = 2`) and "... multi-query model" (`g = 1`), after the FFN
+   entries (143 locally, 47 in the Rust reference); no earlier entry moved (checked entry by entry).
+   `SequenceGrouped<class>` fixtures for each implementation's sequence class.
 8. **The study** (D7): registered first (claims, cells, feasibility, budget from a probe), then
    the sweep, then the findings.
 9. **Docs**: README (Layer norm and attention gains GQA); the workplan retired.

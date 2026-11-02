@@ -113,6 +113,11 @@ GELU_SPECS, SEQUENCE_SPECS with the exact GELU in its FFN, and SWIGLU_SPECS, wit
 GatedDense(3) (SwiGLU) at about two thirds of the FFN's width, in all three implementations, on the
 sequence rows. No earlier entry moved when they were recorded.
 
+The grouped-query attention entries (the grouped-query attention workplan, stage 7, D6) are added
+after the FFN ones: GROUPED_SPECS and MULTI_QUERY_SPECS, SEQUENCE_SPECS with four causal heads of
+3 sharing two key/value heads and one, in all three implementations, on the sequence rows. No
+earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -605,6 +610,20 @@ SWIGLU_SPECS: list[LayerSpec] = [
     *SEQUENCE_SPECS[4:],
 ]
 SWIGLU_NETWORKS = ["numpy swiglu model", "rust swiglu model", "python swiglu model"]
+# SEQUENCE_SPECS at four heads of 3 sharing two key/value heads, and one (the grouped-query
+# attention workplan, D6)
+GROUPED_SPECS: list[LayerSpec] = [
+    *SEQUENCE_SPECS[:2],
+    Residual((LayerNorm(), Attention(heads=4, key_size=3, causal=True, key_value_heads=2))),
+    *SEQUENCE_SPECS[3:],
+]
+GROUPED_NETWORKS = ["numpy grouped model", "rust grouped model", "python grouped model"]
+MULTI_QUERY_SPECS: list[LayerSpec] = [
+    *SEQUENCE_SPECS[:2],
+    Residual((LayerNorm(), Attention(heads=4, key_size=3, causal=True, key_value_heads=1))),
+    *SEQUENCE_SPECS[3:],
+]
+MULTI_QUERY_NETWORKS = ["numpy multi-query model", "rust multi-query model", "python multi-query model"]
 
 
 def _packed_rows() -> list[Example[tuple[int, ...]]]:
@@ -1031,7 +1050,12 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 "predict_probabilities",
             ),
         )
-    for names, specs in ((GELU_NETWORKS, GELU_SPECS), (SWIGLU_NETWORKS, SWIGLU_SPECS)):
+    for names, specs in (
+        (GELU_NETWORKS, GELU_SPECS),
+        (SWIGLU_NETWORKS, SWIGLU_SPECS),
+        (GROUPED_NETWORKS, GROUPED_SPECS),
+        (MULTI_QUERY_NETWORKS, MULTI_QUERY_SPECS),
+    ):
         for name in names:
             yield (
                 name,
