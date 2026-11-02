@@ -20,6 +20,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Embedding,
     ExpandedSpec,
     Fork,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Merge,
@@ -95,6 +96,9 @@ def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputSha
     for spec in expand_specs(specs):
         if isinstance(spec, Dense):
             shapes.append(SpecShape(shape, (shape[0], spec.size) if len(shape) == 2 else (spec.size,)))
+        elif isinstance(spec, GatedDense):
+            # over tokens only (validate_layer_specs): each token's size outputs (D3)
+            shapes.append(SpecShape(shape, (shape[0], spec.size)))
         elif isinstance(spec, BatchNorm):
             positions = shape[0] * shape[1] if len(shape) == 3 else 1
             shapes.append(SpecShape(shape, shape, positions))

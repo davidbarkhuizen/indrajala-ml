@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from indrajala_ml.model.layers.python.activations import GELUS
+from indrajala_ml.model.layers.python.activations import GELUS, GLUS
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.specs.layer_specs import (
@@ -20,6 +20,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Dense,
     Dropout,
     Embedding,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Patches,
@@ -134,9 +135,18 @@ def _check_token_residual(spec: Residual, in_body: bool, window: bool) -> None:
     )
     if isinstance(last, Dense):
         _check_hidden_dense(last)
+        if layers and isinstance(layers[-1], GatedDense):
+            # the gated FFN, right before its affine layer (the FFN activations workplan, D3, D5)
+            _check_gated_dense(layers[-1])
+            layers = layers[:-1]
     elif isinstance(last, Attention):
         _check_attention(last)
     _check_token_layers(layers, in_body=True, window=window)
+
+
+def _check_gated_dense(spec: GatedDense) -> None:
+    assert spec.size >= 1, f"a GatedDense needs at least one unit; got {spec!r}"
+    assert spec.activation in GLUS, f'a GatedDense\'s activation is "silu", "gelu" or "gelu_tanh"; got {spec!r}'
 
 
 def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool, window: bool) -> None:
@@ -147,6 +157,10 @@ def _check_token_layers(tokens: Sequence[LayerSpec], in_body: bool, window: bool
     assert batch_norm is None, f"a BatchNorm doesn't stand among the tokens, a LayerNorm does (D4); got {batch_norm!r}"
     blocks = 0
     for i, spec in enumerate(tokens):
+        assert not isinstance(spec, GatedDense), (
+            'a GatedDense stands in a token block\'s body, right before its affine layer, Dense(n, "linear", '
+            f"bias=True) (the FFN activations workplan, D3, D5); got {spec!r} in {list(tokens)!r}"
+        )
         if isinstance(spec, Dropout):
             assert i > 0 and isinstance(tokens[i - 1], Position), (
                 "a Dropout among the tokens stands right after the Position, or ends a block's body after its "
@@ -400,7 +414,14 @@ def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -
         f"network); got {list(specs)!r}"
     )
     _validate_layer_specs(specs, window=True)
-    gelu = next((spec for spec in expand_specs(specs) if isinstance(spec, Dense) and spec.activation in GELUS), None)
+    gelu = next(
+        (
+            spec
+            for spec in expand_specs(specs)
+            if isinstance(spec, GatedDense) or (isinstance(spec, Dense) and spec.activation in GELUS)
+        ),
+        None,
+    )
     assert gelu is None, (
         f"a window's token-wise layers are ReLU: the window program's ops are (the FFN activations workplan, D5, "
         f"D8); got {gelu!r}"

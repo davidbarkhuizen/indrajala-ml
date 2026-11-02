@@ -21,6 +21,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Dense,
     Dropout,
     Embedding,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Position,
@@ -35,12 +36,19 @@ WINDOW = 8
 ATOL = 1e-13
 
 
-def _specs(positions: str, causal: bool = True, dropout: float = 0.0) -> list[LayerSpec]:
+def _specs(positions: str, causal: bool = True, dropout: float = 0.0, feed_forward: str = "relu") -> list[LayerSpec]:
     attention = Attention(
         heads=2, causal=causal, dropout=dropout, positions="rotary" if positions == "rotary" else "none"
     )
     # a token-wise dropout ends the FFN's body
-    body = (LayerNorm(), Dense(32, activation="relu"), Dense(FEATURES, activation="linear", bias=True))
+    # the FFN's hidden layer: ReLU, GELU, or the gated FFN at about two thirds the width (the FFN
+    # activations workplan, D3, D4)
+    hidden = (
+        GatedDense(21)
+        if feed_forward == "swiglu"
+        else Dense(32, activation="gelu" if feed_forward == "gelu" else "relu")
+    )
+    body = (LayerNorm(), hidden, Dense(FEATURES, activation="linear", bias=True))
     ffn = Residual((*body, Dropout(dropout)) if dropout else body)
     blocks = [Residual((LayerNorm(), attention)), ffn] * 2
     return [
@@ -103,6 +111,14 @@ def _sliding_reference(specs: list[LayerSpec], network: Any, ids: list[int]) -> 
         if isinstance(layer, AttentionArrayLayer):
             layer._band = WINDOW  # pyright: ignore[reportPrivateUsage]
     return _full(long, ids)
+
+
+@pytest.mark.parametrize("ffn", ["gelu", "swiglu"])
+def test_a_gelu_or_gated_ffn_decodes_as_the_full_pass(ffn: str) -> None:
+    # the FFN activations workplan, D3: a GatedDense decodes one token a row, as the token-wise Dense
+    network = _network(_specs("rotary", feed_forward=ffn))
+    ids = _ids(WINDOW)
+    np.testing.assert_allclose(_decoded(network, ids, 3)[1:], _full(network, ids)[3:], rtol=0, atol=ATOL)
 
 
 @pytest.mark.parametrize("positions", ["rotary", "none"])

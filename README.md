@@ -133,7 +133,8 @@ network = SequentialArrayNetwork(
 ```
 
 - **Layer specs** (`layer_specs.py`) are backend-free data: `Dense(size, activation, dropout)`
-  (sigmoid, ReLU or GELU (Activations), dropout on sigmoid only),
+  (sigmoid, ReLU or GELU (Activations), dropout on sigmoid only), the gated FFN
+  `GatedDense(size, activation)` (Activations),
   `Conv(kernel_size, channel_count, stride)`,
   `Pool(pool_size, stride)`, and the output layer `Dense(size, output=True, activation, loss)`
   (sigmoid with the squared or cross-entropy loss, or softmax with cross-entropy), with
@@ -386,6 +387,29 @@ ReLU's derivative reads the layer's output (`a > 0`) and GELU's its pre-activati
 layer keeps from its forward pass. On Rust the three are one fused family (`layer_activation_*`,
 `array_activation_mask`; D9): the forward returns `(a, z)`, with `z` only for the GELUs, and ReLU's
 arithmetic is what it was before the family, so every ReLU golden entry is unchanged.
+
+**The gated FFN** (D3; Shazeer 2020, "GLU Variants Improve Transformer") is `GatedDense(size,
+activation)`, in a token block's FFN body right before its affine layer:
+`Residual((LayerNorm(), GatedDense(170), Dense(64, activation="linear", bias=True)))`. Each token's
+features `x` give a gate `a = x W_g^T + b_g` and a value `v = x W_v^T + b_v`, and the layer's
+output is `act(a) * v`. With `"silu"` (the default) this is SwiGLU, PaLM's and LLaMA's; with a GELU
+it is GEGLU. The two projections are one `(2 * size, d)` weight (the gate's rows, then the
+value's) and one bias, one product, and one parameter pair to the optimizers: the weight decayed,
+the bias not. At equal parameters with a ReLU FFN of size `4d`, `size` is about `8d/3`: at `d = 64`,
+170 against 256 gives 33,044 parameters against 33,088 (D4). It decodes one token a row, as the
+token-wise `Dense` does. Validation refuses it anywhere else, and in a window-recurrent network's
+window. SiLU and the backward pass:
+
+| Function | Expression |
+| --- | --- |
+| `silu(z)` | `z * s`, `s = 1.0 / (1.0 + exp(-z))` |
+| `silu'(z)` | `s * (1.0 + z * (1.0 - s))` |
+| gate's delta | `(d * v) * act'(a)` |
+| value's delta | `d * act(a)` |
+
+The layer's delta is its pre-activation's, the gate's part then the value's, and its downstream
+and gradients are a dense layer's on it. On Rust it is `gated_forward_batch` and
+`gated_delta_batch`.
 
 ## Batch normalization
 

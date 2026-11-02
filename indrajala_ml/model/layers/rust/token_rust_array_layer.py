@@ -20,7 +20,7 @@ from typing import Any, ClassVar
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.array.array_parameters import WeightAndBias
-from indrajala_ml.model.layers.python.activations import TokenActivation
+from indrajala_ml.model.layers.python.activations import Smooth, TokenActivation
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 from indrajala_ml.model.specs.hidden_layers import DeltaIsDownstream, Hidden, ParameterFree
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
@@ -357,6 +357,75 @@ class TokenDenseRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], WeightAn
     def reset_gradient_accum(self) -> None:
         self.grad_W = pa.Array.zeros((self.size, self.input_size))
         self.grad_b = pa.Array.zeros(self.size)
+
+
+class GatedDenseRustArrayLayer(RowDecoding[pa.Array], Hidden[pa.Array], WeightAndBias[pa.Array]):
+    """
+    GatedDenseArrayLayer on the Rust backend (the FFN activations workplan, D3): gated_forward_batch
+    on the rows of tokens, act(a) * v of one (2 * size, input_size) product, keeping Z; its delta,
+    Z's, from gated_delta_batch; its downstream and gradients the dense ops' (layer_downstream_batch,
+    layer_accumulate_gradient_batch) on that delta's rows.
+    """
+
+    def __init__(self, size: int, input_size: int, tokens: int, activation: Smooth) -> None:
+        self.size = size
+        self.input_size = input_size
+        self.tokens = tokens
+        self.activation: Smooth = activation
+        self.W = pa.Array.zeros((2 * size, input_size))
+        self.b = pa.Array.zeros(2 * size)
+        self.reset_gradient_accum()
+
+    def _rows(self, values: pa.Array, features: int) -> pa.Array:
+        # one example's (T * features) or a batch's (N, T * features) as rows of features
+        examples = 1 if len(values.shape) == 1 else values.shape[0]
+        return values.reshape((examples * self.tokens, features))
+
+    def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        out, self.z = pa.gated_forward_batch(self.W, self._rows(x, self.input_size), self.b, self.activation)
+        self.a = out.reshape(self.tokens * self.size)
+        return self.a
+
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        out, self.Z = pa.gated_forward_batch(self.W, self._rows(X, self.input_size), self.b, self.activation)
+        self.A = out.reshape((X.shape[0], self.tokens * self.size))
+        return self.A
+
+    def decode_rows(self, R: pa.Array) -> pa.Array:
+        return pa.gated_forward_batch(self.W, R, self.b, self.activation)[0]
+
+    def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        # Z's delta, (T * 2 * size), as a dense layer's delta is laid out
+        downstream = self._rows(next_layer.downstream(context=context), self.size)
+        self.delta = pa.gated_delta_batch(downstream, self.z, self.activation).reshape(self.tokens * 2 * self.size)
+
+    def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
+        downstream = next_layer.downstream_batch(context=context)
+        rows = pa.gated_delta_batch(self._rows(downstream, self.size), self.Z, self.activation)
+        self.delta_batch = rows.reshape((downstream.shape[0], self.tokens * 2 * self.size))
+
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        rows = pa.layer_downstream_batch(self.W, self._rows(self.delta, 2 * self.size))
+        return rows.reshape(self.tokens * self.input_size)
+
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        rows = pa.layer_downstream_batch(self.W, self._rows(self.delta_batch, 2 * self.size))
+        return rows.reshape((self.delta_batch.shape[0], self.tokens * self.input_size))
+
+    def _accumulate(self, delta: pa.Array, X: pa.Array) -> None:
+        self.grad_W, self.grad_b = pa.layer_accumulate_gradient_batch(
+            self._rows(delta, 2 * self.size), self._rows(X, self.input_size), self.grad_W, self.grad_b
+        )
+
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self._accumulate(self.delta, input_activation)
+
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self._accumulate(self.delta_batch, input_activation_batch)
+
+    def reset_gradient_accum(self) -> None:
+        self.grad_W = pa.Array.zeros((2 * self.size, self.input_size))
+        self.grad_b = pa.Array.zeros(2 * self.size)
 
 
 class TokenSoftmaxRustArrayLayer(TokenDenseRustArrayLayer):

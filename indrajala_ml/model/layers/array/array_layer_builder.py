@@ -27,6 +27,7 @@ from indrajala_ml.model.layers.numpy.residual_array_layer import AddArrayLayer, 
 from indrajala_ml.model.layers.numpy.softmax_array_layer import SoftmaxArrayLayer
 from indrajala_ml.model.layers.numpy.token_array_layer import (
     EmbeddingArrayLayer,
+    GatedDenseArrayLayer,
     PatchesArrayLayer,
     PositionArrayLayer,
     TokenDenseArrayLayer,
@@ -54,6 +55,7 @@ from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer
 from indrajala_ml.model.layers.rust.softmax_rust_array_layer import SoftmaxRustArrayLayer
 from indrajala_ml.model.layers.rust.token_rust_array_layer import (
     EmbeddingRustArrayLayer,
+    GatedDenseRustArrayLayer,
     PatchesRustArrayLayer,
     PositionRustArrayLayer,
     TokenDenseRustArrayLayer,
@@ -71,6 +73,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Dropout,
     Embedding,
     Fork,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Merge,
@@ -167,6 +170,7 @@ class TokenLayerClasses:
     """
 
     token_dense: LayerClass
+    gated_dense: LayerClass  # the gated FFN (the FFN activations workplan, D3)
     patches: LayerClass
     position: LayerClass
     layer_norm: LayerClass
@@ -181,6 +185,7 @@ class TokenLayerClasses:
 TOKEN_LAYER_CLASSES = {
     "numpy": TokenLayerClasses(
         token_dense=TokenDenseArrayLayer,
+        gated_dense=GatedDenseArrayLayer,
         patches=PatchesArrayLayer,
         position=PositionArrayLayer,
         layer_norm=LayerNormArrayLayer,
@@ -193,6 +198,7 @@ TOKEN_LAYER_CLASSES = {
     ),
     "rust": TokenLayerClasses(
         token_dense=TokenDenseRustArrayLayer,
+        gated_dense=GatedDenseRustArrayLayer,
         patches=PatchesRustArrayLayer,
         position=PositionRustArrayLayer,
         layer_norm=LayerNormRustArrayLayer,
@@ -215,6 +221,9 @@ def _token_layer(
         return classes.token_output(spec.size, shape[1], shape[0])
     if isinstance(spec, Dense) and len(shape) == 2:
         return classes.token_dense(spec.size, shape[1], shape[0], spec.activation)
+    if isinstance(spec, GatedDense):
+        tokens, features = token_shape(shape)
+        return classes.gated_dense(spec.size, features, tokens, spec.activation)
     if isinstance(spec, Patches):
         return classes.patches(*image_shape(shape), spec.patch_size)
     if isinstance(spec, Embedding):

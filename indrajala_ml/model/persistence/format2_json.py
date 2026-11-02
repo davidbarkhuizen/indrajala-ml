@@ -26,6 +26,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Embedding,
     ExpandedSpec,
     Fork,
+    GatedDense,
     LayerNorm,
     LayerSpec,
     Merge,
@@ -47,7 +48,7 @@ _RULES: dict[str, type[UpdateRule]] = {"sgd": SGD, "momentum": Momentum, "adam":
 # workplan's StateInput (stage 2); a token-wise dense layer's entry, an output layer's included, is a
 # "dense" one
 _TOKEN_SPECS: dict[
-    str, type[Patches | Embedding | Position | LayerNorm | Attention | Dropout | StateInput | TokenMean]
+    str, type[Patches | Embedding | Position | LayerNorm | Attention | Dropout | StateInput | TokenMean | GatedDense]
 ] = {
     "patches": Patches,
     "embedding": Embedding,
@@ -57,6 +58,8 @@ _TOKEN_SPECS: dict[
     "dropout": Dropout,
     "state_input": StateInput,
     "token_mean": TokenMean,
+    # the gated FFN (the FFN activations workplan, D3): its W (2 * size, d) and b
+    "gated_dense": GatedDense,
 }
 _TOKEN_KINDS = {cls: kind for kind, cls in _TOKEN_SPECS.items()}
 

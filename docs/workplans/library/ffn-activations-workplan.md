@@ -179,7 +179,28 @@ Each lists the options considered, with pros and cons, and the choice.
      256 x 64 row slower by more; the crate's second commit dropped the mask's repeated shape check,
      which settled 256 x 64.
 4. **`GatedDense`** (D3): specs, numpy, the crate and a "Bump rust/" PR, Rust, pure Python; row
-   decoding; the optimizer pair and its decay flag; persistence; parity.
+   decoding; the optimizer pair and its decay flag; persistence; parity. *Done 2026-11-02* (crate #92 and its bump).
+   What the code settled:
+   - **The layout:** `W` is `(2 * size, d)`, the gate's rows then the value's, and `b`
+     `(2 * size,)`. Randomization draws it as one dense layer's pair, so the three implementations
+     draw the same weights. Its delta is the pre-activation's, `(rows, 2 * size)`: each row's gate
+     part `(d * v) * act'(a)`, then its value part `d * act(a)`. The downstream and the gradients
+     are the dense ops' on that delta, so the crate gained only `gated_forward_batch` and
+     `gated_delta_batch`. SiLU joins the activation family (`"silu"`), through the dense layers'
+     sigmoid.
+   - **Where it stands:** a token block's body, right before its affine layer (D5). Validation
+     refuses it elsewhere: outside a body, ending one, before attention or a LayerNorm, after the
+     mean, flat, and in a window.
+   - **Layers:** `GatedDenseArrayLayer` (numpy), `GatedDenseRustArrayLayer`, and `GatedDenseLayer`
+     (pure Python, with nodes keeping the gate's and the value's pre-activations and deltas per
+     example). Format 2's kind is `"gated_dense"`.
+   - **Tests:**
+     - SiLU by bits across the three implementations (`test_activation_implementations.py`).
+     - SwiGLU and GEGLU cases in the shared spec tables (gradient checks, parity and format 2 on
+       every implementation, a dropped SwiGLU FFN included).
+     - Decoding by bits on Rust and pure Python.
+     - D4's counts on all three implementations (`test_gated_dense.py`).
+     - Tier 0: new ops only.
 5. **Fixtures, checkpoints and golden entries** (D6), the Rust reference on both architectures.
 6. **The study** (D7): after step 12's report; registration first, then the sweep.
 7. **Docs**; the workplan retired.

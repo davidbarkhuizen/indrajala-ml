@@ -28,7 +28,7 @@ from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.numpy import activations
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer, FloatArray, relu
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
-from indrajala_ml.model.layers.python.activations import GELUS, TokenActivation
+from indrajala_ml.model.layers.python.activations import GELUS, Smooth, TokenActivation
 from indrajala_ml.model.protocols.decoding_protocols import RowDecoding
 
 exp = np.exp
@@ -383,6 +383,64 @@ class TokenDenseArrayLayer(RowDecoding[FloatArray], BatchShaped, ArrayLayer):
         delta = self._rows(self.delta_batch, self.size)
         self.grad_W += delta.T @ self._rows(input_activation_batch, self.input_size)
         self.grad_b += delta.sum(axis=0)
+
+    def _rows(self, batch: FloatArray, features: int) -> FloatArray:
+        return batch.reshape(batch.shape[0] * self.tokens, features)
+
+
+class GatedDenseArrayLayer(RowDecoding[FloatArray], BatchShaped, ArrayLayer):
+    """
+    A gated linear unit over each token (the FFN activations workplan, D3): its W (2 * size,
+    input_size), the gate's rows then the value's, and b (2 * size,) shared over the tokens, one
+    product Z = R @ W.T + b on the (N * T, input_size) rows, and out act(a) * v of each row's gate a
+    (Z's first size columns) and value v (its last size), act SiLU (SwiGLU) or a GELU (GEGLU),
+    through activations.py. It keeps Z; its delta is Z's, each row's gate part (d * v) * act'(a)
+    then its value part d * act(a), and its downstream and gradients are a dense layer's on that
+    delta. W and b are drawn and stepped as a dense layer's pair, W decayed and b not.
+    """
+
+    def __init__(self, size: int, input_size: int, tokens: int, activation: Smooth) -> None:
+        super().__init__(2 * size, input_size)
+        # size is the output's width per token; W and b are twice as tall
+        self.size = size
+        self.tokens = tokens
+        self.activation: Smooth = activation
+
+    def _gated(self, Z: FloatArray) -> FloatArray:
+        # (rows, 2 * size) to (rows, size): act(a) * v
+        return activations.activate(self.activation, Z[:, : self.size]) * Z[:, self.size :]
+
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        n = X.shape[0]
+        self.Z = X.reshape(n * self.tokens, self.input_size) @ self.W.T + self.b
+        self.A = self._gated(self.Z).reshape(n, self.tokens * self.size)
+        return self.A
+
+    def decode_rows(self, R: FloatArray) -> FloatArray:
+        return self._gated(R @ self.W.T + self.b)
+
+    def _backward(self, downstream: FloatArray) -> None:
+        n = downstream.shape[0]
+        d = downstream.reshape(n * self.tokens, self.size)
+        a, v = self.Z[:, : self.size], self.Z[:, self.size :]
+        gate = (d * v) * activations.derivative(self.activation, a)
+        value = d * activations.activate(self.activation, a)
+        self.delta_batch = np.concatenate([gate, value], axis=1).reshape(n, self.tokens * 2 * self.size)
+
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        n = self.delta_batch.shape[0]
+        return (self._rows(self.delta_batch, 2 * self.size) @ self.W).reshape(n, self.tokens * self.input_size)
+
+    def accumulate_gradient_batch(
+        self, input_activation_batch: FloatArray, *, context: ForwardContext = NO_CONTEXT
+    ) -> None:
+        delta = self._rows(self.delta_batch, 2 * self.size)
+        self.grad_W += delta.T @ self._rows(input_activation_batch, self.input_size)
+        self.grad_b += delta.sum(axis=0)
+
+    def reset_gradient_accum(self) -> None:
+        self.grad_W = np.zeros((2 * self.size, self.input_size))
+        self.grad_b = np.zeros(2 * self.size)
 
     def _rows(self, batch: FloatArray, features: int) -> FloatArray:
         return batch.reshape(batch.shape[0] * self.tokens, features)
