@@ -297,9 +297,13 @@ Herodotus's contiguous split on Rust, one job at a time on `jebel`, 2026-11-02 a
   and 1 of uptraining.
 - **The run** (the owner, 2026-11-02: every machine but `litshe`, from 2026-11-03 05:00): one
   corpus a machine, the scratch stage (`sweep --epochs 30`), then on the same machine the
-  uptraining stage (`uptrain --epochs 30`): Herodotus on `stone` (10 workers), the *Muqaddimah*
-  on `jebel` (8 workers, PL1 65 W), Euclid on `klip` (6 workers, 5.3 GB; its thermal guard at
-  85 C). Expected about 4 to 7 hours of wall clock; `klip` is the slowest and may run longer.
+  uptraining stage (`uptrain --epochs 30`): Herodotus on `stone` (8 workers: 12 add about 4%, the
+  working notes; the owner's word covers `stone` at any hour for this study), the *Muqaddimah* on
+  `jebel` (8 workers, PL1 65 W), Euclid on `klip` (4 workers on its 4 cores, 5.3 GB, under its
+  thermal guard at 85 C). Expected about 4 to 6 hours on `jebel` and `stone` and 8 to 10 on
+  `klip`, the slowest. Pinned to the commit this registration merges at; started from `pyramidon`
+  by one controller once each machine is up and its earlier job (the FFN sweep on `stone`, the
+  certificate note's affine pass on `klip`) has ended.
 - **Resuming:** each run's result is written as it ends, so a stopped stage resumes by whole runs.
 
 ## Stages
