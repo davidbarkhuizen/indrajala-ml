@@ -42,6 +42,12 @@ def fan_in_aware_random_rust_weights(rng: pa.Generator, size: int, previous_size
     return rng.uniform(-limit, limit, (size, previous_size))
 
 
+def he_random_rust_weights(rng: pa.Generator, size: int, previous_size: int) -> pa.Array:
+    """he_random_weights drawn from the crate's Generator, numpy's by bits: the Rust backend's he_weights."""
+    limit = math.sqrt(6.0 / previous_size)
+    return rng.uniform(-limit, limit, (size, previous_size))
+
+
 class RustArrayLayer(WeightAndBias[pa.Array]):
     """
     ArrayLayer on the Rust backend, with the same methods and formulas, each one fused Rust call

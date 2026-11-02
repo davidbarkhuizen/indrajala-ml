@@ -25,7 +25,7 @@ from indrajala_ml.model.protocols.array_protocols import (
 )
 from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer
 from indrajala_ml.model.specs.bounds import validate_batch
-from indrajala_ml.model.specs.layer_specs import Embedding, LayerSpec
+from indrajala_ml.model.specs.layer_specs import Embedding, LayerSpec, expand_specs
 from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
@@ -295,14 +295,21 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         # embedding its E (vocabulary, size) as a W, an attention layer each projection's W then b
         # in turn, a window's state input its P (features, state_size) as a W, and a pool,
         # batch-norm, layer-norm, patches, position or token-mean layer draws nothing.
-        for layer in self.layers:
+        # A dense or conv layer whose spec's init is "he" draws its W uniform within sqrt(6 / fan_in)
+        # and no bias, which is zero (the audit-remedies workplan, D8).
+        for layer, spec in zip(self.layers, expand_specs(self.layer_specs), strict=True):
+            he = getattr(spec, "init", "fan_in") == "he"
             if isinstance(layer, WeightedArrayLayer):
                 rows, fan_in = layer.W.shape
-                layer.W, layer.b = self.backend.random_layer(self.rng, rows, fan_in)
+                if he:
+                    layer.W, layer.b = self.backend.he_weights(self.rng, rows, fan_in), self.backend.zeros(rows)
+                else:
+                    layer.W, layer.b = self.backend.random_layer(self.rng, rows, fan_in)
             elif isinstance(layer, BiasFreeArrayLayer):
                 linear = cast("BiasFreeArrayLayer[A]", layer)
                 rows, fan_in = linear.W.shape
-                linear.W = self.backend.random_weights(self.rng, rows, fan_in)
+                draw = self.backend.he_weights if he else self.backend.random_weights
+                linear.W = draw(self.rng, rows, fan_in)
             elif isinstance(layer, EmbeddingTableLayer):
                 embedding = cast("EmbeddingTableLayer[A]", layer)
                 vocabulary, size = embedding.E.shape

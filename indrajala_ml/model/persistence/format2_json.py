@@ -92,6 +92,8 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         fields = asdict(spec)
         if spec.activation == "relu":
             del fields["activation"]
+        if spec.init == "fan_in":
+            del fields["init"]  # only He's (the audit-remedies workplan, D8), so other files don't change
         return {"kind": "conv", **fields}
     if isinstance(spec, BatchNorm):
         # an entry without ghost groups as before BatchNorm had a group_size, so those files don't
@@ -110,6 +112,8 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
             del fields["bias"]
         if spec.loss is None:
             fields["loss"] = "squared"
+        if spec.init == "fan_in":
+            del fields["init"]  # only He's (D8), so other files don't change
         return {"kind": "dense", **fields}
     if isinstance(spec, PoolSpec):
         return {"kind": "pool", **asdict(spec)}

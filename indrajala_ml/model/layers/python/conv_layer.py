@@ -25,6 +25,8 @@ class ConvSpec:
     channel_count: int
     stride: int = 1
     activation: Literal["relu", "linear"] = "relu"
+    # the kernels' draw, as Dense's init (the audit-remedies workplan, D8)
+    init: Literal["fan_in", "he"] = "fan_in"
 
 
 class ConvLayer:

@@ -2,6 +2,8 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import numpy.typing as npt
 
@@ -48,6 +50,16 @@ def fan_in_aware_random_layer(rng: np.random.Generator, size: int, previous_size
 def fan_in_aware_random_weights(rng: np.random.Generator, size: int, previous_size: int) -> FloatArray:
     """fan_in_aware_random_layer's W alone: the numpy backend's random_weights."""
     limit = 1.0 / np.sqrt(previous_size)
+    return rng.uniform(-limit, limit, size=(size, previous_size))
+
+
+def he_random_weights(rng: np.random.Generator, size: int, previous_size: int) -> FloatArray:
+    """
+    He initialisation's W (He et al. 2015; the audit-remedies workplan, D8), uniform in
+    [-limit, limit], limit = sqrt(6 / fan_in), so variance 2 / fan_in (Kaiming-uniform): the numpy
+    backend's he_weights. The same uniform draw as fan_in_aware_random_weights, another limit.
+    """
+    limit = math.sqrt(6.0 / previous_size)
     return rng.uniform(-limit, limit, size=(size, previous_size))
 
 

@@ -133,6 +133,12 @@ The SimVQ entries (the audit-remedies workplan, stage 6, D6) are added after the
 the same window networks with LINEAR_RECURRENCE, WINDOW_RECURRENCE's codes as E = Q W, W trained
 from the identity. No earlier entry moved when they were recorded.
 
+The He entries (the audit-remedies workplan, stage 8, D8) are added after the SimVQ ones: HE_SPECS,
+a ReLU conv and a ReLU dense layer drawn by He (init="he") before a softmax output, on the conv
+rows, in all three implementations. Their weights are not injected: each network draws its own
+from SEED (randomize), so the entries pin He's draw, which all three share by bits. No earlier
+entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -654,6 +660,14 @@ LINEAR_CODES_NETWORKS = {
     "rust linear codes window model": WindowRecurrentRustArrayNetwork,
     "python linear codes window model": WindowRecurrentBackpropNetwork,
 }
+# a ReLU conv and dense layer drawn by He (the audit-remedies workplan, stage 8, D8)
+HE_SPECS: list[LayerSpec] = [
+    ConvSpec(3, 2, init="he"),
+    PoolSpec(2),
+    Dense(4, activation="relu", init="he"),
+    Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+]
+HE_NETWORKS = ["numpy he model", "rust he model", "python he model"]
 # the window networks with their dead codes re-seeded between two steps (the audit-remedies
 # workplan, stage 4, D4)
 RESEED_NETWORKS = {
@@ -853,9 +867,15 @@ def _run_network(
     clip_norm: float | None = None,
     prepare: Callable[[Any], None] | None = None,
     between: Callable[[Any], None] | None = None,
+    inject: bool = True,
 ) -> dict[str, Any]:
     network = build()
-    _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
+    if inject:
+        _inject(network, _backend(name), random.Random(f"{SEED} weights {name}"))
+    else:
+        # the network's own draw, from SEED (the He entries)
+        network.rng = default_rng(SEED) if _backend(name) == "python" else network.backend.default_rng(SEED)
+        network.randomize()
     if prepare is not None:
         prepare(network)
     network.rng = default_rng(SEED) if _backend(name) == "python" else network.backend.default_rng(SEED)
@@ -1148,6 +1168,18 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 partial(window_cls, (WINDOW_COLUMNS,), WINDOW_SPECS, LINEAR_RECURRENCE, Adam()),
                 sequence_rows,
                 "predict_probabilities",
+            ),
+        )
+    for name in HE_NETWORKS:
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(_sequential_network, name, (CONV_HEIGHT, CONV_WIDTH, 1), HE_SPECS, Adam()),
+                conv_rows,
+                "predict_probabilities",
+                inject=False,
             ),
         )
 
