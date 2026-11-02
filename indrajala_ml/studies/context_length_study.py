@@ -39,7 +39,8 @@ import argparse
 import json
 import math
 import random
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from functools import partial
 from pathlib import Path
 from typing import Any, cast
 
@@ -169,14 +170,34 @@ def train_run(
     the first epoch of the registered schedule).
     """
     corpus, split, arm = config
-    tokens = context(arm)
+    return train_packed(
+        corpus, split, context(arm), partial(arm_specs, arm), seed, epochs, backend, limit, schedule_epochs
+    )
+
+
+def train_packed(
+    corpus: str,
+    split: str,
+    tokens: int,
+    specs: Callable[[int], list[LayerSpec]],
+    seed: int,
+    epochs: int,
+    backend: str = "numpy",
+    limit: int | None = None,
+    schedule_epochs: int | None = None,
+) -> dict[str, Any]:
+    """
+    train_run's run of the model specs(symbols) gives over a packed corpus of symbols characters, at
+    windows of tokens: the recipe, the token budget and the records as the module's docstring says.
+    The FFN activations study trains its arms with it (ffn_activation_study.py).
+    """
     epochs_data, held_out, vocabulary = text_data.load_packed_text_epochs(
         text_data.CORPORA[corpus], tokens, split_by=cast(text_data.Split, split)
     )
     held_out = held_out[:limit]
     array_backend = BACKENDS[backend]
     network: Any = SequentialArrayNetwork(
-        (tokens,), arm_specs(arm, len(vocabulary)), Adam(weight_decay=WEIGHT_DECAY), "sequence", array_backend
+        (tokens,), specs(len(vocabulary)), Adam(weight_decay=WEIGHT_DECAY), "sequence", array_backend
     )
     network.rng = array_backend.default_rng(seed)
     network.randomize()
@@ -236,9 +257,9 @@ COMPARISONS = [
 ]
 
 
-def claims(results: Results) -> str:
+def claims(results: Results, comparisons: Sequence[tuple[str, str, str, str]] = COMPARISONS) -> str:
     rows: list[tuple[str, list[float], int, float, str]] = []
-    for name, arm, against, sided in COMPARISONS:
+    for name, arm, against, sided in comparisons:
         d = differences(results, arm, against)
         lower = sum(x < 0 for x in d)
         rows.append((name, d, lower, sign_test(lower, len(d), sided) if d else 1.0, sided))
@@ -256,7 +277,12 @@ def claims(results: Results) -> str:
     return "\n".join(lines)
 
 
-def report(results: Results, epochs: int) -> str:
+def report(
+    results: Results,
+    epochs: int,
+    arms: Sequence[str] = ARMS,
+    comparisons: Sequence[tuple[str, str, str, str]] = COMPARISONS,
+) -> str:
     """Per corpus and split, each arm's final held-out bits, its last three epochs' fall, training bits,
     the first and last position buckets' bits, and seconds per epoch; then the claims."""
     header = [
@@ -273,7 +299,7 @@ def report(results: Results, epochs: int) -> str:
     rows: list[list[str]] = []
     for corpus in CORPORA:
         for split in SPLITS:
-            for arm in ARMS:
+            for arm in arms:
                 runs = results.get((corpus, split, arm))
                 if not runs:
                     continue
@@ -296,7 +322,7 @@ def report(results: Results, epochs: int) -> str:
                     ]
                     + [mean_sd(first, ".3f"), mean_sd(last, ".3f"), mean_sd(seconds, ".0f")]
                 )
-    return table(header, rows) + "\n\n" + claims(results)
+    return table(header, rows) + "\n\n" + claims(results, comparisons)
 
 
 def _merged(paths: Sequence[str]) -> Results:
