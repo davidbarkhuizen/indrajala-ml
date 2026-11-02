@@ -6,7 +6,7 @@ workplan for multi-threading, on this basis. 1. I have ordered an active-cooler 
 outstanding maths-kernel related work, compile a list of that, and do it BEFORE we start the actual
 multi-threading work - as I guess stage -1 of the multithreading plan - do the detailed analysis,
 then write up the workplan". The owner delegates the decisions (each below with its options' pros
-and cons) except those marked **for the owner**.
+and cons); the two left to the owner (O1, O2) were settled the same day.
 
 This is the "coming multithreading work" the crate kernels plan's D3 deferred to (the owner,
 2026-10-29: "multithreading in general comes in the near future"; `git show
@@ -27,6 +27,8 @@ next-steps.md's "From the crate kernels" (the pool, the threshold) and "From the
 | D5 | 2026-11-02 | the machine read once | `CpuInfo` (physical cores, caches, ISA) read once per process; thread counts and slab sizes derived from it, every override hook kept |
 | D6 | 2026-11-02 | epochs decide | a threading change is judged on epochs and study runs at training's thread count, not on isolated loops, which flatter threading |
 | D7 | 2026-11-02 | one plan, sub-stages | stage −1's items are sub-stages here, each its own crate PR, bump and A/B, not a workplan each |
+| O1 | 2026-11-02 | after step 13 | the owner: this plan runs after roadmap step 13 (FFN activations) and before steps 14 and 15 |
+| O2 | 2026-11-02 | `litshe` from its response | the owner: `litshe`'s thermal profile with the cooler is based on its measured temperature response |
 
 ## Where things stand (read 2026-11-02 from the code, next-steps.md and the retired plans)
 
@@ -191,16 +193,17 @@ rule).
   - (a) *Chosen.* Stage −1's items as sub-stages of this plan, each its own PRs and A/B. Pros: one
     place for the order and the dependencies; the outline's "a workplan each" would make ten small
     plans. Cons: a long plan; each sub-stage still writes its findings here.
-- **For the owner:**
-  - **O1. Where this sits in the roadmap.** The primitives roadmap is at step 12 (finishing) and
+- **Settled by the owner (2026-11-02):**
+  - **O1. Where this sits in the roadmap. Settled: (a)** ("agreed"). The primitives roadmap is at step 12 (finishing) and
     step 13 (FFN activations, stage 3 next), with 14 and 15 after; both want jebel's A/Bs. Options:
     (a) after step 13 and before 14 and 15; (b) after step 15; (c) stage −1 now, between step 12's
     end and step 13's stage 3. I'd take (a): step 13 is already under way and its crate change
     (an activation-parameterised fused family) is better done before −1i touches the same code's
     neighbours; 14 (grouped-query attention) and 15 then build on a threaded attention.
-  - **O2. `litshe`'s limits with the active cooler.** The rule now is 65 C ideal, 70 C hard, and
-    single-threaded passes (the owner, 2026-10-18). Stage 7 measures an all-core soak with the
-    cooler; whether the limits change is the owner's.
+  - **O2. `litshe`'s limits with the active cooler. Settled:** "we base the profile on the measured
+    temperature response, when the cooler is available". Until then the rule stands (65 C ideal,
+    70 C hard, single-threaded passes; the owner, 2026-10-18), and stage 7 sets the profile from
+    the measured curve.
 
 ## Stages
 
@@ -226,10 +229,11 @@ In order: stage 0, then −1, then 1 to 8.
    profile shows them worth a call's cost.
 - **Stage 6. numpy beside the crate:** whether `OPENBLAS_NUM_THREADS` should follow the crate's budget in
    mixed runs (the spin gotcha), measured on the conv demo; documented either way.
-- **Stage 7. `litshe` all-core, with the active cooler:** a thermal soak (all four cores, 15 minutes, the
-   temperature sampled each second, under the thermal guard at the current limit), then its
-   scaling and its share of the memory bus (the b512 result), the threshold for aarch64; the
-   owner's O2.
+- **Stage 7. `litshe` all-core, with the active cooler (O2):** its temperature response measured
+   (temperature against time at 1, 2 and 4 busy cores, each to its plateau or to the hard limit,
+   sampled each second under the thermal guard at 70 C); `litshe`'s profile set from that curve
+   (how many cores, for how long, at what clock) and recorded in its machine profile and memory;
+   then its scaling, its share of the memory bus (the b512 result) and the threshold for aarch64.
 - **Stage 8. Docs:** the README's threading section (the budget, the bits rule, the pool), measurement.md
    (threaded A/Bs, the tools), next-steps' leftovers, the workplan retired.
 
