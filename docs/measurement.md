@@ -380,6 +380,12 @@ What to do next:
   32-byte boundaries, the JCC erratum; aarch64 loops and functions aligned); with both, an A/B moves
   only the rows whose code changed.
 
+- **No benchmark times a batch's segments.** `segment_context` (a packed batch's segments,
+  positions and counted targets, once per training batch of a network with segments) runs outside
+  every timed region: `attention_timing` builds its packed context before timing, and
+  `prepared_dataset_timing` trains no network with segments. A change to it has nothing to A/B
+  against until a benchmark trains a packed network (found 2026-11-03, the cross-attention
+  workplan's stage 4b).
 - **Any change to the loaded code moves two numpy attention rows.** `attention_timing`'s numpy
   forward rows at T=256 causal and T=64 packed moved on jebel (2026-11-02, the grouped-query
   attention workplan) by +7.4% and -5.1% with stage 2 (whose numpy ops at `g = h` are the old
