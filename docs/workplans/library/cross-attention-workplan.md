@@ -8,7 +8,7 @@ registration. Stage 1 (this plan) done. Stage 2 (2026-11-03): the dataset reposi
 entry and the loader of packed pairs here (D13 new: a packed pair's layout). The same day, at the
 owner's direction, D4's second corpus became Plutarch's *Lives* in place of the New Testament, and
 Pausanias was dropped: the repository at `v2026-11-03.2` (13,122 pairs of the histories, 9,794 of
-the *Lives*; its `report.md` the alignment report).**
+the *Lives*; its `report.md` the alignment report). Stage 3 (2026-11-03): the specs (D14).**
 
 Roadmap step 15 ([primitives-roadmap.md](../../primitives-roadmap.md)): attention from one sequence to
 another, and the encoder-decoder transformer it builds (Vaswani et al. 2017, §3.1, §3.2.3), on a
@@ -282,7 +282,10 @@ Each lists the options considered, with pros and cons, and the choice.
    near-duplicates) and tag; `scripts/data/fetch_datasets.py`'s entry; a loader of packed pairs
    (D11, D13). Done 2026-11-03.
 3. **Specs**: `CrossAttention`, `EncoderDecoderNetwork`, validation, format 2; the decoder's
-   segment rule (D13: a target separator opens its pair).
+   segment rule (D13: a target separator opens its pair). Done 2026-11-03 (D14):
+   `CrossAttention`, `Embedding(separator_opens)`, `EncoderDecoder`, `validate_encoder_decoder`,
+   `encoder_decoder_shapes` (each `CrossAttention`'s memory width), and format 2's
+   `"encoder_decoder"` codecs. Building the network, and its format-2 file, is stage 4.
 4. **numpy**: the network (D2), `CrossAttention` (D3); tests by hand (with one memory token, every
    weight is 1; padding in the memory changes nothing).
 5. **The crate**: the key/value input through the attention ops; "Bump rust/" with its A/B.
