@@ -287,7 +287,17 @@ Each lists the options considered, with pros and cons, and the choice.
    `encoder_decoder_shapes` (each `CrossAttention`'s memory width), and format 2's
    `"encoder_decoder"` codecs. Building the network, and its format-2 file, is stage 4.
 4. **numpy**: the network (D2), `CrossAttention` (D3); tests by hand (with one memory token, every
-   weight is 1; padding in the memory changes nothing).
+   weight is 1; padding in the memory changes nothing). Three PRs, since the trainer and the
+   network base take one input today:
+   - **4a, the layer:** `CrossAttentionArrayLayer` (memory from the forward context; dX and the
+     memory's gradient), and D13's segment rule (`segment_context(..., separator_opens=True)`).
+     Self-attention's tiled passes gain `Masking.own_column` and a guard for a row no key is
+     allowed to (H = 0, P = 0), which leaves every self-attention row as it was. Tests: by hand,
+     against finite differences, padding and other segments changing nothing. Done 2026-11-03.
+   - **4b, the network:** the encoder-decoder network over two inputs (source and target ids),
+     the memory's gradient summed over the `CrossAttention` layers and run back through the
+     encoder, its training step and the trainer's examples of two inputs.
+   - **4c, the file:** format 2 save and load, and checkpoints, resuming by bits.
 5. **The crate**: the key/value input through the attention ops; "Bump rust/" with its A/B.
 6. **Rust layers**; 7. **Pure Python**; parity.
 8. **Decoding** (D7) and chrF (D6).
