@@ -1,0 +1,167 @@
+[
+ {
+  "hypotheses": [
+   "and ",
+   "",
+   "summer"
+  ],
+  "references": [
+   "Athenians Sicily them the led ships the Athenians and",
+   "Athenians ships Athenians led and the summer",
+   "ships "
+  ],
+  "score": 1.9861421205909964
+ },
+ {
+  "hypotheses": [
+   "them and the ships the led summer sent to"
+  ],
+  "references": [
+   "sent led Athenians them to led summer"
+  ],
+  "score": 43.4966665940608
+ },
+ {
+  "hypotheses": [
+   "them",
+   " ships Sicily Athenians led x Athenians them the"
+  ],
+  "references": [
+   "Nicias  led and",
+   "Nicias them Nicias Sicily to ships"
+  ],
+  "score": 28.098807540082575
+ },
+ {
+  "hypotheses": [
+   "Athenians them to",
+   "Nicias Sicily x Nicias to them Athenians Athenians"
+  ],
+  "references": [
+   "and sent in Sicily sent Nicias and the ",
+   "in led"
+  ],
+  "score": 8.816440762261044
+ },
+ {
+  "hypotheses": [
+   "x Sicily them Nicias them",
+   "Athenians summer Athenians to Nicias x ",
+   "the"
+  ],
+  "references": [
+   " them  summer Nicias",
+   "x and  Sicily the",
+   "Sicily sent them Athenians Nicias the ships in"
+  ],
+  "score": 14.684982755215017
+ },
+ {
+  "hypotheses": [
+   "x ships",
+   "and summer Nicias Athenians sent Nicias",
+   "led to sent summer and summer"
+  ],
+  "references": [
+   "to x and Sicily  and ships sent Athenians",
+   "sent ships ",
+   "the Nicias summer them"
+  ],
+  "score": 16.682906221051645
+ },
+ {
+  "hypotheses": [
+   "to the sent and",
+   "Sicily them them Sicily sent x summer led"
+  ],
+  "references": [
+   "Nicias",
+   "and and and and Athenians Nicias  and the"
+  ],
+  "score": 11.01255104710883
+ },
+ {
+  "hypotheses": [
+   "ships",
+   "sent Athenians Sicily them the Athenians the"
+  ],
+  "references": [
+   "led Athenians Sicily",
+   "Athenians"
+  ],
+  "score": 27.014941465819366
+ },
+ {
+  "hypotheses": [
+   "and sent  to Sicily them Sicily Nicias Athenians",
+   "summer"
+  ],
+  "references": [
+   "Nicias Nicias Nicias to Athenians sent Athenians x",
+   "x to Nicias summer x sent"
+  ],
+  "score": 33.98020329749389
+ },
+ {
+  "hypotheses": [
+   "led Sicily sent"
+  ],
+  "references": [
+   "the in led to  summer Athenians x summer"
+  ],
+  "score": 7.794169752092767
+ },
+ {
+  "hypotheses": [
+   "Sicily sent Sicily in ships led led in",
+   "Sicily  ships them in in in summer",
+   "in ships summer"
+  ],
+  "references": [
+   "x in ships ships led Nicias Sicily",
+   "the",
+   "Nicias to ships x them"
+  ],
+  "score": 35.68401346800028
+ },
+ {
+  "hypotheses": [
+   "in x Sicily Sicily Athenians ships Athenians",
+   "Nicias ships Sicily",
+   "Nicias them them"
+  ],
+  "references": [
+   "Nicias",
+   "in  Athenians summer  Athenians",
+   "in x in ships Nicias sent and"
+  ],
+  "score": 13.136484319968938
+ },
+ {
+  "hypotheses": [
+   "abc"
+  ],
+  "references": [
+   "abc"
+  ],
+  "score": 100.0
+ },
+ {
+  "hypotheses": [
+   ""
+  ],
+  "references": [
+   "abc"
+  ],
+  "score": 0.0
+ },
+ {
+  "hypotheses": [
+   "Περικλῆς ὁ Ξανθίππου"
+  ],
+  "references": [
+   "Περικλῆς Ξανθίππου"
+  ],
+  "score": 79.99737918608916
+ }
+]
