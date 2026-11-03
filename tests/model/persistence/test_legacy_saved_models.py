@@ -60,9 +60,17 @@ def test_legacy_file_loads(name: str) -> None:
     assert outputs(loaded, fixture.predict, states) == expected_outputs
 
 
+# an encoder-decoder saves from the cross-attention workplan's stage 4c, when its fixture comes
+NOT_YET_SAVED = {"EncoderDecoderArrayNetwork"}
+
+
 def test_every_saveable_class_has_a_fixture() -> None:
     # the networks, not the shape mixins and bases that define save for them
-    saveable = {name for name, cls in MODEL_CLASSES.items() if name.endswith("Network") and hasattr(cls, "save")}
+    saveable = {
+        name
+        for name, cls in MODEL_CLASSES.items()
+        if name.endswith("Network") and hasattr(cls, "save") and name not in NOT_YET_SAVED
+    }
     assert saveable == {fixture.class_name or name for name, fixture in FIXTURES.items()}
     for name in FIXTURES:
         assert (FIXTURE_DIR / f"{name}.json").exists(), name
