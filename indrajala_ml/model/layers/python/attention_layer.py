@@ -119,13 +119,18 @@ class Masking:
     """
     One example's masks (attention_array_layer.Masking's rules): causal, key u at most query t's
     column t + offset; and by segment, the queries' and the keys' ids, another segment's key or a
-    pad's (0) masked, never the query's own column.
+    pad's (0) masked, never the query's own column unless not own_column (cross-attention's two
+    sequences, the cross-attention workplan, D3: a pad's query may then reach no key).
     """
 
     def __init__(
-        self, causal: bool, offset: int = 0, segments: tuple[Sequence[int], Sequence[int]] | None = None
+        self,
+        causal: bool,
+        offset: int = 0,
+        segments: tuple[Sequence[int], Sequence[int]] | None = None,
+        own_column: bool = True,
     ) -> None:
-        self.causal, self.offset, self.segments = causal, offset, segments
+        self.causal, self.offset, self.segments, self.own_column = causal, offset, segments, own_column
 
     def allowed(self, t: int, u: int) -> bool:
         column = t + self.offset
@@ -134,7 +139,7 @@ class Masking:
         if self.segments is None:
             return True
         queries, keys = self.segments
-        return u == column or (keys[u] == queries[t] and keys[u] != 0)
+        return (self.own_column and u == column) or (keys[u] == queries[t] and keys[u] != 0)
 
     def rows(self, queries: int, k0: int, k1: int) -> tuple[int, int] | None:
         """The rows reaching keys k0..k1, the smallest range holding them; None when none does."""
@@ -241,6 +246,9 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         # computed once and divided by, never multiplied by its reciprocal
         self.scale = math.sqrt(self.key_size)
         self.causal = causal
+        # the keys each query has, whose draws a pass makes (N h T keys): the tokens' own here, the
+        # memory's in a CrossAttention (cross_attention_layer.py)
+        self.key_tokens = tokens
         self.dropout = dropout
         self._keep = 1.0 - dropout
         # set by set_training_mode and set_rng, as a dense dropout layer's nodes'
@@ -361,7 +369,7 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         """
         if self.training and self.dropout > 0.0:
             self._batch = (self.rng.state, examples)
-            self.rng.advance(examples * self.heads * self.tokens * self.tokens)
+            self.rng.advance(examples * self.heads * self.tokens * self.key_tokens)
 
     def begin_example(self, example: int) -> None:
         self._example = example
@@ -413,27 +421,39 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
                         H[t][c + j] = H[t][c + j] * alpha + ev
         for t in range(queries):
             for i in range(self.heads):
+                # a row no key is allowed to (a cross-attention pad's query) keeps l = 0 and H = 0,
+                # divided by 1; every self-attention row has its own key, so l > 0 there
+                total = 1.0 if l[i][t] == 0.0 else l[i][t]
                 for j in range(i * d_k, (i + 1) * d_k):
-                    H[t][j] /= l[i][t]
+                    H[t][j] /= total
         return H, m, l
 
     def _combine(self, H: Matrix) -> Matrix:
         # one product over all heads' columns
         return _affine(H, self.outputs)
 
-    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
-        self._Q, self._K, self._V = self._project(self._inputs())
-        self._segments = self._attention_segments(context.segments, 0)
-        masking = Masking(self.causal, 0, None if self._segments is None else (self._segments, self._segments))
+    def _masking(self) -> Masking:
+        # this example's masks, from its segments as the forward pass kept them
+        segments = self._segments
+        return Masking(self.causal, 0, None if segments is None else (segments, segments))
+
+    def _take_draws(self) -> None:
+        # where this example's dropout masks are: its batch's (begin_batch), or one example alone's,
+        # drawn now (a batch of one); None when it draws none
         self._draws = None
         if self.training and self.dropout > 0.0:
             if self._batch is None:
                 # one example alone: a batch of one, its draws taken now
                 self._draws = (self.rng.state, 1, 0)
-                self.rng.advance(self.heads * self.tokens * self.tokens)
+                self.rng.advance(self.heads * self.tokens * self.key_tokens)
             else:
                 self._draws = (self._batch[0], self._batch[1], self._example)
-        self._H, self._m, self._l = self._tiled((self._Q, self._K, self._V), masking, draws=self._draws)
+
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self._Q, self._K, self._V = self._project(self._inputs())
+        self._segments = self._attention_segments(context.segments, 0)
+        self._take_draws()
+        self._H, self._m, self._l = self._tiled((self._Q, self._K, self._V), self._masking(), draws=self._draws)
         out = self._combine(self._H)
         for node, value in zip(self.nodes, (value for row in out for value in row)):
             node.activate(value)
@@ -494,16 +514,16 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
         # group's first head's assigned and each later head's added, in head order (D3); dQ and dK
         # then divided by the scale
         Q, K, V, T, d_k = self._Q, self._K, self._V, self.tokens, self.key_size
-        segments = self._segments
-        masking = Masking(self.causal, 0, None if segments is None else (segments, segments))
+        masking = self._masking()
+        keys = len(K)
         D = [
             [_fold_first([dH[t][j] * self._H[t][j] for j in range(i * d_k, (i + 1) * d_k)]) for t in range(T)]
             for i in range(self.heads)
         ]
         dQ = [[0.0] * self.width for _ in range(T)]
-        dK = [[0.0] * self.kv_width for _ in range(T)]
-        dV = [[0.0] * self.kv_width for _ in range(T)]
-        for k0, k1 in key_blocks(T, self.block):
+        dK = [[0.0] * self.kv_width for _ in range(keys)]
+        dV = [[0.0] * self.kv_width for _ in range(keys)]
+        for k0, k1 in key_blocks(keys, self.block):
             masks = None if self._draws is None else self._block_draws(self._draws, k1 - k0, k0)
             rows = masking.rows(T, k0, k1)
             if rows is None:
@@ -521,7 +541,10 @@ class AttentionLayer(ParameterFreeLayer[TokenNode]):
                         else -math.inf
                         for u in range(k0, k1)
                     ]
-                    p = [exp(x - self._m[i][t]) / self._l[i][t] for x in s]
+                    # a row no key is allowed to (m = -inf, l = 0) reads m as 0 and l as 1: its p is 0
+                    m_t, l_t = self._m[i][t], self._l[i][t]
+                    shift, total = (0.0 if m_t == -math.inf else m_t), (1.0 if l_t == 0.0 else l_t)
+                    p = [exp(x - shift) / total for x in s]
                     dp = [_dot(dH[t][c : c + d_k], V[u][ck : ck + d_k]) for u in range(k0, k1)]
                     kept = [1.0] * len(p) if masks is None else [x / self._keep for x in masks[i][t]]
                     if masks is not None:
