@@ -59,8 +59,10 @@ bits.
     (`GatedDense`, SwiGLU and GEGLU); done (2026-11-02), in all three implementations and the
     crate (README, Activations); the study was abandoned unfinished, so ReLU stays the default
     (next-steps, From FFN activations).
-14. **Grouped- and multi-query attention**; planned (2026-10-10,
-    [grouped-query-attention-workplan.md](workplans/library/grouped-query-attention-workplan.md)).
+14. **Grouped- and multi-query attention**: `Attention(key_value_heads=g)` and `to_grouped`;
+    done (2026-11-02), in all three implementations and the crate (README, Layer norm and
+    attention); the study was abandoned for a literature review, which keeps multi-head the
+    default (next-steps, From grouped-query attention).
 15. **Cross-attention**, with an encoder-decoder model on Greek-English translation; planned
     (2026-10-10, [cross-attention-workplan.md](workplans/library/cross-attention-workplan.md)).
 
