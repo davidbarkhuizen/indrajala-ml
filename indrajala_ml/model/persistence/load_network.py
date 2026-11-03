@@ -20,6 +20,7 @@ from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_networ
     EnsembleRustArrayBackpropClassifierNetwork,
 )
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
+from indrajala_ml.model.networks.numpy.encoder_decoder_array_network import EncoderDecoderArrayNetwork
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
@@ -32,6 +33,7 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentRustArrayNetwork,
 )
 from indrajala_ml.model.persistence.format2 import (
+    ENCODER_DECODER,
     ENSEMBLE,
     PYTHON,
     WINDOW_RECURRENT,
@@ -83,6 +85,14 @@ def network_from_state(state: dict[str, Any]) -> Any:
 
 def _sequential(file: NetworkFile) -> Any:
     network: Any
+    if file.shape == ENCODER_DECODER:
+        # numpy's for now (the cross-attention workplan: Rust's is stage 6, pure Python's stage 7);
+        # a numpy file loads into numpy
+        if file.implementation != NUMPY.name:
+            raise ValueError(f"an encoder-decoder loads into numpy only for now; this file's is {file.implementation}")
+        network = EncoderDecoderArrayNetwork.from_file(file)
+        restore_file(network, file)
+        return network
     if file.shape == WINDOW_RECURRENT:
         assert file.recurrence is not None
         if file.implementation == PYTHON:

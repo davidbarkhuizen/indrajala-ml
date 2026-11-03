@@ -21,15 +21,15 @@ gradient is then accumulated, the encoder's then the decoder's, and the optimize
 
 Its layers are the encoder's then the decoder's, one list (EncoderDecoder.layers(), expanded), so
 randomize, snapshot, restore and checkpoint work over them as over any network's. A one-example
-learn is a batch of one. Saving to a file, format 2's "encoder_decoder" (stage 4c), and decoding
-(stage 8) come later.
+learn is a batch of one. It saves to format 2's "encoder_decoder" file (D14) and loads from it,
+resuming by bits; decoding is stage 8.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
 from dataclasses import replace
-from typing import Any, ClassVar, NoReturn, Self
+from typing import Any, ClassVar, Self
 
 import numpy as np
 
@@ -39,7 +39,7 @@ from indrajala_ml.model.layers.forward_context import ForwardContext
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.cross_attention_array_layer import CrossAttentionArrayLayer
 from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
-from indrajala_ml.model.persistence.format2 import ENCODER_DECODER
+from indrajala_ml.model.persistence.format2 import ENCODER_DECODER, NetworkFile
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
 from indrajala_ml.model.specs.array_network_shapes import TokenWiseOutput
 from indrajala_ml.model.specs.bounds import validate_class_count
@@ -191,14 +191,19 @@ class EncoderDecoderArrayNetwork(GivenRule, TokenWiseOutput[FloatArray], NumpyAr
                 target_batch[row, t * self.class_count + label] = 1.0
         return target_batch
 
-    # format 2's file is stage 4c's
-
-    def save(self, path: str) -> NoReturn:
-        raise NotImplementedError("an encoder-decoder's format-2 file is the cross-attention workplan's stage 4c")
+    # format 2's file (D14): its "encoder" and "layers" entries, and its source's and target's ids
 
     @classmethod
-    def from_format2(cls, state: dict[str, Any]) -> Self:
-        raise NotImplementedError("an encoder-decoder's format-2 file is the cross-attention workplan's stage 4c")
+    def from_file(cls, file: NetworkFile) -> Self:
+        """The network a format-2 file describes, unweighted: restore_file then fills it."""
+        assert file.encoder_length is not None and file.source_tokens is not None, "an encoder-decoder's file"
+        n = file.encoder_length
+        spec = EncoderDecoder(tuple(file.layers[:n]), tuple(file.layers[n:]))
+        return cls(spec, file.source_tokens, file.input_shape[0] - file.source_tokens, file.update_rule)
+
+    @classmethod
+    def _from_file(cls, file: NetworkFile) -> Self:
+        return cls.from_file(file)
 
 
 NUMPY_NAME = NumpyArrayNetworkBase.backend.name

@@ -5,6 +5,7 @@ CrossAttention layers; training on packed pair windows lowers the loss; a checkp
 bits; and what it refuses.
 """
 
+import json
 from typing import Any
 
 import numpy as np
@@ -14,6 +15,9 @@ from indrajala_ml.data.parallel_data import Pair, PairWindow, pack_pairs
 from indrajala_ml.data.text_data import Vocabulary
 from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.networks.numpy.encoder_decoder_array_network import EncoderDecoderArrayNetwork
+from indrajala_ml.model.persistence.format2 import file_checkpoint, network_from_json
+from indrajala_ml.model.persistence.load_network import load_network
+from indrajala_ml.model.persistence.model_io import load_json
 from indrajala_ml.model.protocols.array_protocols import TrainedArrayLayer
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
@@ -163,9 +167,38 @@ def test_the_same_seed_draws_the_same_network_and_a_one_example_step_is_a_batch_
     np.testing.assert_array_equal(a.predict_probabilities(example[0]), b.predict_probabilities(example[0]))
 
 
-def test_it_refuses_a_state_of_the_wrong_width_and_saving_before_stage_4c(tmp_path: Any):
+def test_it_refuses_a_state_of_the_wrong_width():
     net = network()
     with pytest.raises(AssertionError, match="source ids then its"):
         net.classify_state((0.0,) * WINDOW)
-    with pytest.raises(NotImplementedError, match="stage 4c"):
-        net.save(str(tmp_path / "net.json"))
+
+
+def test_a_saved_file_loads_and_trains_on_by_bits(tmp_path: Any):
+    net = network(Adam(), seed=4)
+    examples = batch(windows())
+    net.learn_batch(0.01, examples)
+    path = str(tmp_path / "net.json")
+    net.save(path)
+    with open(path) as f:
+        document = json.load(f)
+    assert document["shape"] == "encoder_decoder" and document["input"] == {
+        "source": {"dimension": WINDOW},
+        "target": {"dimension": WINDOW},
+    }
+    assert len(document["encoder"]) == len(spec().encoder) and len(document["layers"]) == len(spec().decoder)
+    for loaded in (EncoderDecoderArrayNetwork.load(path), load_network(path)):
+        assert isinstance(loaded, EncoderDecoderArrayNetwork) and loaded.spec == net.spec
+        loaded.learn_batch(0.01, examples)
+    net.learn_batch(0.01, examples)
+    states = np.array([s for s, _ in examples])
+    expected = net._forward_batch(states)  # pyright: ignore[reportPrivateUsage]
+    np.testing.assert_array_equal(loaded._forward_batch(states), expected)  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_file_of_another_spec_or_split_is_refused(tmp_path: Any):
+    net = network()
+    path = str(tmp_path / "net.json")
+    net.save(path)
+    other = EncoderDecoderArrayNetwork(spec(memory_width=6), WINDOW, WINDOW, SGD())
+    with pytest.raises(ValueError, match="can't load this file"):
+        other.restore_checkpoint(file_checkpoint(other, network_from_json(load_json(path))))
