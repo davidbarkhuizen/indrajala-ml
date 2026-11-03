@@ -44,6 +44,7 @@ from indrajala_ml.model.layers.rust.affine_rust_array_layer import AffineRustArr
 from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
 from indrajala_ml.model.layers.rust.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer, LinearConvRustArrayLayer
+from indrajala_ml.model.layers.rust.cross_attention_rust_array_layer import CrossAttentionRustArrayLayer
 from indrajala_ml.model.layers.rust.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.layers.rust.layer_norm_rust_array_layer import LayerNormRustArrayLayer
@@ -197,7 +198,7 @@ class TokenLayerClasses:
     state_input: LayerClass
     film_state_input: LayerClass
     # a decoder's attention to the encoder's output (the cross-attention workplan, D3): numpy's
-    # (stage 4), the crate's from stage 5
+    # (stage 4) and the crate's (stage 6); pure Python's from stage 7
     cross_attention: LayerClass | None = None
 
 
@@ -230,6 +231,7 @@ TOKEN_LAYER_CLASSES = {
         dropout=TokenDropoutRustArrayLayer,
         state_input=StateInputRustArrayLayer,
         film_state_input=FilmStateInputRustArrayLayer,
+        cross_attention=CrossAttentionRustArrayLayer,
     ),
 }
 
@@ -287,7 +289,7 @@ def _cross_attention_layer(
     classes: TokenLayerClasses, spec: CrossAttention, shape: SpecShape, backend_name: str
 ) -> ArrayNetworkLayer[Any]:
     assert classes.cross_attention is not None, (
-        f"the {backend_name} backend has no CrossAttention yet (the cross-attention workplan: the crate's is stage 5)"
+        f"the {backend_name} backend has no CrossAttention yet (the cross-attention workplan: pure Python's is stage 7)"
     )
     assert shape.memory_shape is not None, "a CrossAttention's shape has the memory's (encoder_decoder_shapes)"
     tokens, features = token_shape(shape.input_shape)
