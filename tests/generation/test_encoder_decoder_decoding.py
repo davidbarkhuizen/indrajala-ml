@@ -25,7 +25,11 @@ from indrajala_ml.model.specs.update_rules import SGD
 from tests.helpers import bits
 from tests.model.networks import test_encoder_decoder_numpy as numpy_tests
 
-CLASSES = {"python": EncoderDecoderBackpropNetwork, "numpy": EncoderDecoderArrayNetwork, "rust": EncoderDecoderRustArrayNetwork}
+CLASSES = {
+    "python": EncoderDecoderBackpropNetwork,
+    "numpy": EncoderDecoderArrayNetwork,
+    "rust": EncoderDecoderRustArrayNetwork,
+}
 WINDOW = numpy_tests.WINDOW
 SEPARATOR, PAD = separator_id(numpy_tests.TARGET), pad_id(numpy_tests.TARGET)
 SOURCE_SEPARATOR, SOURCE_PAD = separator_id(numpy_tests.SOURCE), pad_id(numpy_tests.SOURCE)
@@ -93,7 +97,7 @@ class _Scripted:
         self.scripts, self.classes, self.column = scripts, classes, 0
 
     def _rows(self) -> list[list[float]]:
-        rows = []
+        rows: list[list[float]] = []
         for script in self.scripts:
             p = [0.0] * self.classes
             p[script[min(self.column, len(script) - 1)]] = 1.0
