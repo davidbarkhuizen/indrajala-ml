@@ -136,7 +136,9 @@ class _Downstream:
     def __init__(self, delta: Any) -> None:
         self.delta = delta
 
-    def downstream_batch(self) -> Any:
+    def downstream_batch(self, *, context: Any = None) -> Any:
+        # context: the layers' passes have taken the forward context since the segments workplan's
+        # stage 2 (#1158), which left this case failing until it took one too
         return self.delta
 
 
