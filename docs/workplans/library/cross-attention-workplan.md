@@ -3,7 +3,8 @@
 **Status: decisions D1-D10 settled (2026-10-10) by building for extensibility, speed and real-world
 production (the owner's direction, 2026-10-10). Revised 2026-11-03 at the owner's direction (windows
 of 1,024, more texts): D4 rewritten on a measurement of Perseus's parallel texts, D11 new (packed
-pairs), D3 and D9 amended to match. The dataset repository (D4) is the owner's to create, as the
+pairs), D3 and D9 amended to match; D12 (the model's width and head size) left to the study's
+registration. The dataset repository (D4) is the owner's to create, as the
 corpora's were. Stage 1 (this plan) done.**
 
 Roadmap step 15 ([primitives-roadmap.md](../../primitives-roadmap.md)): attention from one sequence to
@@ -181,6 +182,13 @@ Each lists the options considered, with pros and cons, and the choice.
   - (c) Windows of 1,024, one pair a window. Pros: no segment mask. Cons: windows mostly padding
     (medians of 250-450 characters), several times the compute for the same pairs.
 
+- **D12. The model's width and head size. Open until the study's registration (new 2026-11-03).**
+  Today's sequence models are `d = 64` with 4 heads of 16 (`d_k = 16`); production heads are 64 or
+  128 wide. A standalone `d_k = 64` probe on today's model was declined (the owner, 2026-11-03): at
+  `d = 64` a head of 64 doubles a model already at the ~1M-character corpora's data limit. D4's
+  corpora (about 6M characters a side) support `d = 128` to `256`, where heads of 32 to 64 come
+  from the width. So the encoder's and decoder's `d`, heads and `key_size` are set when the study
+  (D9) is registered, sized by that data and by `jebel`'s time, with `d_k` of at least 32.
 ## Stages
 
 1. **This workplan.**

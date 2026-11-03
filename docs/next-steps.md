@@ -218,13 +218,17 @@ recipe below cosine on 40 of 40, C2 differs). Left:
 
 - **Which half of the recipe gains.** C2 compared cosine against cosine with AdamW 0.1 and
   clipping at 1.0 together; an arm with each alone would say which (or both) gives the 0.021 bits.
+  *Decided from the literature, not measured (the owner, 2026-11-03):* most likely AdamW's.
+  Decoupled weight decay is the documented generalisation gain (Loshchilov & Hutter 2019), while
+  clipping at the global norm guards against loss spikes (Pascanu et al. 2013), which rarely show
+  at this scale. A reading, not a finding: both halves stay in the recipe, and no ablation is
+  planned.
 - **The cosine's peak** stayed the constant rate's tuned one (D8 (a)); a decay usually tolerates a
   higher peak, untested here.
 
-- **indrajala-studies' `FactorRates`** (`window_recurrent_study.py`), a wrapper of the network's
-  optimizer, has no `step()`, which every network's batch step calls since #1152: give it one
-  (`step` applying each layer through its own `apply`) in the studies' next ml bump, or its runs
-  fail at the first batch.
+- **indrajala-studies' `FactorRates`** had no `step()`, which every network's batch step calls
+  since #1152. *Done* (studies #15): the wrapper is gone, and `factor_rates` sets the optimizer's
+  `learning_rate_scales` (the audit remedies' D5) for the block.
 - **A run file doesn't record `clip_norm`**, so a resumed run under another clip isn't refused as
   one under another schedule is. Record it beside the schedule (run file version 3) when a resumed
   clipped run needs it.
