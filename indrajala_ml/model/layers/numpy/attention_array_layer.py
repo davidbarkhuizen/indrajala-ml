@@ -103,7 +103,9 @@ class Masking:
     queries are the keys' last, offset = keys - queries); band, when set, only the band keys before
     and including that column (a sliding window); and by segment, the queries' (N, T_q) and the
     keys' (N, T_k) ids, another segment's or a pad's key masked (the segments workplan, D4), never
-    the query's own column.
+    the query's own column. Cross-attention's queries and keys are two sequences (the cross-attention
+    workplan, D3): own_column False masks by segment alone, so a pad's query, segment 0, may attend
+    to no key, its row wholly masked (tiled_forward gives it H = 0).
     """
 
     causal: bool
@@ -111,6 +113,7 @@ class Masking:
     band: int | None = None
     query_segments: Segments | None = None
     key_segments: Segments | None = None
+    own_column: bool = True
 
     def tile(self, queries: int, k0: int, k1: int) -> tuple[int, int, npt.NDArray[np.bool_] | None] | None:
         """
@@ -137,7 +140,9 @@ class Masking:
             assert self.key_segments is not None
             q = self.query_segments[:, r0:r1, np.newaxis]
             k = self.key_segments[:, np.newaxis, k0:k1]
-            same: npt.NDArray[np.bool_] = ((q == k) & (k != 0)) | (keys == rows)
+            same: npt.NDArray[np.bool_] = (q == k) & (k != 0)
+            if self.own_column:
+                same = same | (keys == rows)
             joint = same if allowed is None else same & allowed
             reached = joint.any(axis=(0, 2))
             if not reached.any():
@@ -200,7 +205,9 @@ def tiled_forward(
     K and V (N, g, T_k, d_k), g dividing h, expanded to h heads: per key block, in order, m' = max(m, the block's row max), e = exp(S -
     m') (0 in place of an all-masked row's m'), l = l exp(m - m') + the fold of e, H = H exp(m - m')
     + e V (e dropped: e M / keep, M drawn by draw for the block's every query and key), then H / l.
-    The key blocks are key_blocks(T_k, block, origin): origin is key 0's column.
+    The key blocks are key_blocks(T_k, block, origin): origin is key 0's column. A row no key is
+    allowed to (a cross-attention pad's query: Masking.own_column) keeps l = 0 and H = 0, divided by
+    1, so its H is 0; every self-attention row has its own key, so l > 0 and the division is as before.
     """
     N, h, queries, d_k = Q.shape
     keys = K.shape[2]
@@ -224,7 +231,7 @@ def tiled_forward(
         dropped = e if M is None else e * M[:, :, r0:r1] / keep
         H[:, :, r0:r1] = H[:, :, r0:r1] * alpha + dropped @ V[:, :, k0:k1]
         m[:, :, r0:r1] = m_new
-    return H / l, m, l
+    return H / np.where(l == 0.0, 1.0, l), m, l
 
 
 def tiled_backward(
@@ -243,9 +250,13 @@ def tiled_backward(
     recomputed (M drawn again, the same draws in the same order), dV = (P M / keep)^T dH, dP = (dH
     V^T) M / keep, dS = P (dP - D) with D = the fold of dH H over d_k (FlashAttention-2's), dQ the
     blocks' dS K summed in key order, dK = dS^T Q; dK and dV then folded per group (fold), and dQ and
-    dK divided by the scale.
+    dK divided by the scale. A row no key is allowed to (m = -inf, l = 0) has P = 0: its m read as 0
+    and its l as 1, as tiled_forward divides its H.
     """
     Q, K, V, H, m, l = saved
+    # a wholly masked row's (cross-attention's pad queries): P = exp(-inf - 0) / 1 = 0, never NaN
+    m = np.where(m == -np.inf, 0.0, m)
+    l = np.where(l == 0.0, 1.0, l)
     N, h, queries, _ = Q.shape
     keys, key_value_heads = K.shape[2], K.shape[1]
     K, V = expand(K, h), expand(V, h)

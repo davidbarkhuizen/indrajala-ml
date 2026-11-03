@@ -12,7 +12,10 @@ the network (segments.py: numpy's arrays, the crate's, or lists of rows in pure 
 passes (the Decoder, D8) carry examples, the batch's N, always; column, the first column of the
 pass's tokens (a prefill's 0, a step's its own), from which a rotary attention reads its angles;
 and segments and positions, (N, L) for a prefill and (N, 1) for a step, when the batch has
-segments. Step 15 adds its encoder output. A layer that reads nothing from it ignores it.
+segments. An encoder-decoder's decoder passes (the cross-attention workplan, D2) carry memory,
+the encoder's output, (N, S * d_m) on the array backends, and memory_segments, its tokens'
+segments (N, S), None when the source has none; a CrossAttention reads them. A layer that reads
+nothing from it ignores it.
 Backend-free: the pure-Python layers take it too.
 
 Every pass's context is keyword-only, defaulting to NO_CONTEXT, so a layer driven alone (a test, a
@@ -35,6 +38,8 @@ class ForwardContext:
     count: int = 0
     examples: int = 0
     column: int = 0
+    memory: Any = None
+    memory_segments: Any = None
 
     def example(self, n: int) -> ForwardContext:
         """
