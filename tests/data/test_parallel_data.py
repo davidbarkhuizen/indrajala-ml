@@ -80,7 +80,11 @@ def test_pair_k_is_segment_k_on_both_sides():
         ]
         assert "".join(greek) == p.grc
         assert "".join(english_predicted) == p.eng  # every character, the first included, from its own pair
-        assert "".join(english_read) == p.eng[:-1]
+        assert "".join(english_read) == p.eng  # read after the separator that opens the pair
+    # each pair's last label is the separator that ends its translation (D7), in its own segment
+    # (the opening separator's label sits at a pad's position, segment 0: given, not predicted)
+    ends = [g for i, g in zip(window.labels, target_segments, strict=True) if i == separator_id(TARGET) and g]
+    assert ends == [1, 2, 3]
     # the opening separator is given: its target position's input is a pad, so it doesn't count (step 11's D6)
     counted = segment_context(
         np.array([window.decoder_input], dtype=np.float64), separator_id(TARGET), pad_id(TARGET)
@@ -135,8 +139,9 @@ def test_the_corpora_pack_at_1024(corpus: str):
     dataset = load_parallel_dataset(corpus)
     pairs = len(dataset.train.pairs) + sum(w.pairs for w in dataset.validation + dataset.test) + len(dataset.dropped)
     assert pairs == {"histories": 14_602, "new-testament": 7_908}[corpus]
-    # the alignment report's pairs over 1,024 (a side longer than the window), and those at exactly 1,024,
+    # the alignment report's 68 pairs over 1,024 (a side longer than the window), and 2 of exactly 1,024,
     # whose separator overflows it
-    assert len(dataset.dropped) == {"histories": 68, "new-testament": 0}[corpus]
+    assert len(dataset.dropped) == {"histories": 70, "new-testament": 0}[corpus]
+    assert all(max(len(p.grc), len(p.eng)) >= 1024 for p in dataset.dropped)
     for window in dataset.validation[:5] + dataset.train.epoch(Random(0))[:5]:
         assert len(window.source) == 1024 and len(window.target) == 1025
