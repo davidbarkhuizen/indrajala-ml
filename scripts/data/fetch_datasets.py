@@ -5,7 +5,7 @@ expected SHA-256.
 
 Presence+checksum is checked first, network only as a last resort: a repeated `./cli setup`/
 `./cli fetch-data` against an unchanged local checkout performs zero network calls after the
-first successful fetch. MNIST and the sequence task's corpora are fetched here - UCI digits' digits.csv stays committed
+first successful fetch. MNIST, the sequence task's corpora and the parallel corpora are fetched here - UCI digits' digits.csv stays committed
 directly in `indrajala-ml`, with its own `indrajala-datasets-uci-digits` packaging existing for
 metadata consistency, not because indrajala-ml needs to fetch it.
 
@@ -29,11 +29,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 PINNED_REF = "v2026-09-16"
 _RAW_BASE = f"https://raw.githubusercontent.com/davidbarkhuizen/indrajala-datasets-mnist/{PINNED_REF}/data"
 TEXT_PINNED_REF = "v2026-10-09"
+# the parallel corpora's tag (the cross-attention workplan, D4)
+PARALLEL_PINNED_REF = "v2026-11-03"
 
 
-def _text_url(repository: str, filename: str) -> str:
-    # one of the sequence task's corpora, from its indrajala-datasets-* repository at the pinned tag
-    return f"https://raw.githubusercontent.com/davidbarkhuizen/{repository}/{TEXT_PINNED_REF}/data/{filename}"
+def _text_url(repository: str, filename: str, ref: str = TEXT_PINNED_REF) -> str:
+    # one of the text corpora, from its indrajala-datasets-* repository at the pinned tag
+    return f"https://raw.githubusercontent.com/davidbarkhuizen/{repository}/{ref}/data/{filename}"
 
 
 DATASETS = [
@@ -71,6 +73,18 @@ DATASETS = [
         "local_path": "data/euclid-heath/euclid-heath.txt",
         "sha256": "5b2a8d39410a422b2fca03f682030dc978f585a03ffa6e83ba6c84290ef2b2d6",
         "url": _text_url("indrajala-datasets-euclid-heath", "euclid-heath.txt"),
+    },
+    {
+        # the parallel corpora (the cross-attention workplan, D4): CC BY-SA 4.0, adapted from the
+        # Perseus Digital Library (the repository's LICENSE-TEXT.md, with its copyright check per volume)
+        "local_path": "data/perseus-parallel/histories.jsonl",
+        "sha256": "d1fbe9e52340543822e74a30fcbe64945213d88c95f273f2d7696523731ff978",
+        "url": _text_url("indrajala-datasets-perseus-parallel", "histories.jsonl", PARALLEL_PINNED_REF),
+    },
+    {
+        "local_path": "data/perseus-parallel/new-testament.jsonl",
+        "sha256": "0750b9a6764e56a16c95b79a213f2ef3ad8731fb975998830ec3cbcb9cedab8e",
+        "url": _text_url("indrajala-datasets-perseus-parallel", "new-testament.jsonl", PARALLEL_PINNED_REF),
     },
 ]
 

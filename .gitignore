@@ -170,6 +170,8 @@ data/tinyshakespeare/
 data/herodotus-rawlinson/
 data/muqaddimah/
 data/euclid-heath/
+# the parallel corpora (the cross-attention workplan, D4), fetched the same way
+data/perseus-parallel/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
