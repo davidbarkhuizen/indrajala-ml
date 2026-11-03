@@ -198,7 +198,7 @@ Each lists the options considered, with pros and cons, and the choice.
   - (c) Windows of 1,024, one pair a window. Pros: no segment mask. Cons: windows mostly padding
     (medians of 250-450 characters), several times the compute for the same pairs.
 
-- **D12. The model's width and head size. Open until the study's registration (new 2026-11-03).**
+- **D12. The model's width and head size. Closed by D18 (2026-11-03): set when a translation model is trained on the corpora (new 2026-11-03).**
   Today's sequence models are `d = 64` with 4 heads of 16 (`d_k = 16`); production heads are 64 or
   128 wide. A standalone `d_k = 64` probe on today's model was declined (the owner, 2026-11-03): at
   `d = 64` a head of 64 doubles a model already at the ~1M-character corpora's data limit. D4's
@@ -310,6 +310,63 @@ Each lists the options considered, with pros and cons, and the choice.
   - (b) `cross_attention_forward_batch` per step, the keys and values recomputed. Pros: no crate
     change. Cons: S·d_m·g·d_k products a row per step for nothing; against D7.
 
+- **D18. The study (D9), decided from the literature. Settled: (a) (new 2026-11-03, at stage 10:
+  the owner chose the literature over running D9, as for grouped-query attention).** The question
+  is D9's: at equal parameters, does the encoder-decoder translate better than a decoder-only model
+  reading the Greek as a prefix, and what does the source buy over an English-only model?
+
+  **The evidence.**
+  - Raffel et al. 2020 (T5, §3.2, Table 2): an encoder-decoder (2P parameters, M FLOPs), the same
+    with its stacks' parameters shared (P), a prefix LM (P, M) and a causal LM (P, M), pre-trained
+    and fine-tuned. The encoder-decoder is best on every task. The shared one (P) beats the prefix
+    LM at equal parameters and compute: En-De BLEU 26.98 (2P), 26.72 (shared), 26.43 (prefix LM),
+    25.09 (LM). The authors read this as "the addition of an explicit encoder-decoder attention is
+    beneficial".
+  - Zhang et al. 2022 (MT, bilingual and multilingual, scaled): the architectures differ most at
+    small scale, and the gap narrows as parameters grow. Causal masking of the source hurts. A
+    prefix LM, with full visibility of the source, performs "similarly well to EncDec" in
+    supervised directions. Their conclusion: "current product offerings for major language pairs
+    or small on-device models should continue using EncDec".
+  - Gao et al. 2022: a translation LM over the concatenated source and target is on par with the
+    encoder-decoder "when carefully tuned". Its limits: the concatenated sequence is longer, and
+    "when decoding efficiency is critical, TLM may suffer because a separate decoder is not
+    existent and each translation query goes through the entire network".
+  - Fu et al. 2023: in a decoder-only model, "as the generation step number grows, less and less
+    attention is focused on the source sequence" (attention degeneration).
+  - What the source buys (D9's third arm): every study above conditions on the source. An
+    English-only model is step 9's sequence model, whose bits per character the library already
+    measures.
+
+  **Options.**
+  - (a) *Chosen.* The encoder-decoder is the library's translation model, and D9's study is not
+    run. No prefix decoder-only model is built for it.
+    Pros:
+    - It follows the evidence at our scale: our models are a few million parameters at most, where
+      Zhang et al. find the architectures differ most, with EncDec ahead.
+    - T5 favours an explicit cross-attention at equal parameters and compute.
+    - Decoding encodes the source once and caches its keys and values (D7). A prefix model carries
+      the source in every window: windows of 2,048 for D11's pairs, and attention over all of it
+      at every step.
+    - No days of compute on a question the literature answers.
+    Cons:
+    - No measurement on our corpora: the encoder-decoder has trained here only in the tests and
+      the golden run.
+    - The evidence is at larger scales (T5's base models, Zhang et al.'s 30M-900M), with
+      pre-training (T5) or other data (WMT, OPUS).
+  - (b) Run D9 as registered. Pros: our own evidence, on our corpora. Cons: 30 runs at windows of
+    1,024 to 2,048 on CPU; a prefix model and its loss mask to build; 5 seeds a cell is a screen.
+  - (c) Build the prefix model as a library option, without the study. Pros: production's other
+    form (Gao et al.'s TLM) ready to compare later. Cons: code with no use here yet; it waits for a
+    question that needs it (next-steps.md).
+
+  D12 (the width and head size) closes with it: a translation model's `d`, heads and `key_size`
+  are set when one is trained on the corpora, sized by that data, with `d_k` of at least 32
+  (next-steps.md).
+
+  Sources (indrajala-literature): `raffel-2020-exploring-limits-transfer-t5`,
+  `zhang-2022-scaling-transfer-lm-architectures-mt`, `gao-2022-encoder-decoder-redundant-nmt`,
+  `fu-2023-decoder-only-or-encoder-decoder`.
+
 ## Stages
 
 1. **This workplan.**
@@ -406,5 +463,5 @@ Each lists the options considered, with pros and cons, and the choice.
    and a cross-attention), one per implementation, after the FiLM ones; the 161 earlier entries
    are bit-identical, and the committed `golden_run_rust.json` gains the Rust one. Each machine's
    reference is recorded and archived (new functionality) once the PR merges.
-10. **The study** (D9).
+10. **The study** (D9): decided from the literature (D18, 2026-11-03), not run.
 11. **Docs**; the workplan retired.
