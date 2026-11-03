@@ -189,6 +189,7 @@ Each lists the options considered, with pros and cons, and the choice.
   corpora (about 6M characters a side) support `d = 128` to `256`, where heads of 32 to 64 come
   from the width. So the encoder's and decoder's `d`, heads and `key_size` are set when the study
   (D9) is registered, sized by that data and by `jebel`'s time, with `d_k` of at least 32.
+
 ## Stages
 
 1. **This workplan.**
