@@ -399,6 +399,12 @@ Each lists the options considered, with pros and cons, and the choice.
      sacreBLEU 2.5.1's scores to 1e-12 on a recorded fixture; `training/translation_evaluate.py`,
      bits per character under teacher forcing (the training loss's counted targets) and chrF of
      greedy and sampled translations of each held-out pair's Greek. Stage 8 done.
-9. **Fixtures, checkpoints and golden entries** (D8).
+9. **Fixtures, checkpoints and golden entries** (D8). Done 2026-11-03: the saved-model fixtures came
+   with stages 4c, 6b and 7b, and `test_format2.py`'s resume-by-bits checkpoints cover all three
+   implementations. The golden run gains three encoder-decoder entries
+   (`ENCODER_DECODER_SPEC`, twelve pairs each alone in a window of 8, dropout on a self-attention
+   and a cross-attention), one per implementation, after the FiLM ones; the 161 earlier entries
+   are bit-identical, and the committed `golden_run_rust.json` gains the Rust one. Each machine's
+   reference is recorded and archived (new functionality) once the PR merges.
 10. **The study** (D9).
 11. **Docs**; the workplan retired.

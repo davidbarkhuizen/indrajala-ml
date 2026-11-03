@@ -149,6 +149,13 @@ x_t * (1 + G c) + P c), beside WINDOW_RECURRENCE, in all three implementations; 
 window's other weights are, so it starts away from zero. No earlier entry moved when they were
 recorded.
 
+The encoder-decoder entries (the cross-attention workplan, stage 9, D8) are added after the FiLM
+ones: ENCODER_DECODER_SPEC, an encoder of a bidirectional attention block and a decoder of a causal
+attention block and two CrossAttention blocks (one with every query head its own key/value head,
+one with one shared, and dropout on both attentions), over ENCODER_DECODER_PAIRS, each pair packed
+alone into a window of ENCODER_DECODER_WINDOW ids a side (D11, D13: left-padded, so some targets
+don't count), in all three implementations. No earlier entry moved when they were recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -172,6 +179,7 @@ from typing import Any, cast
 import indrajala_math_rust as pa
 import numpy as np
 
+from indrajala_ml.data.parallel_data import Pair, pack_pairs
 from indrajala_ml.data.prepared_dataset import PreparedDataset
 from indrajala_ml.data.text_data import Vocabulary, pack, paragraphs, windows
 from indrajala_ml.measurement import benchmark_archive
@@ -215,6 +223,7 @@ from indrajala_ml.model.networks.numpy.dropout_conv_vectorized_multiclass_backpr
 from indrajala_ml.model.networks.numpy.dropout_vectorized_multiclass_backprop_classifier_network import (
     DropoutVectorizedMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.numpy.encoder_decoder_array_network import EncoderDecoderArrayNetwork
 from indrajala_ml.model.networks.numpy.l2_array_backprop_classifier_network import L2ArrayBackpropClassifierNetwork
 from indrajala_ml.model.networks.numpy.l2_conv_vectorized_multiclass_backprop_classifier_network import (
     L2ConvVectorizedMultiClassBackpropClassifierNetwork,
@@ -274,6 +283,7 @@ from indrajala_ml.model.networks.python.dropout_conv_multiclass_backprop_classif
 from indrajala_ml.model.networks.python.dropout_multiclass_backprop_classifier_network import (
     DropoutMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.python.encoder_decoder_backprop_network import EncoderDecoderBackpropNetwork
 from indrajala_ml.model.networks.python.fan_in_aware_backprop_classifier_network import (
     FanInAwareBackpropClassifierNetwork,
 )
@@ -344,6 +354,7 @@ from indrajala_ml.model.networks.rust.dropout_rust_array_backprop_classifier_net
 from indrajala_ml.model.networks.rust.dropout_rust_array_multiclass_backprop_classifier_network import (
     DropoutRustArrayMultiClassBackpropClassifierNetwork,
 )
+from indrajala_ml.model.networks.rust.encoder_decoder_rust_array_network import EncoderDecoderRustArrayNetwork
 from indrajala_ml.model.networks.rust.l2_conv_rust_array_multiclass_backprop_classifier_network import (
     L2ConvRustArrayMultiClassBackpropClassifierNetwork,
 )
@@ -389,9 +400,11 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
 from indrajala_ml.model.protocols.classifier_protocols import Example
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
+    CrossAttention,
     Dense,
     Dropout,
     Embedding,
+    EncoderDecoder,
     GatedDense,
     LayerNorm,
     LayerSpec,
@@ -743,6 +756,62 @@ FILM_NETWORKS = {
     "rust film window model": WindowRecurrentRustArrayNetwork,
     "python film window model": WindowRecurrentBackpropNetwork,
 }
+
+
+# a small encoder-decoder (the cross-attention workplan, stage 9, D8) over twelve pairs, each its own
+# window
+ENCODER_DECODER_PAIRS = [
+    Pair("golden", str(k), "train", grc, eng)
+    for k, (grc, eng) in enumerate(
+        [
+            ("ἦλθε", "came"),
+            ("εἶπε", "said"),
+            ("ναῦς", "ship"),
+            ("ἵππος", "horse"),
+            ("λόγος", "word"),
+            ("πόλις", "city"),
+            ("θάλασσα", "sea"),
+            ("ἔπεμψε", "sent"),
+            ("νῆσος", "isle"),
+            ("ὁδός", "road"),
+            ("δῆμος", "people"),
+            ("ἄρχων", "ruler"),
+        ]
+    )
+]
+ENCODER_DECODER_SOURCE = Vocabulary.of("".join(pair.grc for pair in ENCODER_DECODER_PAIRS))
+ENCODER_DECODER_TARGET = Vocabulary.of("".join(pair.eng for pair in ENCODER_DECODER_PAIRS))
+ENCODER_DECODER_WINDOW = 8
+ENCODER_DECODER_SPEC = EncoderDecoder(
+    (
+        Embedding(len(ENCODER_DECODER_SOURCE) + 2, 4, segments=True),
+        Residual((LayerNorm(), Attention(heads=2))),
+        LayerNorm(),
+    ),
+    (
+        Embedding(len(ENCODER_DECODER_TARGET) + 2, 4, segments=True, separator_opens=True),
+        Residual((LayerNorm(), Attention(heads=2, causal=True, dropout=0.1))),
+        Residual((LayerNorm(), CrossAttention(heads=2, dropout=0.1))),
+        Residual((LayerNorm(), CrossAttention(heads=2, key_value_heads=1))),
+        LayerNorm(),
+        Dense(len(ENCODER_DECODER_TARGET) + 1, "softmax", output=True, loss="cross_entropy"),
+    ),
+)
+ENCODER_DECODER_NETWORKS = {
+    "numpy encoder-decoder": EncoderDecoderArrayNetwork,
+    "rust encoder-decoder": EncoderDecoderRustArrayNetwork,
+    "python encoder-decoder": EncoderDecoderBackpropNetwork,
+}
+
+
+def _encoder_decoder_rows() -> list[Example[tuple[int, ...]]]:
+    # each pair alone in its window: the source's ids, then the target row less its last
+    window = ENCODER_DECODER_WINDOW
+    rows: list[Example[tuple[int, ...]]] = []
+    for pair in ENCODER_DECODER_PAIRS:
+        (packed,) = pack_pairs([pair], ENCODER_DECODER_SOURCE, ENCODER_DECODER_TARGET, window)
+        rows.append((tuple(float(i) for i in (*packed.source, *packed.decoder_input)), packed.labels))
+    return rows
 
 
 def _sequential_network(name: str, input_shape: InputShape, specs: list[LayerSpec], rule: UpdateRule) -> Any:
@@ -1229,6 +1298,24 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 name,
                 partial(window_cls, (WINDOW_COLUMNS,), FILM_WINDOW_SPECS, WINDOW_RECURRENCE, Adam()),
                 sequence_rows,
+                "predict_probabilities",
+            ),
+        )
+    encoder_decoder_rows = _encoder_decoder_rows()
+    for name, encoder_decoder_cls in ENCODER_DECODER_NETWORKS.items():
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(
+                    encoder_decoder_cls,
+                    ENCODER_DECODER_SPEC,
+                    ENCODER_DECODER_WINDOW,
+                    ENCODER_DECODER_WINDOW,
+                    Adam(),
+                ),
+                encoder_decoder_rows,
                 "predict_probabilities",
             ),
         )
