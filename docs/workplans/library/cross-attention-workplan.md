@@ -275,6 +275,41 @@ Each lists the options considered, with pros and cons, and the choice.
     would cross from the memory back to the decoder's ids.
   - (c) A general graph of layers. Cons: D2's (b).
 
+- **D15. The decode's shape. Settled: (a) (new 2026-11-03, at stage 8).**
+  - (a) *Chosen.* Each implementation's network gives `decoder(sources)`: step 9's `Decoder` over
+    the decoder's layers, the sources encoded once (one encoder pass over the batch, each source
+    left-padded to the window), the memory and its segments in every decode pass's context. Each
+    `CrossAttention` computes its keys and values from the memory at `prefill` and keeps them in
+    its cache for every `step` (D7). `translate(...)` drives it: each row starts from one
+    separator and stops at the next (D13), or at a length cap.
+    Pros:
+    - One decoding loop for every model: caching, padding and the learned-position fallback stay
+      step 9's.
+    - The cross-attention cache is a layer's cache, as self-attention's is.
+    Cons:
+    - The `Decoder`'s context hook must carry the memory: a closure per decode.
+  - (b) A separate translator loop over the decoder's layers. Pros: free of the `Decoder`'s
+    assumptions. Cons: a second loop to keep in step with the first (padding, positions, the
+    uncached fallback).
+- **D16. The decode's segments. Settled: (a) (new 2026-11-03, at stage 8).** Training's target
+  segments are D13's: a separator opens its segment. A decode must give the same, or a decoded
+  token's cross-attention would read no source.
+  - (a) *Chosen.* `SpecialIds` gains `separator_opens`, and the `Decoder` tracks segments and
+    positions by that rule when it is set, as `segment_context(..., separator_opens=True)` does.
+    Pros: a decode's masks and positions are training's, so a step's bits are the full pass's.
+    Cons: a second rule in the `Decoder`, as in the segment functions.
+  - (b) Query segments all 1 in a decode. Pros: no change to the `Decoder`. Cons: the decoder's
+    self-attention and positions would then differ from training's whenever a row holds more than
+    the one translation; and a step's bits would no longer be the full pass's.
+- **D17. Rust's cross-attention step. Settled: (a) (new 2026-11-03, at stage 8).**
+  - (a) *Chosen.* A crate op attending from given keys and values,
+    `cross_attention_attend_batch` (indrajala-math-rust#96), the keys and values the memory's rows
+    through `affine_forward_batch` once per source. Pros: D7's cache in Rust as in numpy and pure
+    Python; one query's bits are the full pass's at that token (tested in the crate). Cons: one more
+    crate op, and a "Bump rust/".
+  - (b) `cross_attention_forward_batch` per step, the keys and values recomputed. Pros: no crate
+    change. Cons: S·d_m·g·d_k products a row per step for nothing; against D7.
+
 ## Stages
 
 1. **This workplan.**
@@ -346,7 +381,15 @@ Each lists the options considered, with pros and cons, and the choice.
      `EncoderDecoderBackpropNetwork`, through a `_build_layers` hook in `BackpropNetworkBase`; its
      draws are numpy's by bits, and it trains as numpy's within rounding, with dropout's masks
      numpy's. An encoder-decoder file records no input bounds in any implementation. Stage 7 done.
-8. **Decoding** (D7) and chrF (D6).
+8. **Decoding** (D7, D15-D17) and chrF (D6). Three PRs:
+   - **8a, the crate:** `cross_attention_attend_batch` (D17), and its "Bump rust/".
+   - **8b, decoding:** `SpecialIds.separator_opens` in the `Decoder` (D16); each `CrossAttention`'s
+     `start_decoding`, `prefill` and `step` in the three implementations; each network's
+     `decoder(sources)` and `translate` (D15). Tests: a decode's probabilities are the full pass's
+     (by bits within an implementation), padding changes nothing, a translation stops at the
+     separator.
+   - **8c, chrF:** chrF (D6) and the evaluation the study reads: bits per character under teacher
+     forcing and chrF of greedy and sampled translations.
 9. **Fixtures, checkpoints and golden entries** (D8).
 10. **The study** (D9).
 11. **Docs**; the workplan retired.
