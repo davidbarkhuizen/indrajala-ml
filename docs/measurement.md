@@ -401,7 +401,8 @@ What to do next:
   by self-attention: indrajala-math-rust's `probe-cross-layout`, `67de7c7`) moved neither of those
   rows, but moved others up to 2.0% (backward T=1024 causal +1.3%). A lone consistent Rust row near
   2%, in a crate change that leaves its path's arithmetic alone, is a build's shift unless a probe
-  of the touched function shows otherwise.
+  of the touched function shows otherwise. The next bump (#1232, only a new op added) moved the same
+  forward T=256 causal row back, -2.4%, and forward T=64 causal -3.1%.
 
 - **`ab.py run` checks the machine profile before the load** (fixed 2026-10-14; it was the other
   way round): a host with no profile, or a changed identity, is refused at once, not after waiting
