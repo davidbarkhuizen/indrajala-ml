@@ -84,9 +84,7 @@ class BackpropNetworkBase[
 
         # every layer with trained weights (and any pool layer), in forward order: the forward and
         # backward passes and snapshot/restore walk it
-        self.trainable_layers: list[TrainableLayer] = build_python_layers(
-            specs, input_shape, self.input_layer, self._window_state_size()
-        )
+        self.trainable_layers: list[TrainableLayer] = self._build_layers(specs, input_shape)
         # LayerT is what the specs build before the output layer: dense layers, unless conv and
         # pool layers come first
         self.hidden_layers = cast("list[LayerT]", self.trainable_layers[:-1])
@@ -111,6 +109,13 @@ class BackpropNetworkBase[
         # OS entropy until randomized(seed=, rng=) or an assignment sets it (the RNG generators
         # workplan, D9)
         self.rng = default_rng()
+
+    def _build_layers(self, specs: Sequence[LayerSpec], input_shape: InputShape) -> list[TrainableLayer]:
+        """
+        The trainable layers, in forward order, behind the input layer: specs' (python_layer_builder.py).
+        A network of two stacks (the encoder-decoder, the cross-attention workplan, D2) builds its own.
+        """
+        return build_python_layers(specs, input_shape, self.input_layer, self._window_state_size())
 
     @property
     def rng(self) -> Pcg64Generator:

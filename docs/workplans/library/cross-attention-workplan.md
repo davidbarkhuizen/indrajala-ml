@@ -342,7 +342,10 @@ Each lists the options considered, with pros and cons, and the choice.
      pure-Python bits don't move. Done 2026-11-03.
    - **7b, the network:** a pure-Python encoder-decoder network (two layer-major passes, the
      memory's gradient folded into the encoder's last layer), three-way parity, its saved-model
-     fixture, and `load_network`'s last refusal removed.
+     fixture, and `load_network`'s last refusal removed. Done 2026-11-03:
+     `EncoderDecoderBackpropNetwork`, through a `_build_layers` hook in `BackpropNetworkBase`; its
+     draws are numpy's by bits, and it trains as numpy's within rounding, with dropout's masks
+     numpy's. An encoder-decoder file records no input bounds in any implementation. Stage 7 done.
 8. **Decoding** (D7) and chrF (D6).
 9. **Fixtures, checkpoints and golden entries** (D8).
 10. **The study** (D9).

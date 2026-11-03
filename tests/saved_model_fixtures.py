@@ -87,6 +87,7 @@ from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.networks.numpy.encoder_decoder_array_network import EncoderDecoderArrayNetwork
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
+from indrajala_ml.model.networks.python.encoder_decoder_backprop_network import EncoderDecoderBackpropNetwork
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
@@ -441,7 +442,11 @@ def _window(
 
 
 def _encoder_decoder(implementation: str) -> SavedModelFixture:
-    cls = EncoderDecoderArrayNetwork if implementation == "numpy" else EncoderDecoderRustArrayNetwork
+    cls = {
+        "python": EncoderDecoderBackpropNetwork,
+        "numpy": EncoderDecoderArrayNetwork,
+        "rust": EncoderDecoderRustArrayNetwork,
+    }[implementation]
     return SavedModelFixture(
         implementation,
         lambda: cls(ENCODER_DECODER_MODEL, SOURCE_TOKENS, TOKENS, Adam(**ADAM)),
@@ -647,6 +652,7 @@ FIXTURES: dict[str, SavedModelFixture] = {
     "WindowRecurrentBackpropNetwork": _window("python"),
     "EncoderDecoderArrayNetwork": _encoder_decoder("numpy"),
     "EncoderDecoderRustArrayNetwork": _encoder_decoder("rust"),
+    "EncoderDecoderBackpropNetwork": _encoder_decoder("python"),
     **{
         f"ContinuousWindow{name}": _window(implementation, CONTINUOUS_RECURRENCE, name)
         for name, implementation in (

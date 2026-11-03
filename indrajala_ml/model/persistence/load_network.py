@@ -21,6 +21,7 @@ from indrajala_ml.model.ensembles.ensemble_rust_array_backprop_classifier_networ
 )
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.networks.numpy.encoder_decoder_array_network import EncoderDecoderArrayNetwork
+from indrajala_ml.model.networks.python.encoder_decoder_backprop_network import EncoderDecoderBackpropNetwork
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
@@ -87,12 +88,12 @@ def network_from_state(state: dict[str, Any]) -> Any:
 def _sequential(file: NetworkFile) -> Any:
     network: Any
     if file.shape == ENCODER_DECODER:
-        # numpy's and Rust's (the cross-attention workplan, stages 4c and 6b; pure Python's is stage 7)
-        if file.implementation == PYTHON:
-            raise ValueError("an encoder-decoder loads into numpy or Rust only for now; this file's is python")
-        encoder_decoder = (
-            EncoderDecoderArrayNetwork if file.implementation == NUMPY.name else EncoderDecoderRustArrayNetwork
-        )
+        # each implementation's (the cross-attention workplan, stages 4c, 6b and 7b)
+        encoder_decoder = {
+            PYTHON: EncoderDecoderBackpropNetwork,
+            NUMPY.name: EncoderDecoderArrayNetwork,
+            RUST.name: EncoderDecoderRustArrayNetwork,
+        }[file.implementation]
         network = encoder_decoder.from_file(file)
         restore_file(network, file)
         return network

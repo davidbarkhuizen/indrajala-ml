@@ -351,6 +351,7 @@ PYTHON_SEQUENTIAL = {
     "WindowRecurrentBackpropNetwork": "WindowRecurrentArrayNetwork",
 }
 PYTHON_SINGLE_OUTPUT = {"FanInAwareBackpropClassifierNetwork": "ArrayBackpropClassifierNetwork"}
+PYTHON_ENCODER_DECODER = {"EncoderDecoderBackpropNetwork": "EncoderDecoderArrayNetwork"}
 # bounds-width randomize (BackpropClassifierNetwork.randomize), which no array network draws
 PYTHON_WITHOUT_TWIN = {
     "BackpropClassifierNetwork",
@@ -365,7 +366,7 @@ PYTHON_CLASSES = _classes(BackpropNetworkBase)
 
 
 def test_every_pure_python_network_class_is_covered():
-    twins = {**PYTHON_MULTICLASS, **PYTHON_CONV, **PYTHON_SEQUENTIAL, **PYTHON_SINGLE_OUTPUT}
+    twins = {**PYTHON_MULTICLASS, **PYTHON_CONV, **PYTHON_SEQUENTIAL, **PYTHON_SINGLE_OUTPUT, **PYTHON_ENCODER_DECODER}
     assert set(twins) | PYTHON_WITHOUT_TWIN == set(PYTHON_CLASSES)
     assert set(twins.values()) <= set(NUMPY_CLASSES)
 
@@ -403,6 +404,15 @@ def test_pure_python_sequential_randomized_is_numpys_after_the_same_seed(python_
     numpy_name = PYTHON_SEQUENTIAL[python_name]
     python = PYTHON_CLASSES[python_name].randomized(*SEQUENTIAL[numpy_name], seed=seed)
     numpy_network = NUMPY_CLASSES[numpy_name].randomized(*SEQUENTIAL[numpy_name], seed=seed)
+    assert_seeded_alike(python, numpy_network)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("python_name", PYTHON_ENCODER_DECODER)
+def test_pure_python_encoder_decoder_randomized_is_numpys_after_the_same_seed(python_name: str, seed: int):
+    numpy_name = PYTHON_ENCODER_DECODER[python_name]
+    python = PYTHON_CLASSES[python_name].randomized(*ENCODER_DECODER[numpy_name], seed=seed)
+    numpy_network = NUMPY_CLASSES[numpy_name].randomized(*ENCODER_DECODER[numpy_name], seed=seed)
     assert_seeded_alike(python, numpy_network)
 
 
