@@ -387,7 +387,12 @@ Each lists the options considered, with pros and cons, and the choice.
      `start_decoding`, `prefill` and `step` in the three implementations; each network's
      `decoder(sources)` and `translate` (D15). Tests: a decode's probabilities are the full pass's
      (by bits within an implementation), padding changes nothing, a translation stops at the
-     separator.
+     separator. Done 2026-11-03: `CrossAttentionCache` per implementation (the memory's
+     K and V at prefill: numpy's products, the crate's `affine_forward_batch`, pure Python's folds);
+     `decoder(sources)` on `EncoderDecoderNetwork` and `EncoderDecoderBackpropNetwork`;
+     `generation/translate.py`. A decode is the full pass token by token, by bits on Rust and in
+     pure Python, within 1e-12 on numpy; a batch of sources is each alone by bits; the three
+     implementations decode alike within rounding.
    - **8c, chrF:** chrF (D6) and the evaluation the study reads: bits per character under teacher
      forcing and chrF of greedy and sampled translations.
 9. **Fixtures, checkpoints and golden entries** (D8).
