@@ -15,9 +15,7 @@ indrajala-ml, which it bloats for reuse). Their names in this repository's code 
 
 The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 1) and not yet built.
 
-| workplan | roadmap |
-| --- | --- |
-| [cross-attention-workplan.md](library/cross-attention-workplan.md) | step 15: cross-attention and an encoder-decoder model |
+None open: steps 1-15 are done (their workplans retired, next-steps.md).
 
 ## `infrastructure/`: machines, release and repositories
 
