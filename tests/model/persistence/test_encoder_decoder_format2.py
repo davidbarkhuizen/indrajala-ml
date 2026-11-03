@@ -1,6 +1,7 @@
 """An encoder-decoder's format-2 entries (the cross-attention workplan, stage 3, D13, D14)."""
 
 import json
+from typing import Any
 
 from indrajala_ml.model.persistence.format2 import ENCODER_DECODER
 from indrajala_ml.model.persistence.format2_json import (
@@ -55,7 +56,7 @@ def test_an_embedding_entry_says_separator_opens_only_when_set():
 
 
 def test_an_encoder_decoder_s_layers_and_input_round_trip_through_json():
-    document = {"format": 2, "shape": ENCODER_DECODER, **encoder_decoder_to_json(SPEC)}
+    document: dict[str, Any] = {"format": 2, "shape": ENCODER_DECODER, **encoder_decoder_to_json(SPEC)}
     assert [entry["kind"] for entry in document["encoder"]] == ["embedding", "residual", "layer_norm"]
     assert document["layers"][2]["body"][1]["kind"] == "cross_attention"
     assert encoder_decoder_from_json(json.loads(json.dumps(document))) == SPEC

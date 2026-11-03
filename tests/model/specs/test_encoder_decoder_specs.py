@@ -10,6 +10,7 @@ from indrajala_ml.model.specs.layer_specs import (
     Embedding,
     EncoderDecoder,
     LayerNorm,
+    LayerSpec,
     Position,
     Residual,
     StateInput,
@@ -30,7 +31,7 @@ def ffn(width: int) -> Residual:
     return Residual((LayerNorm(), Dense(2 * width, "relu"), Dense(width, "linear", bias=True)))
 
 
-def encoder(width: int = 16) -> tuple:
+def encoder(width: int = 16) -> tuple[LayerSpec, ...]:
     return (
         Embedding(SOURCE, width, segments=True),
         Residual((LayerNorm(), Attention(heads=2))),
@@ -39,7 +40,7 @@ def encoder(width: int = 16) -> tuple:
     )
 
 
-def decoder(width: int = 12, cross: CrossAttention | None = None) -> tuple:
+def decoder(width: int = 12, cross: CrossAttention | None = None) -> tuple[LayerSpec, ...]:
     return (
         Embedding(TARGET, width, segments=True, separator_opens=True),
         Residual((LayerNorm(), Attention(heads=2, causal=True))),
@@ -69,7 +70,7 @@ def test_an_encoder_and_a_decoder_with_cross_attention_validate():
 
 
 def test_the_layers_are_the_encoder_s_then_the_decoder_s():
-    spec = EncoderDecoder(list(encoder()), list(decoder()))
+    spec = EncoderDecoder(list(encoder()), list(decoder()))  # pyright: ignore[reportArgumentType]: lists, kept as tuples
     assert spec == EncoderDecoder(encoder(), decoder())  # lists kept as tuples
     assert spec.layers() == [*encoder(), *decoder()]
     assert len(expand_specs(spec.layers())) == len(expand_specs(encoder())) + len(expand_specs(decoder()))
@@ -102,7 +103,9 @@ def test_a_cross_attention_stands_only_in_a_decoder():
         ),
         (EncoderDecoder(encoder()[:-1], decoder()), "an encoder ends in a LayerNorm"),
         (
-            EncoderDecoder((*encoder()[:-1], Dense(16, "softmax", output=True, loss="cross_entropy"), LayerNorm()), decoder()),
+            EncoderDecoder(
+                (*encoder()[:-1], Dense(16, "softmax", output=True, loss="cross_entropy"), LayerNorm()), decoder()
+            ),
             "an encoder has no output layer",
         ),
         (
@@ -115,7 +118,7 @@ def test_a_cross_attention_stands_only_in_a_decoder():
         ),
         (EncoderDecoder(encoder(), decoder()[:-1]), "a decoder ends in a token-wise output layer"),
         (
-            EncoderDecoder(encoder(), (decoder()[0], Residual((LayerNorm(), Attention(heads=2)))), *decoder()[2:])),
+            EncoderDecoder(encoder(), (decoder()[0], Residual((LayerNorm(), Attention(heads=2))), *decoder()[2:])),
             "a decoder's self-attention is causal",
         ),
         (
@@ -144,7 +147,9 @@ def test_the_shape_walk_records_the_memory_s_width_on_each_cross_attention():
     encoder_shapes, decoder_shapes = encoder_decoder_shapes(spec, source_tokens=20, target_tokens=21)
     assert encoder_shapes[-1].output_shape == (20, 16)
     crosses = [
-        shape for layer, shape in zip(expand_specs(spec.decoder), decoder_shapes, strict=True) if isinstance(layer, CrossAttention)
+        shape
+        for layer, shape in zip(expand_specs(spec.decoder), decoder_shapes, strict=True)
+        if isinstance(layer, CrossAttention)
     ]
     assert [(s.input_shape, s.output_shape, s.memory_shape) for s in crosses] == [((21, 12), (21, 12), (20, 16))]
     assert all(s.memory_shape is None for s in decoder_shapes if s not in crosses)
