@@ -81,6 +81,7 @@ docs cite them by section:
 | Segments: packing, document masks and padding (roadmap step 11, D1-D11) | #642 | #1157, #1158, #1162-#1166, crate #87, #1159, this PR | `git show 69e2e93:docs/workplans/library/segments-workplan.md` |
 | Context length: tiled attention, windows cut anew every epoch, the study (roadmap step 12, D1-D13) | #643 | #647, #1168-#1175, crate #88, #1178, this PR | `git show ec20e8c:docs/workplans/library/context-length-workplan.md` |
 | FFN activations: GELU and SwiGLU (roadmap step 13, D1-D11; its study abandoned) | #644 | #1176, #1177, #1182-#1187, crate #90, #92, this PR | `git show dcedf28:docs/workplans/library/ffn-activations-workplan.md` |
+| Grouped- and multi-query attention (roadmap step 14, D1-D13; its study abandoned for the literature) | #645 | #1189-#1197, crate #93, this PR | `git show 3a09724:docs/workplans/library/grouped-query-attention-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -89,7 +90,7 @@ candidate optimizations) were retired the same way: `git show 0a04977:docs/optim
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
-tokens, Rotary positions, Generation, Activations, The addition study), [measurement.md](measurement.md)
+tokens, Rotary positions, Generation, Activations, The addition study; grouped key/value heads in Layer norm and attention), [measurement.md](measurement.md)
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/studies/residual_depth_study.py`'s, the patch-attention study's in
@@ -97,6 +98,47 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From grouped-query attention (retired 2026-11-03)
+
+Done: `Attention(key_value_heads=g)` in all three implementations and the crate (D1-D4, D9;
+crate #93), the decoder's caches at `g` heads, the window program unchanged (D10); `to_grouped`
+(D5); `generation_timing.py`'s `--heads`, `--key-value-heads`, `--context`, `--batch` (D11); golden
+entries and fixtures at `g` 2 and 1 (D6). The study (D7, D13) was registered (#1197) and
+**abandoned by the owner on 2026-11-03** before any run ended (stone ran it 4 minutes); the
+owner asked for a literature review to decide instead.
+
+**The decision, from the literature (D14):** the README's "When to use it" (Layer norm and
+attention) gives the evidence. Options:
+- (a) *Chosen.* Multi-head stays the default (`key_value_heads=None`); GQA is documented as the
+  decoder's option when the cache binds, at about 4 query heads a key/value head, not
+  multi-query. Pros: no model moves; it follows the evidence: grouping costs little where
+  uptrained (Ainslie et al.) or at 4:1 at 125M-350M (MobileLLM), but measurably from scratch at
+  7B (DeepSeek-V2), and multi-query is last in every comparison; nothing here is cache-bound (the
+  sequence models' cache is 2,048 bytes a token). Cons: unlike most production decoders, which
+  group by default.
+- (b) Grouped by default for decoding models (production's 8 key/value heads, or `h / 4`). Pros:
+  production's practice (Llama 3, Mistral, Qwen2.5, Gemma 2). Cons: our models have 4 heads, so
+  `h / 4` is multi-query; a quality cost in DeepSeek-V2's from-scratch ablation for a saving
+  nothing here needs; every preset model would move.
+- (c) Multi-query by default. Cons: last in every comparison (Ainslie et al., DeepSeek-V2,
+  MobileLLM's single-head rows).
+
+Sources (indrajala-literature): `ainslie-2023-gqa-grouped-query-attention`,
+`shazeer-2019-one-write-head-fast-decoding`, `deepseek-2024-deepseek-v2-moe`,
+`liu-2024-mobilellm-sub-billion`, `chen-2025-cost-optimal-gqa-long-context`,
+`grattafiori-2024-llama-3-herd`, `jiang-2023-mistral-7b`, `qwen-2024-qwen2-5-technical-report`,
+`gemma-2024-gemma-2-practical-size`, `olmo-2024-2-olmo-2-furious`; SmolLM2-135M from its
+`config.json`. Left:
+
+- **Not measured here:** GQA's quality at this library's sizes, an uptrained model against one
+  trained from scratch (the study's U1; Ainslie et al. didn't compare them either), and the decode
+  rate at each `g` (`generation_timing.py` measures it in minutes when a question needs it).
+- **Out of scope (D8):** multi-head latent attention (DeepSeek-V2: above multi-head at 14% and 4%
+  of its cache, its Table 9) and cache quantization, each its own step if a cache ever binds.
+- **Reinvesting the saved parameters** (MobileLLM widened the embedding: +0.4 and +0.7 points at
+  125M and 350M) is a model-design choice, not planned.
+- **The study's code stays** (`indrajala_ml/studies/gqa_study.py`, its script and tests), never run.
 
 ## From FFN activations (retired 2026-11-03)
 
@@ -847,7 +889,7 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
   | dropout on the weights (done: `Attention(dropout=p)`, roadmap step 7) | attend: an inverted mask on `P[i]` before `H[i] = P[i] V[i]`, kept for backward | a `dropout` field, the mask drawn by the layer from the network's generator |
   | dropout after the projection (done: `Dropout(p)`, roadmap step 7) | after combine | a token-wise dropout layer, outside attention |
   | a separate value width | project and combine: `Wv` `(h·d_v, d)`, `Wo` `(d, h·d_v)` | a `value_size` field defaulting to `key_size` |
-  | grouped- or multi-query attention | project: `Wk`, `Wv` with `g` row blocks; attend: head `i` reads key/value block `i // (h / g)` | a `key_value_heads` field defaulting to `heads` |
+  | grouped- or multi-query attention (done: `Attention(key_value_heads=g)`, roadmap step 14) | project: `Wk`, `Wv` with `g` row blocks; attend: head `i` reads key/value block `i // (h / g)` | a `key_value_heads` field defaulting to `heads` |
   | cross-attention | project: `K`, `V` from a second input | a second input to the layer, which `Sequential` doesn't have: its own design |
 
 - **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable

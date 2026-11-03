@@ -757,8 +757,9 @@ adds `Wo bv` to every output, as `bo` can, since each row of every `P[i]` sums t
 
 Every implementation's attention layer, and the crate, is the same three blocks per pass, project,
 attend and combine, each tested on its own; the causal mask and dropout on `P` sit in attend (The sequence task,
-Dropout among the tokens), and padding masks, grouped key/value heads and cross-attention each
-have a named place among them (next-steps.md, From multi-head attention).
+Dropout among the tokens), grouped key/value heads in project and attend (below), and padding
+masks and cross-attention each have a named place among them (next-steps.md, From multi-head
+attention).
 On Rust each layer-norm and attention pass is still one crate call, the attention ops thin
 wrappers over the crate's blocks, and the token-wise dense layer is the existing dense ops on the
 `(N * T, d)` view. A dense layer's hidden delta reads the next
@@ -775,6 +776,46 @@ block alone is the weakest, 92.4%, below the dense control's 93.9%; and the conv
 4 heads of 32 features, and two layers, at 5 seeds. At this size more heads change nothing (96.1%,
 96.2%, 96.0%), wider heads stay within noise, and a second layer helps on every seed: two layers of
 4 heads reach 97.0%, a point under the conv network with 11% of its parameters.
+
+**Grouped key/value heads** (roadmap step 14; Ainslie et al. 2023, "GQA"; Shazeer 2019, multi-query
+attention): `Attention(heads, key_size, key_value_heads=g)` lets the `h` query heads share `g`
+key/value heads, `g` dividing `h`; `None`, the default, means `h` (multi-head, every model before
+it bit for bit), and `g = 1` is multi-query attention. `Wq` stays `(h * d_k, d)` and `Wo`
+`(d, h * d_k)`; `Wk` and `Wv` are `(g * d_k, d)`, and query head `i` reads key/value head
+`i // (h / g)`, so a group is `h / g` consecutive query heads. A decoder's cache holds `g` heads:
+`2 * g * d_k` values a token a layer, `h / g` times smaller than multi-head's. A shared head's
+`dK` and `dV` are its group's heads' sum, a left fold in head order from the first head (then
+`dK` divided by the scale once), the same additions in every implementation, so parity holds by
+bits where it did. The crate reads each group's key and value tiles once per key block and never
+copies them to `h` heads; numpy, the reference, expands them per call. Format 2 writes
+`"key_value_heads"` only when set, and validation refuses `g = h` written out (one spelling) and a
+grouped attention in a window-recurrent window. `to_grouped(document, g)`
+(`model/persistence/grouping.py`) converts a trained format-2 model: each group's key and value
+projections become its heads' mean, the optimizer state starts afresh, and Ainslie et al. then
+train for about 5% of the original steps ("uptraining"). `scripts/measurement/generation_timing.py
+--heads H --key-value-heads G --context T --batch B` times a decode and reports the cache's bytes a
+token.
+
+**When to use it** (from the literature, not measured here; next-steps.md, From grouped-query
+attention). Keep multi-head unless the key/value cache bounds decoding (long contexts, large
+batches); then share heads at about 4 query heads a key/value head, and not down to one:
+- **Quality:** uptrained at 5%, T5-XXL's GQA-8 scores 47.1 against multi-head's 47.2 and
+  multi-query's 46.6 (Ainslie et al., Table 1). Trained from scratch at 7B and 1.33T tokens,
+  DeepSeek-V2's ablation (its Table 8) has multi-head ahead of 8 groups and both ahead of
+  multi-query on every benchmark (MMLU 45.2, 41.2, 37.9). At 125M and 350M, MobileLLM (its Table
+  13) finds 16 query heads over 4 key/value heads level with multi-head (44.7 against 44.6; 49.4
+  against 49.6), and 1 or 2 key/value heads under 16 query heads 0.9 to 1.1 points lower at 125M
+  and 1.7 to 2.1 at 350M.
+- **Practice:** Llama 3 shares 8 key/value heads at every size (32, 64 and 128 query heads),
+  Mistral 7B 8 of 32, Qwen2.5 2 of 14 at 0.5B up to 8 of 64, Gemma 2 one per 2 query heads,
+  SmolLM2-135M 3 of 9; OLMo 2 keeps multi-head at 7B and 13B and groups only at 32B.
+- **Cost:** the saving is the cache's memory and reads at decode, growing with the context;
+  training's cost hardly depends on the grouping when most of it runs at short contexts. The
+  cost-optimal grouping depends on the target loss and the context: at 8K, from one key/value head
+  of 32 for a weak model to multi-head for the strongest they fit (Chen et al. 2025, Table 4).
+- **Here:** the long-form sequence models have 4 heads of 16 at windows of 256: 2,048 bytes a token,
+  512 KiB a window, not binding. At 4 query heads a key/value head they would be multi-query, the
+  configuration every comparison ranks last.
 
 ## The sequence task
 

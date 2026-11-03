@@ -10,7 +10,10 @@ workplan's registered claims.
     python scripts/studies/gqa_study.py uptrain --epochs 30 --workers 8 --corpora C...
     python scripts/studies/gqa_study.py report --results A.json ... --epochs 30
 
-Findings: none yet (registered, not run).
+Findings: none. The study was abandoned by the owner on 2026-11-03 before any run finished
+(stone's 8 workers ran at about one lone job's speed, next-steps.md, From FFN activations), and the
+question was decided from the literature instead (README, Layer norm and attention; next-steps.md,
+From grouped-query attention).
 """
 
 from indrajala_ml.studies import gqa_study
