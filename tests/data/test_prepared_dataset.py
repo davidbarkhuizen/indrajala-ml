@@ -25,7 +25,17 @@ from indrajala_ml.model.networks.rust.dropout_rust_array_multiclass_backprop_cla
 )
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.protocols.classifier_protocols import Example
-from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, LayerNorm, LayerSpec, Residual, StateInput
+from indrajala_ml.model.specs.layer_specs import (
+    Attention,
+    CrossAttention,
+    Dense,
+    Embedding,
+    EncoderDecoder,
+    LayerNorm,
+    LayerSpec,
+    Residual,
+    StateInput,
+)
 from indrajala_ml.model.specs.update_rules import Adam, Momentum
 from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
 from indrajala_ml.training.train import _training_accuracy
@@ -75,6 +85,20 @@ WINDOW: list[LayerSpec] = [
     Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
 ]
 
+# an encoder-decoder (the cross-attention workplan, stage 4b): its state the source's SOURCE_TOKENS
+# ids, then the target's, a class per target token
+SOURCE_TOKENS = DIMENSION // 2
+ENCODER_DECODER = EncoderDecoder(
+    (Embedding(CLASS_COUNT + 2, 4, segments=True), Residual((LayerNorm(), Attention(heads=2))), LayerNorm()),
+    (
+        Embedding(CLASS_COUNT + 2, 4, segments=True, separator_opens=True),
+        Residual((LayerNorm(), Attention(heads=2, causal=True))),
+        Residual((LayerNorm(), CrossAttention(heads=2))),
+        LayerNorm(),
+        Dense(CLASS_COUNT, output=True, activation="softmax", loss="cross_entropy"),
+    ),
+)
+
 # how to build each numpy class (its Rust twin, named with RustArray, is built alike: _rust_twin);
 # a class missing here fails test_every_class_has_a_constructor.
 # Both twins' generators are reseeded before each step (_seed_step), so the dropout classes
@@ -121,7 +145,10 @@ NUMPY_CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     "WindowRecurrentArrayNetwork": lambda cls: cls(
         (DIMENSION,), WINDOW, WindowRecurrence((Factor(2, Codes(3)),)), Adam()
     ),
+    "EncoderDecoderArrayNetwork": lambda cls: cls(ENCODER_DECODER, SOURCE_TOKENS, DIMENSION - SOURCE_TOKENS, Adam()),
 }
+# numpy only until their Rust twin (the encoder-decoder's: the cross-attention workplan, stage 6)
+NUMPY_ONLY = {"EncoderDecoderArrayNetwork"}
 
 
 def _rust_twin(name: str) -> str:
@@ -129,7 +156,10 @@ def _rust_twin(name: str) -> str:
     return name.replace("Vectorized", "RustArray", 1) if "Vectorized" in name else name.replace("Array", "RustArray", 1)
 
 
-CONSTRUCTORS = {**NUMPY_CONSTRUCTORS, **{_rust_twin(name): build for name, build in NUMPY_CONSTRUCTORS.items()}}
+CONSTRUCTORS = {
+    **NUMPY_CONSTRUCTORS,
+    **{_rust_twin(name): build for name, build in NUMPY_CONSTRUCTORS.items() if name not in NUMPY_ONLY},
+}
 
 
 def _is_rust(cls: type[Any]) -> bool:
@@ -142,7 +172,7 @@ def _is_binary(cls: type[Any]) -> bool:
 
 def _is_sequence(cls: type[Any]) -> bool:
     # a label per token: a sequence network's, or a window-recurrent network's per column
-    return cls.format2_shape in ("sequence", "window_recurrent")
+    return cls.format2_shape in ("sequence", "window_recurrent", "encoder_decoder")
 
 
 def _label_type(cls: type[Any]) -> type[Any]:
@@ -154,11 +184,12 @@ def _rows(
 ) -> list[Example[float]] | list[Example[int]] | list[Example[tuple[int, ...]]]:
     rng = random.Random(1)
     if _is_sequence(cls):
-        # token ids, and a class per token
+        # token ids, and a class per token (an encoder-decoder's per target token)
+        labels = DIMENSION - SOURCE_TOKENS if cls.format2_shape == "encoder_decoder" else DIMENSION
         return [
             (
                 tuple(float(rng.randrange(CLASS_COUNT)) for _ in range(DIMENSION)),
-                tuple(rng.randrange(CLASS_COUNT) for _ in range(DIMENSION)),
+                tuple(rng.randrange(CLASS_COUNT) for _ in range(labels)),
             )
             for _ in range(count)
         ]

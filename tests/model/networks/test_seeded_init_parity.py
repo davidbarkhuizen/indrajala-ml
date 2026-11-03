@@ -150,9 +150,14 @@ def rust_counterpart(numpy_name: str) -> type[Any]:
     return RUST_CLASSES[numpy_name.replace("ArrayNetwork", "RustArrayNetwork")]
 
 
+# numpy only until its Rust counterpart (the cross-attention workplan: the crate is stage 5, its Rust
+# layers and parity stages 6 and 7); its seeded draws are tested in test_encoder_decoder_numpy.py
+NUMPY_ONLY = {"EncoderDecoderArrayNetwork"}
+
+
 def test_every_array_network_class_is_covered():
     covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT, *SEQUENTIAL}
-    assert covered == set(NUMPY_CLASSES)
+    assert covered | NUMPY_ONLY == set(NUMPY_CLASSES)
     assert {rust_counterpart(name) for name in covered} == set(RUST_CLASSES.values())
     assert set(NUMPY_CLASSES.values()) | set(RUST_CLASSES.values()) == set(all_subclasses(ArrayNetworkBase)) - {
         NumpyArrayNetworkBase,

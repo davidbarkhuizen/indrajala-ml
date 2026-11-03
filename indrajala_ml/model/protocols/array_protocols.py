@@ -204,8 +204,9 @@ class ArrayOptimizer[A: BackendArray](Protocol):
 class ArrayBackend[A: BackendArray](Protocol):
     """The array operations ArrayNetworkBase needs from a backend (array_backend.py)."""
 
-    # a batch's segments from its token ids (the segments workplan, D4-D6)
-    def segment_context(self, X: A, separator: int, pad: int, /) -> ForwardContext: ...
+    # a batch's segments from its token ids (the segments workplan, D4-D6), a separator opening its
+    # segment with separator_opens (an encoder-decoder's target, the cross-attention workplan, D13)
+    def segment_context(self, X: A, separator: int, pad: int, separator_opens: bool = False, /) -> ForwardContext: ...
 
     # a decode pass's context from its segments and positions, lists of rows or None (the segments
     # workplan, D8)

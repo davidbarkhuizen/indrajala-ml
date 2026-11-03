@@ -15,6 +15,7 @@ from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
 from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer
 from indrajala_ml.model.layers.numpy.conv_array_layer import ConvArrayLayer, LinearConvArrayLayer
+from indrajala_ml.model.layers.numpy.cross_attention_array_layer import CrossAttentionArrayLayer
 from indrajala_ml.model.layers.numpy.cross_entropy_array_layer import CrossEntropyArrayLayer
 from indrajala_ml.model.layers.numpy.dropout_array_layer import DropoutArrayLayer
 from indrajala_ml.model.layers.numpy.gelu_array_layer import GELUArrayLayer
@@ -72,9 +73,11 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Branch,
+    CrossAttention,
     Dense,
     Dropout,
     Embedding,
+    EncoderDecoder,
     Fork,
     GatedDense,
     LayerNorm,
@@ -87,8 +90,17 @@ from indrajala_ml.model.specs.layer_specs import (
     TokenMean,
     expand_specs,
 )
-from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
+from indrajala_ml.model.specs.spec_shapes import (
+    InputShape,
+    Shape,
+    SpecShape,
+    encoder_decoder_shapes,
+    image_shape,
+    spec_shapes,
+    token_shape,
+)
 from indrajala_ml.model.specs.spec_validation import (
+    validate_encoder_decoder,
     validate_layer_specs,
     validate_window_specs,
 )
@@ -184,6 +196,9 @@ class TokenLayerClasses:
     dropout: LayerClass
     state_input: LayerClass
     film_state_input: LayerClass
+    # a decoder's attention to the encoder's output (the cross-attention workplan, D3): numpy's
+    # (stage 4), the crate's from stage 5
+    cross_attention: LayerClass | None = None
 
 
 TOKEN_LAYER_CLASSES = {
@@ -200,6 +215,7 @@ TOKEN_LAYER_CLASSES = {
         dropout=TokenDropoutArrayLayer,
         state_input=StateInputArrayLayer,
         film_state_input=FilmStateInputArrayLayer,
+        cross_attention=CrossAttentionArrayLayer,
     ),
     "rust": TokenLayerClasses(
         token_dense=TokenDenseRustArrayLayer,
@@ -267,6 +283,27 @@ def _token_layer(
     return None
 
 
+def _cross_attention_layer(
+    classes: TokenLayerClasses, spec: CrossAttention, shape: SpecShape, backend_name: str
+) -> ArrayNetworkLayer[Any]:
+    assert classes.cross_attention is not None, (
+        f"the {backend_name} backend has no CrossAttention yet (the cross-attention workplan: the crate's is stage 5)"
+    )
+    assert shape.memory_shape is not None, "a CrossAttention's shape has the memory's (encoder_decoder_shapes)"
+    tokens, features = token_shape(shape.input_shape)
+    memory_tokens, memory_features = shape.memory_shape
+    return classes.cross_attention(
+        tokens,
+        features,
+        memory_tokens,
+        memory_features,
+        spec.heads,
+        spec.head_size(features),
+        spec.key_value_heads,
+        spec.dropout,
+    )
+
+
 def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> ArrayNetworkLayer[Any]:
     if spec.bias:
         return classes.affine(spec.size, input_size)
@@ -294,12 +331,34 @@ def build_array_layers(
     first layer, and each window's split to its branches' first layers. With a state_size, specs are
     a window-recurrent network's window (validate_window_specs), its StateInputs that wide.
     """
-    token_classes = TOKEN_LAYER_CLASSES[backend_name]
     if state_size is None:
         validate_layer_specs(specs)
     else:
         validate_window_specs(specs, input_shape)
-    shapes = spec_shapes(specs, input_shape)
+    return _build_layers(specs, spec_shapes(specs, input_shape), backend_name, state_size)
+
+
+def build_encoder_decoder_layers(
+    spec: EncoderDecoder, source_tokens: int, target_tokens: int, backend_name: str
+) -> tuple[list[ArrayNetworkLayer[Any]], list[ArrayNetworkLayer[Any]]]:
+    """
+    spec, validated (validate_encoder_decoder), as backend_name's layers (the cross-attention
+    workplan, D2, D14): the encoder's over source_tokens ids, then the decoder's over target_tokens,
+    each CrossAttention reading the encoder's output, its memory_shape (encoder_decoder_shapes).
+    """
+    validate_encoder_decoder(spec)
+    encoder_shapes, decoder_shapes = encoder_decoder_shapes(spec, source_tokens, target_tokens)
+    return (
+        _build_layers(spec.encoder, encoder_shapes, backend_name, None),
+        _build_layers(spec.decoder, decoder_shapes, backend_name, None),
+    )
+
+
+def _build_layers(
+    specs: Sequence[LayerSpec], shapes: Sequence[SpecShape], backend_name: str, state_size: int | None
+) -> list[ArrayNetworkLayer[Any]]:
+    # the layers of validated specs over their shape walk's shapes
+    token_classes = TOKEN_LAYER_CLASSES[backend_name]
     classes = LAYER_CLASSES[backend_name]
 
     layers: list[ArrayNetworkLayer[Any]] = []
@@ -336,7 +395,10 @@ def build_array_layers(
             fork.add = classes.add(fork)
             layers.append(fork.add)
             continue
-        token_layer = _token_layer(token_classes, spec, shape.input_shape, state_size)
+        if isinstance(spec, CrossAttention):
+            token_layer = _cross_attention_layer(token_classes, spec, shape, backend_name)
+        else:
+            token_layer = _token_layer(token_classes, spec, shape.input_shape, state_size)
         if token_layer is not None:
             layers.append(token_layer)
         elif isinstance(spec, Dense):

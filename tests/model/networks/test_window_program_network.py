@@ -157,7 +157,8 @@ def test_every_layer_class_a_window_holds_has_an_op():
     window_kinds = {
         name: getattr(TOKEN_LAYER_CLASSES["rust"], name)
         for name in TOKEN_LAYER_CLASSES["rust"].__dataclass_fields__
-        if name not in ("patches", "token_mean", "gated_dense")
+        # a CrossAttention is a decoder's, never a window's (the cross-attention workplan, D14)
+        if name not in ("patches", "token_mean", "gated_dense", "cross_attention")
     }
     held = {
         type(layer)

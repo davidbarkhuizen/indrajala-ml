@@ -47,8 +47,8 @@ class NumpyBackend:
     he_weights = staticmethod(he_random_weights)
 
     @staticmethod
-    def segment_context(X: FloatArray, separator: int, pad: int) -> ForwardContext:
-        return segment_context(X, separator, pad)
+    def segment_context(X: FloatArray, separator: int, pad: int, separator_opens: bool = False) -> ForwardContext:
+        return segment_context(X, separator, pad, separator_opens)
 
     @staticmethod
     def decode_context(
@@ -140,11 +140,11 @@ class RustBackend:
     he_weights = staticmethod(he_random_rust_weights)
 
     @staticmethod
-    def segment_context(X: pa.Array, separator: int, pad: int) -> ForwardContext:
+    def segment_context(X: pa.Array, separator: int, pad: int, separator_opens: bool = False) -> ForwardContext:
         # numpy's, its (N, T) arrays as crate arrays of floats: the crate's attention reads the
         # segment ids, and the layers read positions and counted as the ids of an embedding_forward
         # gather (segments.py)
-        context = segment_context(np.atleast_2d(np.asarray(X.tolist())), separator, pad)
+        context = segment_context(np.atleast_2d(np.asarray(X.tolist())), separator, pad, separator_opens)
         if context.segments is None:
             return context
         return ForwardContext(
