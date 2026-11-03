@@ -47,20 +47,26 @@ Rows = list[list[int]]
 
 @dataclass(frozen=True)
 class SpecialIds:
-    """A model's separator and pad ids (the segments workplan, D2)."""
+    """
+    A model's separator and pad ids (the segments workplan, D2), and whether a separator opens the
+    segment after it (an encoder-decoder's target, the cross-attention workplan, D13, D16) rather
+    than ending its own.
+    """
 
     separator: int
     pad: int
+    separator_opens: bool = False
 
 
 @dataclass
 class _Row:
     # one row's decode so far: its ids, pads included, and its last token's segment and position,
-    # and whether that token was a separator
+    # whether that token was a separator, and the separators so far (D16's rule)
     ids: list[int]
     segment: int = 0
     position: int = 0
     separated: bool = False
+    separators: int = 0
 
 
 class Decoder:
@@ -162,6 +168,13 @@ class Decoder:
             for i in ids:
                 if special is not None and i == special.pad:
                     row.segment, row.position = 0, 0
+                elif special is not None and special.separator_opens:
+                    # a separator opens its segment: the separators up to and including the token,
+                    # at least 1, segment_context(..., separator_opens=True)'s rule (D16)
+                    row.separators += i == special.separator
+                    segment = max(row.separators, 1)
+                    row.position = 0 if segment != row.segment else row.position + 1
+                    row.segment = segment
                 elif row.segment == 0 or row.separated:
                     row.segment, row.position = row.segment + 1, 0
                 else:

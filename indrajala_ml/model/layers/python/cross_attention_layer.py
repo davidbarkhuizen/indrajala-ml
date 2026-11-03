@@ -28,7 +28,6 @@ from typing import Any, ClassVar
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.attention_layer import (
     BLOCK,
-    AttentionCache,
     AttentionLayer,
     Masking,
     Matrix,
@@ -37,6 +36,19 @@ from indrajala_ml.model.layers.python.attention_layer import (
 )
 from indrajala_ml.model.layers.python.token_layer import WeightRow
 from indrajala_ml.model.protocols.layer_protocols import InputLayer, TrainableLayer
+
+
+class CrossAttentionCache:
+    """
+    One decode's memory keys K and values V per row, S rows of g * d_k each, computed once at
+    prefill from the context's memory (the cross-attention workplan, D7), and each row's memory
+    segments, or None.
+    """
+
+    def __init__(self) -> None:
+        self.K: list[Matrix] = []
+        self.V: list[Matrix] = []
+        self.segments: list[list[int] | None] = []
 
 
 class CrossAttentionLayer(AttentionLayer):
@@ -79,9 +91,9 @@ class CrossAttentionLayer(AttentionLayer):
         self._memory_segments: list[int] | None = None
         self._dM: list[float] = []
 
-    def _memory_rows(self, context: ForwardContext) -> Matrix:
+    def _memory_rows(self, context: ForwardContext, n: int = 0) -> Matrix:
         assert context.memory is not None, "a CrossAttention reads the encoder's output, the context's memory (D2)"
-        row: Sequence[float] = context.memory[0]
+        row: Sequence[float] = context.memory[n]
         d_m = self.memory_features
         assert len(row) == self.memory_tokens * d_m, (
             f"a CrossAttention's memory is {self.memory_tokens} tokens of {d_m}; got {len(row)} values"
@@ -89,12 +101,18 @@ class CrossAttentionLayer(AttentionLayer):
         return [list(row[s * d_m : (s + 1) * d_m]) for s in range(self.memory_tokens)]
 
     def _masking(self) -> Masking:
-        if self._segments is None and self._memory_segments is None:
+        return self._cross_masking(self.tokens, self._segments, self._memory_segments)
+
+    def _cross_masking(self, tokens: int, queries: list[int] | None, keys: list[int] | None) -> Masking:
+        if queries is None and keys is None:
             return Masking(False)
         # a side without segments: its every token in segment 1 (numpy's rule)
-        queries = [1] * self.tokens if self._segments is None else self._segments
-        keys = [1] * self.memory_tokens if self._memory_segments is None else self._memory_segments
-        return Masking(False, 0, (queries, keys), own_column=False)
+        return Masking(
+            False,
+            0,
+            ([1] * tokens if queries is None else queries, [1] * self.memory_tokens if keys is None else keys),
+            own_column=False,
+        )
 
     def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
         self._memory = self._memory_rows(context)
@@ -109,8 +127,40 @@ class CrossAttentionLayer(AttentionLayer):
         for node, value in zip(self.nodes, (value for row in out for value in row)):
             node.activate(value)
 
-    def start_decoding(self) -> AttentionCache:
-        raise NotImplementedError("a CrossAttention decodes with the source encoded once (D7): stage 8")
+    # decoding (the cross-attention workplan, D7, D15): each row's memory K and V computed once, at
+    # prefill, and every query, a prefill's or a step's, against them; never causal, so each query
+    # is the full pass's at its token, by bits
+
+    def start_decoding(self) -> CrossAttentionCache:  # pyright: ignore[reportIncompatibleMethodOverride]
+        return CrossAttentionCache()
+
+    def prefill(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, X: Matrix, cache: CrossAttentionCache, context: ForwardContext
+    ) -> Matrix:
+        keys: Any = context.memory_segments
+        for n in range(context.examples):
+            memory = self._memory_rows(context, n)
+            cache.K.append(_affine(memory, self.keys))
+            cache.V.append(_affine(memory, self.values))
+            cache.segments.append(None if keys is None else [int(s) for s in keys[n]])
+        return self._attend_cached(X, cache, context)
+
+    def step(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, x: Matrix, cache: CrossAttentionCache, context: ForwardContext
+    ) -> Matrix:
+        return self._attend_cached(x, cache, context)
+
+    def _attend_cached(self, X: Matrix, cache: CrossAttentionCache, context: ForwardContext) -> Matrix:
+        # each row's L queries against its cached keys and values
+        L = len(X) // context.examples
+        out: Matrix = []
+        for n in range(context.examples):
+            Q = _affine(X[n * L : (n + 1) * L], self.queries)
+            queries = None if context.segments is None else [int(s) for s in context.segments[n]]
+            masking = self._cross_masking(L, queries, cache.segments[n])
+            H, _m, _l = self._tiled((Q, cache.K[n], cache.V[n]), masking)
+            out += self._combine(H)
+        return out
 
     def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
         for own_index, node in enumerate(self.nodes):

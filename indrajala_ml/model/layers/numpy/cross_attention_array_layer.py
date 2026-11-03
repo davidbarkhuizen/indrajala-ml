@@ -22,6 +22,8 @@ the same order, again in the backward pass.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
@@ -29,7 +31,6 @@ from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.numpy.attention_array_layer import (
     BLOCK,
     AttentionArrayLayer,
-    AttentionCache,
     Masking,
     Segments,
     exp,
@@ -37,6 +38,18 @@ from indrajala_ml.model.layers.numpy.attention_array_layer import (
     tiled_forward,
 )
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import sum_rows
+
+
+class CrossAttentionCache:
+    """
+    One decode's memory keys K and values V, (N, g, S, d_k) each, computed once at prefill from the
+    context's memory (the cross-attention workplan, D7), and the memory's segments, (N, S), or None.
+    """
+
+    def __init__(self) -> None:
+        self.K: FloatArray | None = None
+        self.V: FloatArray | None = None
+        self.segments: Segments | None = None
 
 
 class CrossAttentionArrayLayer(AttentionArrayLayer):
@@ -87,25 +100,30 @@ class CrossAttentionArrayLayer(AttentionArrayLayer):
     def _masking(self, query_segments: Segments | None, key_segments: Segments | None, offset: int = 0) -> Masking:
         return Masking(False, offset, None, query_segments, key_segments, own_column=False)
 
-    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+    def _memory_keys(self, context: ForwardContext) -> tuple[FloatArray, FloatArray, FloatArray]:
+        # the context's memory as (N * S, d_m) rows, and its K and V heads, (N, g, S, d_k)
         assert context.memory is not None, "a CrossAttention reads the encoder's output, the context's memory (D2)"
-        R = self._rows(X, self.features)
-        memory: FloatArray = np.asarray(context.memory, dtype=np.float64)
-        self._memory = self._rows(memory, self.memory_features)
-        Q = R @ self.Wq.T + self.bq
-        K = self._memory @ self.Wk.T + self.bk
-        V = self._memory @ self.Wv.T + self.bv
-        self._Q = self._heads(Q)
-        self._K, self._V = self._heads(K, self.memory_tokens), self._heads(V, self.memory_tokens)
-        queries, keys = context.segments, context.memory_segments
+        memory = self._rows(np.asarray(context.memory, dtype=np.float64), self.memory_features)
+        K = memory @ self.Wk.T + self.bk
+        V = memory @ self.Wv.T + self.bv
+        return memory, self._heads(K, self.memory_tokens), self._heads(V, self.memory_tokens)
+
+    def _cross_masking(self, examples: int, tokens: int, queries: Any, keys: Any) -> Masking:
+        # by segment alone; one side without segments has its every token in segment 1, the other's kept
         if (queries is None) != (keys is None):
-            # one side without segments: its every token in segment 1, the other's own kept
-            queries = np.ones(X.shape[0:1] + (self.tokens,), dtype=np.intp) if queries is None else queries
-            keys = np.ones(X.shape[0:1] + (self.memory_tokens,), dtype=np.intp) if keys is None else keys
-        self._masking_now = self._masking(
+            queries = np.ones((examples, tokens), dtype=np.intp) if queries is None else queries
+            keys = np.ones((examples, self.memory_tokens), dtype=np.intp) if keys is None else keys
+        return self._masking(
             None if queries is None else np.asarray(queries, dtype=np.intp),
             None if keys is None else np.asarray(keys, dtype=np.intp),
         )
+
+    def forward_batch(self, X: FloatArray, *, context: ForwardContext = NO_CONTEXT) -> FloatArray:
+        R = self._rows(X, self.features)
+        self._memory, self._K, self._V = self._memory_keys(context)
+        Q = R @ self.Wq.T + self.bq
+        self._Q = self._heads(Q)
+        self._masking_now = self._cross_masking(X.shape[0], self.tokens, context.segments, context.memory_segments)
         draw = None
         self._dropout_state = None
         if self.training and self.dropout > 0.0:
@@ -138,8 +156,36 @@ class CrossAttentionArrayLayer(AttentionArrayLayer):
         P[:, :, r0:r1] = exp(S - m) / l
         return P
 
-    def start_decoding(self) -> AttentionCache:
-        raise NotImplementedError("a CrossAttention decodes with the source encoded once (D7): stage 8")
+    # decoding (the cross-attention workplan, D7, D15): the memory's K and V computed once, at
+    # prefill, and every query, a prefill's or a step's, against them; never causal, so each query
+    # is the full pass's at its token
+
+    def start_decoding(self) -> CrossAttentionCache:  # pyright: ignore[reportIncompatibleMethodOverride]
+        return CrossAttentionCache()
+
+    def _attend_cached(self, X: FloatArray, cache: CrossAttentionCache, context: ForwardContext) -> FloatArray:
+        # the queries' (N * L, d) rows against the cached keys and values
+        assert cache.K is not None and cache.V is not None, "a decode starts with prefill"
+        N = context.examples
+        L = X.shape[0] // N
+        Q = self._heads(X @ self.Wq.T + self.bq, L)
+        queries = None if context.segments is None else np.asarray(context.segments, dtype=np.intp).reshape(N, L)
+        masking = self._cross_masking(N, L, queries, cache.segments)
+        H, _m, _l = tiled_forward(Q, cache.K, cache.V, self.scale, masking, self.block, None, self._keep)
+        return self._combine(self._side_by_side(H))
+
+    def prefill(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, X: FloatArray, cache: CrossAttentionCache, context: ForwardContext
+    ) -> FloatArray:
+        _memory, cache.K, cache.V = self._memory_keys(context)
+        keys = context.memory_segments
+        cache.segments = None if keys is None else np.asarray(keys, dtype=np.intp)
+        return self._attend_cached(X, cache, context)
+
+    def step(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, x: FloatArray, cache: CrossAttentionCache, context: ForwardContext
+    ) -> FloatArray:
+        return self._attend_cached(x, cache, context)
 
     def _backward(self, downstream: FloatArray) -> None:
         self.delta_batch = downstream

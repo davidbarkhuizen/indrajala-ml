@@ -25,6 +25,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any, ClassVar, Self
 
+from indrajala_ml.generation.decoder import Decoder, SpecialIds
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.cross_attention_layer import CrossAttentionLayer
 from indrajala_ml.model.layers.python.layer_major import LayerMajorBatch
@@ -37,7 +38,7 @@ from indrajala_ml.model.persistence.format2 import ENCODER_DECODER, NetworkFile
 from indrajala_ml.model.protocols.classification import argmax_first_occurrence
 from indrajala_ml.model.protocols.layer_protocols import TrainableLayer
 from indrajala_ml.model.specs.bounds import validate_batch, validate_class_count
-from indrajala_ml.model.specs.layer_specs import Dense, Embedding, EncoderDecoder, LayerSpec
+from indrajala_ml.model.specs.layer_specs import Dense, Embedding, EncoderDecoder, LayerSpec, Position, expand_specs
 from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -147,6 +148,53 @@ class EncoderDecoderBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLaye
 
     def classify_state(self, state: tuple[float, ...]) -> tuple[int, ...]:
         return tuple(argmax_first_occurrence(token) for token in self.predict_probabilities(state))
+
+    # decoding (the cross-attention workplan, D7, D15, D16)
+
+    def decoder(self, sources: Sequence[Sequence[int]]) -> Decoder:
+        """
+        EncoderDecoderNetwork.decoder's: a Decoder over the decoder's layers with sources, one a row,
+        left-padded to the source's window, encoded once, the memory in every decode pass's context.
+        """
+        S, source = self.source_tokens, self._source
+        assert sources and all(1 <= len(row) <= S for row in sources), (
+            f"each source has 1 to {S} ids, the source's window; got lengths {[len(row) for row in sources]}"
+        )
+        rows = [tuple(float(i) for i in [source.pad] * (S - len(row)) + list(row)) for row in sources]
+        encoder_context = self._context(rows, source, False)
+        encoder = LayerMajorBatch(self.source_input, self.encoder_layers, rows)
+        encoder.forward(context=encoder_context)
+        memory = encoder.outputs()
+        count = len(rows)
+
+        def context(segments: Any, positions: Any, examples: int, column: int) -> ForwardContext:
+            assert examples == count, f"a decode of {count} sources decodes {count} rows; got {examples}"
+            return ForwardContext(
+                segments=segments,
+                positions=positions,
+                examples=examples,
+                column=column,
+                memory=memory,
+                memory_segments=encoder_context.segments,
+            )
+
+        def full_pass(targets: Sequence[Sequence[int]]) -> list[list[float]]:
+            states = [
+                (*source_row, *(float(i) for i in target)) for source_row, target in zip(rows, targets, strict=True)
+            ]
+            return [row[-self.class_count :] for row in self._forward_batch_outputs(states)]
+
+        target = self._target
+        return Decoder(
+            self.decoder_layers,
+            self.target_tokens,
+            ids_input=lambda ids: [float(i) for i in ids],
+            rows=lambda out: [list(row) for row in out],
+            full_pass=full_pass,
+            context=context,
+            learned_positions=any(isinstance(spec, Position) for spec in expand_specs(self.spec.decoder)),
+            special=SpecialIds(target.separator, target.pad, separator_opens=True),
+        )
 
     # training
 

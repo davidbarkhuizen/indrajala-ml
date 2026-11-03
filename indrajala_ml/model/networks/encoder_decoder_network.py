@@ -34,13 +34,14 @@ from dataclasses import replace
 from typing import Any, ClassVar, Protocol, Self, runtime_checkable
 
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
+from indrajala_ml.generation.decoder import Decoder, SpecialIds
 from indrajala_ml.model.layers.array.array_layer_builder import build_encoder_decoder_layers
 from indrajala_ml.model.layers.forward_context import ForwardContext
 from indrajala_ml.model.persistence.format2 import ENCODER_DECODER, NetworkFile
 from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer, BackendArray
 from indrajala_ml.model.specs.array_network_shapes import TokenWiseOutput
 from indrajala_ml.model.specs.bounds import validate_class_count
-from indrajala_ml.model.specs.layer_specs import Dense, Embedding, EncoderDecoder, LayerSpec
+from indrajala_ml.model.specs.layer_specs import Dense, Embedding, EncoderDecoder, LayerSpec, Position, expand_specs
 from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import UpdateRule
@@ -177,6 +178,54 @@ class EncoderDecoderNetwork[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         for layer, activations in zip(decoder, decoded, strict=False):
             layer.accumulate_gradient_batch(activations, context=decoder_context)
         self.optimizer.step(self.layers, learning_rate, len(categories), clip_norm)
+
+    # decoding (the cross-attention workplan, D7, D15, D16)
+
+    def decoder(self, sources: Sequence[Sequence[int]]) -> Decoder:
+        """
+        A Decoder over the decoder's layers with sources, one a row, left-padded to the source's
+        window, encoded once: every decode pass's context carries their memory and its segments, and
+        each CrossAttention keeps the memory's keys and values from prefill on. The target's segments
+        are D13's (a separator opens its pair). Decode as many rows as sources (translate.py).
+        """
+        S, source = self.source_tokens, self._source
+        assert sources and all(1 <= len(row) <= S for row in sources), (
+            f"each source has 1 to {S} ids, the source's window; got lengths {[len(row) for row in sources]}"
+        )
+        rows = [[source.pad] * (S - len(row)) + list(row) for row in sources]
+        X = self.backend.matrix([[float(i) for i in row] for row in rows])
+        encoder_context = self.backend.segment_context(X, source.separator, source.pad)
+        memory = X
+        for layer in self.encoder_layers:
+            memory = layer.forward_batch(memory, context=encoder_context)
+        count = len(rows)
+
+        def context(segments: Any, positions: Any, examples: int, column: int) -> ForwardContext:
+            assert examples == count, f"a decode of {count} sources decodes {count} rows; got {examples}"
+            return replace(
+                self.backend.decode_context(segments, positions, examples, column),
+                memory=memory,
+                memory_segments=encoder_context.segments,
+            )
+
+        def full_pass(targets: Sequence[Sequence[int]]) -> list[list[float]]:
+            # each row's last target token's probabilities: one inference pass over source and target
+            states = self.backend.matrix(
+                [[float(i) for i in (*source_row, *target)] for source_row, target in zip(rows, targets, strict=True)]
+            )
+            return [row[-self.class_count :] for row in self._forward_batch(states).tolist()]
+
+        target = self._target
+        return Decoder(
+            self.decoder_layers,
+            self.target_tokens,
+            ids_input=lambda ids: self.backend.vector([float(i) for i in ids]),
+            rows=lambda out: out.tolist(),
+            full_pass=full_pass,
+            context=context,
+            learned_positions=any(isinstance(spec, Position) for spec in expand_specs(self.spec.decoder)),
+            special=SpecialIds(target.separator, target.pad, separator_opens=True),
+        )
 
     # the targets: one class per target token, as a sequence network's
 

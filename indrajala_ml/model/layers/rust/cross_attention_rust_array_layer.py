@@ -32,6 +32,18 @@ from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.specs.hidden_layers import Hidden
 
 
+class CrossAttentionRustCache:
+    """
+    One decode's memory keys K and values V, (N * S, g * d_k) each, computed once at prefill from the
+    context's memory (the cross-attention workplan, D7, D17), and the memory's segments, or None.
+    """
+
+    def __init__(self) -> None:
+        self.K: pa.Array | None = None
+        self.V: pa.Array | None = None
+        self.segments: pa.Array | None = None
+
+
 class CrossAttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Array]):
     """
     Per example, tokens tokens of features features (d) attending to memory_tokens memory tokens
@@ -121,6 +133,49 @@ class CrossAttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Arr
     def forward(self, x: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         # one example: a batch of one
         return self.forward_batch(x.reshape((1, self.size)), context=context).reshape(self.size)
+
+    # decoding (the cross-attention workplan, D7, D15, D17): the memory's K and V computed once, at
+    # prefill, through project's products; every query, a prefill's or a step's, against them in the
+    # crate's attend op, each its full pass's bits at its token
+
+    def start_decoding(self) -> CrossAttentionRustCache:
+        return CrossAttentionRustCache()
+
+    def prefill(self, X: pa.Array, cache: CrossAttentionRustCache, context: ForwardContext) -> pa.Array:
+        assert context.memory is not None, "a CrossAttention reads the encoder's output, the context's memory (D2)"
+        memory: pa.Array = context.memory
+        rows = memory.reshape((context.examples * self.memory_tokens, self.memory_features))
+        cache.K = pa.affine_forward_batch(self.Wk, rows, self.bk)
+        cache.V = pa.affine_forward_batch(self.Wv, rows, self.bv)
+        cache.segments = context.memory_segments
+        return self._attend_cached(X, cache, context)
+
+    def step(self, x: pa.Array, cache: CrossAttentionRustCache, context: ForwardContext) -> pa.Array:
+        return self._attend_cached(x, cache, context)
+
+    def _attend_cached(self, X: pa.Array, cache: CrossAttentionRustCache, context: ForwardContext) -> pa.Array:
+        # the queries' (N * L, d) rows against the cached keys and values
+        assert cache.K is not None and cache.V is not None, "a decode starts with prefill"
+        N = context.examples
+        L = X.shape[0] // N
+        queries, keys = context.segments, cache.segments
+        if queries is not None or keys is not None:
+            queries = pa.Array([[1.0] * L for _ in range(N)]) if queries is None else queries
+            keys = pa.Array([[1.0] * self.memory_tokens for _ in range(N)]) if keys is None else keys
+        A = pa.cross_attention_attend_batch(
+            X.reshape((N, L * self.features)),
+            cache.K,
+            cache.V,
+            self.Wq,
+            self.bq,
+            self.Wo,
+            self.bo,
+            heads=self.heads,
+            key_value_heads=self.key_value_heads,
+            segments=queries,
+            memory_segments=keys,
+        )
+        return A.reshape((N * L, self.features))
 
     def _backward(self, delta: pa.Array) -> None:
         self._dX, self._dM, self._dQ, self._dK, self._dV = pa.cross_attention_downstream_batch(
