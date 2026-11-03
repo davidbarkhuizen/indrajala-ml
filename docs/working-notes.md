@@ -96,6 +96,18 @@ where you meet a new trap; delete one that no longer holds.
 
 ## Tests and lint
 
+- **A new network or layer class meets the registry walks, which enumerate every class:**
+  `test_seeded_init_parity.py` (every array network has a Rust twin and parity),
+  `test_prepared_dataset.py` (every array network has a constructor there),
+  `test_legacy_saved_models.py` (every saveable class has a fixture), `test_format2.py`'s
+  `SEQUENTIAL` table (the class `load_network` builds per implementation and shape), and
+  `test_window_program_network.py` (every Rust token layer class a window holds has an op). They
+  live in `tests/data/` as well as `tests/model/`: before a PR adding a class, run both, or the PR
+  fails in CI (#1224, 2026-11-03). Give a class a real entry where it can have one; where it can't
+  yet (a numpy-only class before its Rust stage), a named exception set with its reason and stage.
+- **A saved-model fixture is written on a runner,** `python -m tests.saved_model_fixtures` in the
+  branch's worktree there (it writes only the missing ones), then copied back with rsync.
+
 - **`./cli test` takes 5-10 minutes** (no pytest-xdist): run it in the background and let its own
   completion notify you. Read the summary line (`= N failed, M passed =`), never the exit code of
   `cmd > log; tail log`.
@@ -180,6 +192,9 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   while a suite runs: tests that start subprocesses import it again.
 
 ## Machines
+
+- **`./cli build-rust` over ssh can't find rustup** (`rustup not found`): a non-interactive ssh
+  shell lacks `~/.cargo/bin` on `PATH`. Run `. ~/.cargo/env` first (jebel, 2026-11-03).
 
 - **`sudo` needs a password on `jebel`, `stone` and `klip`; `litshe` alone has passwordless sudo.**
   An agent can't sudo on the first three, and the owner's `! ssh -t host sudo ...` fails too (a `!`
