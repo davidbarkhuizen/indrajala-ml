@@ -28,6 +28,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from indrajala_ml.data.parallel_data import (
     PARALLEL_CORPORA,
     Pair,
@@ -119,7 +121,7 @@ def network(data: ParallelDataset, seed: int, backend: str = "rust", blocks: int
 
 def parameters(net: Any) -> int:
     """The network's trained values."""
-    return sum(math.prod(getattr(part, "shape", (len(part),))) for entry in net.snapshot() for part in entry)
+    return sum(int(np.asarray(part.tolist()).size) for entry in net.snapshot() for part in entry)
 
 
 def validation_pairs(corpus: str) -> list[Pair]:
