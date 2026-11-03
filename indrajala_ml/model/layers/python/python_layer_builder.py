@@ -15,6 +15,7 @@ from indrajala_ml.model.layers.python.attention_layer import AttentionLayer
 from indrajala_ml.model.layers.python.backprop_layer import BackpropLayer
 from indrajala_ml.model.layers.python.batch_norm_layer import BatchNormLayer
 from indrajala_ml.model.layers.python.conv_layer import ConvLayer, ConvSpec
+from indrajala_ml.model.layers.python.cross_attention_layer import CrossAttentionLayer
 from indrajala_ml.model.layers.python.cross_entropy_output_layer import CrossEntropyOutputLayer
 from indrajala_ml.model.layers.python.dropout_layer import make_dropout_layer_cls
 from indrajala_ml.model.layers.python.gelu_layer import GELULayer, GELUTanhLayer
@@ -41,9 +42,11 @@ from indrajala_ml.model.specs.layer_specs import (
     Add,
     Attention,
     BatchNorm,
+    CrossAttention,
     Dense,
     Dropout,
     Embedding,
+    EncoderDecoder,
     Fork,
     GatedDense,
     LayerNorm,
@@ -54,8 +57,20 @@ from indrajala_ml.model.specs.layer_specs import (
     TokenMean,
     expand_specs,
 )
-from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, image_shape, spec_shapes, token_shape
-from indrajala_ml.model.specs.spec_validation import validate_layer_specs, validate_window_specs
+from indrajala_ml.model.specs.spec_shapes import (
+    InputShape,
+    Shape,
+    SpecShape,
+    encoder_decoder_shapes,
+    image_shape,
+    spec_shapes,
+    token_shape,
+)
+from indrajala_ml.model.specs.spec_validation import (
+    validate_encoder_decoder,
+    validate_layer_specs,
+    validate_window_specs,
+)
 
 
 def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
@@ -125,10 +140,33 @@ def build_python_layers(
         validate_layer_specs(specs)
     else:
         validate_window_specs(specs, input_shape)
-    shapes = spec_shapes(specs, input_shape)
     assert math.prod(input_shape) == len(input_layer.nodes), (
         f"input_shape {input_shape} doesn't match the input layer's {len(input_layer.nodes)} nodes"
     )
+    return _build_layers(specs, spec_shapes(specs, input_shape), input_layer, state_size)
+
+
+def build_python_encoder_decoder_layers(
+    spec: EncoderDecoder, source_tokens: int, target_tokens: int, source: InputLayer, target: InputLayer
+) -> tuple[list[TrainableLayer], list[TrainableLayer]]:
+    """
+    spec, validated (validate_encoder_decoder), as pure-Python layers (the cross-attention workplan,
+    D2, D14): the encoder's reading source, source_tokens ids, then the decoder's reading target,
+    target_tokens ids, each CrossAttention over the encoder's output, its memory_shape
+    (encoder_decoder_shapes), which its forward context carries.
+    """
+    validate_encoder_decoder(spec)
+    encoder_shapes, decoder_shapes = encoder_decoder_shapes(spec, source_tokens, target_tokens)
+    return (
+        _build_layers(spec.encoder, encoder_shapes, source, None),
+        _build_layers(spec.decoder, decoder_shapes, target, None),
+    )
+
+
+def _build_layers(
+    specs: Sequence[LayerSpec], shapes: Sequence[SpecShape], input_layer: InputLayer, state_size: int | None
+) -> list[TrainableLayer]:
+    # the layers of validated specs over their shape walk's shapes
 
     layers: list[TrainableLayer] = []
     previous = input_layer
@@ -159,6 +197,19 @@ def build_python_layers(
             layer = GatedDenseLayer(previous, spec.size, shape.input_shape[0], spec.activation)
         elif isinstance(spec, Dense):
             layer = _dense_layer(spec, previous)
+        elif isinstance(spec, CrossAttention):
+            assert shape.memory_shape is not None, "a CrossAttention's shape has the memory's (encoder_decoder_shapes)"
+            tokens, features = token_shape(shape.input_shape)
+            layer = CrossAttentionLayer(
+                previous,
+                tokens,
+                features,
+                *shape.memory_shape,
+                spec.heads,
+                spec.head_size(features),
+                spec.key_value_heads,
+                spec.dropout,
+            )
         elif isinstance(spec, Patches | Embedding | Position | LayerNorm | Attention | Dropout | TokenMean):
             layer = _token_layer(spec, shape.input_shape, previous)
         elif isinstance(spec, BatchNorm):

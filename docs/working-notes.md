@@ -105,6 +105,10 @@ where you meet a new trap; delete one that no longer holds.
   live in `tests/data/` as well as `tests/model/`: before a PR adding a class, run both, or the PR
   fails in CI (#1224, 2026-11-03). Give a class a real entry where it can have one; where it can't
   yet (a numpy-only class before its Rust stage), a named exception set with its reason and stage.
+- **`golden_training_run.py archive` on jebel pushes its branch but can't open the PR:** jebel's
+  `gh` isn't logged in (HTTP 401). Open and merge the indrajala-benchmarks PR from pyramidon (`gh
+  pr create --repo davidbarkhuizen/indrajala-benchmarks --head archive-...`), then pull on jebel
+  and delete its local branch (2026-11-03, #65).
 - **A saved-model fixture is written on a runner,** `python -m tests.saved_model_fixtures` in the
   branch's worktree there (it writes only the missing ones), then copied back with rsync.
 
