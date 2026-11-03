@@ -394,6 +394,14 @@ What to do next:
   both sides); an A/A of one commit showed nothing over 1.3%. The shift is fixed per build, so an
   A/A can't show it and an extend doesn't remove it. Before reading those rows as a change's, A/B
   a probe branch: the old commit with the new code added unused.
+- **A crate build alone moves single Rust `attention_timing` rows by about 2%.** The
+  cross-attention ops' bump (#1227, 2026-11-03), whose self-attention arithmetic is unchanged,
+  showed Rust forward T=256 causal +2.3% and backward T=1024 causal -2.5%, both consistent after an
+  extend. A probe crate (`bb05ca1` with the new attention module added as a second module, unused
+  by self-attention: indrajala-math-rust's `probe-cross-layout`, `67de7c7`) moved neither of those
+  rows, but moved others up to 2.0% (backward T=1024 causal +1.3%). A lone consistent Rust row near
+  2%, in a crate change that leaves its path's arithmetic alone, is a build's shift unless a probe
+  of the touched function shows otherwise.
 
 - **`ab.py run` checks the machine profile before the load** (fixed 2026-10-14; it was the other
   way round): a host with no profile, or a changed identity, is refused at once, not after waiting
