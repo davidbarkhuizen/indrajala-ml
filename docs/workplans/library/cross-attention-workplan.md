@@ -308,7 +308,15 @@ Each lists the options considered, with pros and cons, and the choice.
      source's and target's ids; the reader makes `NetworkFile.layers` the encoder's then the
      decoder's, with `encoder_length` and `source_tokens`, which `check_loadable` compares;
      `load_network` builds the numpy network. A saved-model fixture pins the file. Stage 4 done.
-5. **The crate**: the key/value input through the attention ops; "Bump rust/" with its A/B.
+5. **The crate**: the key/value input through the attention ops; "Bump rust/" with its A/B. Done
+   2026-11-03 (indrajala-math-rust#95, #1227): `cross_attention_forward_batch`,
+   `cross_attention_downstream_batch` and `cross_attention_accumulate_gradient_batch`, ops of
+   their own beside `attention_*`, since cross-attention returns the memory's gradient as well and
+   takes neither `causal` nor rotary tables. `Masking.own_column`, the empty-row guard (H = 0,
+   P = 0) and a key/value input to `project` are shared with self-attention, whose bits don't move.
+   The memory's gradient is returned as `(N * S, d_m)` rows, as `memory_downstream_batch`. Tests
+   compare by bits against the crate's tiled composition, and the crate's bits fixture gains one
+   cross-attention line.
 6. **Rust layers**; 7. **Pure Python**; parity.
 8. **Decoding** (D7) and chrF (D6).
 9. **Fixtures, checkpoints and golden entries** (D8).
