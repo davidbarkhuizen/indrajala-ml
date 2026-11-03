@@ -63,8 +63,10 @@ bits.
     done (2026-11-02), in all three implementations and the crate (README, Layer norm and
     attention); the study was abandoned for a literature review, which keeps multi-head the
     default (next-steps, From grouped-query attention).
-15. **Cross-attention**, with an encoder-decoder model on Greek-English translation; planned
-    (2026-10-10, [cross-attention-workplan.md](workplans/library/cross-attention-workplan.md)).
+15. **Cross-attention**, with an encoder-decoder model on Greek-English translation; done
+    (2026-11-03), in all three implementations and the crate, with decoding and chrF (README,
+    Cross-attention and the encoder-decoder); its study was decided from the literature, which
+    keeps the encoder-decoder the translation model (next-steps, From cross-attention).
 
 Steps 7 to 13 were ordered by the owner on 2026-10-10 from the candidates the multi-head attention
 and sequence task workplans left (next-steps.md). The same day the owner chose a key/value cache

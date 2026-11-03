@@ -758,8 +758,8 @@ adds `Wo bv` to every output, as `bo` can, since each row of every `P[i]` sums t
 Every implementation's attention layer, and the crate, is the same three blocks per pass, project,
 attend and combine, each tested on its own; the causal mask and dropout on `P` sit in attend (The sequence task,
 Dropout among the tokens), grouped key/value heads in project and attend (below), and padding
-masks and cross-attention each have a named place among them (next-steps.md, From multi-head
-attention).
+masks have a named place among them (next-steps.md, From multi-head attention), and cross-attention
+is attend over a second input's keys and values (Cross-attention and the encoder-decoder).
 On Rust each layer-norm and attention pass is still one crate call, the attention ops thin
 wrappers over the crate's blocks, and the token-wise dense layer is the existing dense ops on the
 `(N * T, d)` view. A dense layer's hidden delta reads the next
@@ -1137,6 +1137,51 @@ same ratio", "the same multiple of A that DE is of DE". The sense does not hold 
 words: at this size (2 layers, 64 characters of context) three times the training under the
 recipe gained 0.106 bits on Tiny Shakespeare and 0.018 on Euclid. The models are in pyramidon's gitignored
 `data/studies/lr-schedule/sweep/models/`.
+
+## Cross-attention and the encoder-decoder
+
+An encoder-decoder (roadmap step 15; Vaswani et al. 2017) reads a source in one stack and writes a
+target in another, the decoder's `CrossAttention` layers attending from each target token to the
+encoder's output, its memory: translation, on Greek-English pairs.
+
+```python
+data = parallel_data.load_parallel_dataset("histories", window=1024)  # pairs packed into windows
+spec = EncoderDecoder(
+    (Embedding(len(data.source) + 2, 128, segments=True), Residual((LayerNorm(), Attention(heads=4))), LayerNorm()),
+    (
+        Embedding(len(data.target) + 2, 128, segments=True, separator_opens=True),
+        Residual((LayerNorm(), Attention(heads=4, causal=True))),
+        Residual((LayerNorm(), CrossAttention(heads=4))),
+        LayerNorm(),
+        Dense(len(data.target) + 1, "softmax", output=True, loss="cross_entropy"),
+    ),
+)
+network = EncoderDecoderRustArrayNetwork.randomized(spec, 1024, 1024, Adam(), seed=0)
+```
+
+- **Data:** each window holds whole pairs: the source each pair's Greek followed by the separator,
+  the target row the separator then each pair's English followed by one (the decoder reads the
+  row less its last token and predicts it less its first). Pair k is segment k on both sides: a
+  separator ends its pair in the source and opens it in the target (`separator_opens`), so every
+  English character is predicted from its own pair's Greek.
+- **`CrossAttention(heads, key_size, key_value_heads, dropout)`** stands in a decoder block, never
+  causal or rotary. Its queries come from the decoder's tokens, its keys and values from the memory,
+  whose width may differ. It masks by segment alone: a target token reads only its own pair's
+  source, and a pad's query reads none (its output is the bias). The network sums the memory's
+  gradient over its `CrossAttention` layers and runs it back through the encoder.
+- **All three implementations** train, save (format 2's `"encoder_decoder"` shape), load,
+  checkpoint and decode it: `EncoderDecoderArrayNetwork` (numpy), `EncoderDecoderRustArrayNetwork`
+  (the crate's `cross_attention_*` ops) and `EncoderDecoderBackpropNetwork` (pure Python).
+- **Decoding:** `network.decoder(sources)` encodes the sources once, and each `CrossAttention`
+  keeps the memory's keys and values from prefill on. `generation.translate.translate` decodes
+  each row from one separator to the next. A decode is the full pass token by token: by bits on
+  Rust and in pure Python, within rounding on numpy.
+- **Evaluation:** `training.translation_evaluate` gives bits per character under teacher forcing
+  and chrF (`generation.chrf`, sacreBLEU 2.x's default, reproduced to 1e-12) of greedy and sampled
+  translations.
+- **When to use it:** for a task with a source to read and a target to write. The literature
+  favours it over a decoder-only model that reads the source as a prefix, most at small scale
+  (next-steps.md, From cross-attention).
 
 ## Segments
 

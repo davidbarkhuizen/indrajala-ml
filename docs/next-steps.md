@@ -85,6 +85,7 @@ docs cite them by section:
 | Grouped- and multi-query attention (roadmap step 14, D1-D13; its study abandoned for the literature) | #645 | #1189-#1197, crate #93, this PR | `git show 3a09724:docs/workplans/library/grouped-query-attention-workplan.md` |
 | Paper 1: learning finite-state transducers through their approximations, with proof (D1-D39; retired 2026-11-03 after the preprint, doi:10.5281/zenodo.23826655) | indrajala-research's | T1-T12, R1-R9; datapack doi:10.5281/zenodo.23733575; tags `paper1-v1` to `paper1-v1.2` | `git show 0d1aaef:docs/workplans/paper-workplan.md` in indrajala-research |
 | The implementation audit's remedies (§16; D1-D11) | #1202, #1203 | #1204-#1212, crate #94, studies #15, research #139, this PR | `git show 85d1705:docs/workplans/library/audit-remedies-workplan.md` |
+| Cross-attention: the encoder-decoder on Greek-English translation (roadmap step 15, D1-D18; its study decided from the literature) | #646 | #1219-#1236, crate #95, #96, this PR | `git show 2a512fb:docs/workplans/library/cross-attention-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -101,6 +102,47 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From cross-attention (retired 2026-11-03)
+
+Done: the parallel dataset (indrajala-datasets-perseus-parallel, tag `v2026-11-03.2`: the
+histories and Plutarch's *Lives*) and its loader of packed pairs (D4, D11, D13);
+`CrossAttention` and `EncoderDecoder` specs and format 2's `"encoder_decoder"` shape (D14); the
+encoder-decoder in numpy, Rust and pure Python, the crate's `cross_attention_*` ops (crate #95,
+#96), seeded draws numpy's by bits and training within rounding (D2, D3); decoding with the
+source encoded once and each `CrossAttention`'s keys and values cached (D7, D15-D17); chrF and
+the translation evaluation (D6); fixtures and golden entries (D8).
+
+**The study (D9) was decided from the literature (D18), not run** (the owner, 2026-11-03, as for
+grouped-query attention). The encoder-decoder stays the translation model:
+- Raffel et al. 2020 (T5, §3.2): at equal parameters and compute, the shared encoder-decoder beats
+  the prefix LM (En-De BLEU 26.72 against 26.43; the unshared 2P one 26.98).
+- Zhang et al. 2022 (MT): the architectures differ most at small scale, with EncDec ahead, and
+  "small on-device models should continue using EncDec"; a prefix LM with full visibility of the
+  source approaches EncDec as models grow.
+- Gao et al. 2022: a concatenated translation LM matches it when tuned, but decodes through the
+  whole network over a longer sequence.
+- Fu et al. 2023: a decoder-only model's attention to the source fades as generation proceeds.
+
+Sources (indrajala-literature): `raffel-2020-exploring-limits-transfer-t5`,
+`zhang-2022-scaling-transfer-lm-architectures-mt`, `gao-2022-encoder-decoder-redundant-nmt`,
+`fu-2023-decoder-only-or-encoder-decoder`. Left:
+
+- **The encoder-decoder has never trained on the corpora:** only in the tests and the golden run.
+  A first real training run (one seed, one corpus, bits per character and chrF on the held-out
+  Lives or books) is the step before any translation claim. Its width and heads are D12's: `d` 128
+  to 256 from the corpora's 6M characters a side, `d_k` at least 32.
+- **A decoder-only translation model (D18 (c)):** the Greek as a prefix, the loss on the English
+  only (counted targets by position, not only "not a pad"), when a question needs the comparison.
+- **D10's out-of-scope items:** pretraining the encoder on Greek alone, a BPE tokenizer over both
+  scripts, beam search.
+- **Batched cross-attention steps:** each step attends from the cached keys and values in one call
+  a pass (crate `cross_attention_attend_batch`), but the decoder's self-attention steps row by row
+  on Rust and in pure Python, as step 9's do.
+- **No benchmark times cross-attention:** `attention_timing` times self-attention only; a change to
+  the `cross_attention_*` ops has nothing to A/B against until one is added (measurement.md).
+- **A build alone moves single Rust `attention_timing` rows by about 2%** (measurement.md §7; the
+  probe crate `probe-cross-layout` in indrajala-math-rust is that note's reference).
 
 ## From the audit remedies (retired 2026-11-03)
 
