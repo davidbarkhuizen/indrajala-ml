@@ -200,13 +200,53 @@ def run(
         result["validation_bits"].append(bits(teacher_forced(net, data.validation, pad)[0]))
         result["train_bits"].append(bits(teacher_forced(net, train_sample, pad)[0]))
         path.write_text(json.dumps(result, indent=1))
+        # the network after every epoch, so a stopped or inspected run loses nothing
+        network_path = out / f"{corpus}-seed{seed}-blocks{blocks}.network.json"
+        network_path.with_suffix(".partial").write_text(json.dumps(network_to_json(net)))
+        network_path.with_suffix(".partial").rename(network_path)
     pairs = validation_pairs(corpus)[:sample]
     hypotheses = translations(net, pairs, data.source, data.target, Sampler(temperature=0.0), random.Random(seed))
     result["chrf_greedy"] = chrf(hypotheses, [pair.eng for pair in pairs])
     result["translations"] = [{"grc": p.grc, "eng": p.eng, "out": h} for p, h in zip(pairs, hypotheses, strict=True)]
     path.write_text(json.dumps(result, indent=1))
-    (out / f"{corpus}-seed{seed}-blocks{blocks}.network.json").write_text(json.dumps(network_to_json(net)))
     return result
+
+
+def swapped_sources(windows: Sequence[PairWindow]) -> list[PairWindow]:
+    """
+    Each window with another's source of as many pairs (the next such window, cyclically), so every
+    target pair still has a source segment to read, but not its own; a window alone in its pair
+    count keeps its source.
+    """
+    groups: dict[int, list[int]] = {}
+    for i, window in enumerate(windows):
+        groups.setdefault(window.pairs, []).append(i)
+    out = list(windows)
+    for indices in groups.values():
+        for k, i in enumerate(indices):
+            donor = windows[indices[(k + 1) % len(indices)]]
+            out[i] = PairWindow(donor.source, windows[i].target, windows[i].pairs)
+    return out
+
+
+def source_ablation(network_path: Path, corpus: str) -> dict[str, Any]:
+    """A trained network's validation bits per character with each window's own source, then with another's."""
+    from indrajala_ml.model.persistence.load_network import load_network
+
+    data = load_parallel_dataset(corpus, WINDOW)
+    net = load_network(str(network_path))
+    pad = len(data.target) + 1
+    swapped = swapped_sources(data.validation)
+    kept = sum(a.source == b.source for a, b in zip(data.validation, swapped, strict=True))
+    own = bits(teacher_forced(net, data.validation, pad)[0])
+    other = bits(teacher_forced(net, swapped, pad)[0])
+    return {
+        "own_source_bits": own,
+        "other_source_bits": other,
+        "gap": other - own,
+        "windows": len(swapped),
+        "unswapped": kept,
+    }
 
 
 OUT = STUDIES_DIR / STUDY
