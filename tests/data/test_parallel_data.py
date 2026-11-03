@@ -138,10 +138,10 @@ def test_training_windows_are_packed_anew_each_epoch_reproducibly(tmp_path: Path
 def test_the_corpora_pack_at_1024(corpus: str):
     dataset = load_parallel_dataset(corpus)
     pairs = len(dataset.train.pairs) + sum(w.pairs for w in dataset.validation + dataset.test) + len(dataset.dropped)
-    assert pairs == {"histories": 14_602, "new-testament": 7_908}[corpus]
-    # the alignment report's 68 pairs over 1,024 (a side longer than the window), and 2 of exactly 1,024,
-    # whose separator overflows it
-    assert len(dataset.dropped) == {"histories": 70, "new-testament": 0}[corpus]
+    assert pairs == {"histories": 13_122, "lives": 9_794}[corpus]
+    # the alignment report's pairs over 1,024 (a side longer than the window: 66 and 4), and 2 of the
+    # histories' of exactly 1,024, whose separator overflows it
+    assert len(dataset.dropped) == {"histories": 68, "lives": 4}[corpus]
     assert all(max(len(p.grc), len(p.eng)) >= 1024 for p in dataset.dropped)
     for window in dataset.validation[:5] + dataset.train.epoch(Random(0))[:5]:
         assert len(window.source) == 1024 and len(window.target) == 1025

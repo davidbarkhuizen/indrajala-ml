@@ -4,15 +4,16 @@
 production (the owner's direction, 2026-10-10). Revised 2026-11-03 at the owner's direction (windows
 of 1,024, more texts): D4 rewritten on a measurement of Perseus's parallel texts, D11 new (packed
 pairs), D3 and D9 amended to match; D12 (the model's width and head size) left to the study's
-registration. Stage 1 (this plan) done. Stage 2 (2026-11-03): the dataset repository at its tag
-`v2026-11-03` (14,602 pairs of the histories, 7,908 of the New Testament; its `report.md` the
-alignment report), its fetch entry and the loader of packed pairs here (D13 new: a packed pair's
-layout).**
+registration. Stage 1 (this plan) done. Stage 2 (2026-11-03): the dataset repository, its fetch
+entry and the loader of packed pairs here (D13 new: a packed pair's layout). The same day, at the
+owner's direction, D4's second corpus became Plutarch's *Lives* in place of the New Testament, and
+Pausanias was dropped: the repository at `v2026-11-03.2` (13,122 pairs of the histories, 9,794 of
+the *Lives*; its `report.md` the alignment report).**
 
 Roadmap step 15 ([primitives-roadmap.md](../../primitives-roadmap.md)): attention from one sequence to
 another, and the encoder-decoder transformer it builds (Vaswani et al. 2017, §3.1, §3.2.3), on a
-real translation task: Greek to English, the Greek historians and the New Testament aligned
-section by section and verse by verse from Perseus's parallel texts (D4). All three implementations
+real translation task: Greek to English, the Greek historians and Plutarch's *Lives* aligned
+section by section from Perseus's parallel texts (D4). All three implementations
 and the crate.
 
 ## Why
@@ -94,59 +95,58 @@ Each lists the options considered, with pros and cons, and the choice.
 
   - (a) *Chosen.* A new repository, `indrajala-datasets-perseus-parallel` (the owner's to create).
     Its `clean.py` builds pairs from the pinned commit at the deepest citation both files share,
-    cleaned as the corpora are. Two corpora:
-    - **The histories:** Herodotus (Godley), Thucydides (one translation, the one the cleaner
-      measures as aligning best of Jowett and Crawley, before Hobbes's seventeenth-century
-      English), Pausanias, Xenophon's *Anabasis*, *Hellenica* and *Cyropaedia*, and Diogenes
-      Laertius. About 14,800 pairs and 5.4M Greek characters.
-    - **The New Testament:** all 27 books, Westcott-Hort's Greek with the World English Bible, verse
-      by verse. About 7,900 pairs, most under 256 characters.
+    cleaned as the corpora are. Two corpora (revised 2026-11-03, the owner: the New Testament
+    dropped, Pausanias dropped rather than kept in a private repository, Plutarch's *Lives* in
+    Perrin's translation as the second corpus):
+    - **The histories:** Herodotus (Godley), Thucydides (the translation the cleaner measures as
+      aligning best), Xenophon's *Anabasis*, *Hellenica* and *Cyropaedia*, and Diogenes Laertius.
+    - **The *Lives*:** Plutarch's *Parallel Lives* with their comparisons, 66 works, Perrin's Greek
+      and English (Loeb, 1914-26).
 
-    Plutarch's *Lives* and the orators (138 Plutarch works and 63 Demosthenes speeches have both
-    texts) are a reserve for scale, not built now.
+    The orators (63 Demosthenes speeches have both texts) are a reserve for scale, not built.
 
-    **Built (stage 2, 2026-11-03),** `indrajala-datasets-perseus-parallel` at `v2026-11-03`; its
+    **Built (stage 2, 2026-11-03),** `indrajala-datasets-perseus-parallel` at `v2026-11-03.2`; its
     `report.md` is the alignment report and its `LICENSE-TEXT.md` the licence check per volume.
-    - **The histories:** 14,602 pairs, 4.75M Greek and 5.76M English characters.
-    - **The New Testament:** 7,908 pairs.
+    - **The histories:** 13,122 pairs, 4.08M Greek and 5.00M English characters (train 11,753,
+      validation 737, test 632).
+    - **The *Lives*:** 9,794 pairs, 3.30M Greek and 4.22M English characters (train 8,841,
+      validation 507, test 446). Every unit aligns after renames in *Solon*, *Camillus* and
+      *Demetrius*.
     - **Thucydides:** Jowett's translation isn't at the pinned commit. Of the three that are
       (Crawley, C. F. Smith, Dale), Crawley aligns best.
-    - **Pausanias:** Books 1-5 only. Books 6-10 are Jones's volumes of 1933 and 1935, whose
-      copyright wasn't checked. Books 1-5 (1918, 1926) are in the US public domain, but under
-      life-plus-70 terms only from 2034 and 2035, and the repository says so.
-    - **Splits:** each held-out book is cut at its middle pair into validation, then test.
-    - **The New Testament's texts differ:** the WEB translates the Majority Text, not
-      Westcott-Hort, so some English has no Greek behind it.
+    - **Splits** hold out whole books of the histories, a different book of each work, and two
+      pairs of *Lives* whole with their comparisons (*Pericles* and *Fabius Maximus*, *Timoleon*
+      and *Aemilius Paulus*). Each held-out book or Life is cut at its middle pair into
+      validation, then test. The report finds no near-duplicates across the split.
+    - **Dropped from the first build (`v2026-11-03`):**
+      - **The New Testament:** the WEB translates the Majority Text, not Westcott and Hort's.
+      - **Pausanias:** his translation is in copyright under life-plus-70 terms until 2034 and 2035.
 
-    **Splits** hold out whole books, a different book of each work. The New Testament's synoptic
-    gospels share passages, so they hold out together or not at all, and the alignment report lists
-    the near-duplicate pairs across the split.
-
-    **Licences:** Perseus's encodings are CC BY-SA 4.0. Each translation's copyright is checked
-    per volume and recorded in the repository before it is included: public domain in the United
-    States if published before 1931 (Godley 1920-25, Brownson, Miller, Hicks, Perrin, Hobbes and
-    Jowett are), the World English Bible public domain. Jones's later Pausanias volumes (1933-35)
-    and terms outside the US (the translator's life plus 50 or 70 years) are to check.
+    **Licences:** Perseus's encodings are CC BY-SA 4.0. Each translation's copyright was checked per
+    volume and recorded in the repository. Every one here is in the public domain in the United
+    States and under terms of life plus 70 years: Godley, Crawley, Brownson, Miller, Hicks and
+    Perrin.
 
     Pros:
-    - Real parallel text in two registers (Attic and Ionic narrative; Koine), aligned by citation,
-      with no statistical aligner.
-    - About ten times the first plan's pairs, every pair fitting a 1,024 window.
+    - Real parallel text, aligned by citation, with no statistical aligner.
+    - About eleven times the first plan's pairs, nearly every pair fitting a 1,024 window.
     - A size that supports a model of a few hundred thousand to a million parameters, which the
       ~1M-character corpora don't.
-    - The New Testament's short pairs make a second backdrop, so a result is checked on two (our
-      rule for a general architecture).
+    - Two backdrops in two Greeks, so a result is checked on two (our rule for a general
+      architecture): classical Attic and Ionic history, and the Lives' later Greek of the imperial
+      age.
+    - Every text in the public domain under both terms.
 
     Cons:
-    - Two cleaners and a licence check per volume.
-    - A religious text as one backdrop.
+    - The two backdrops are both narrative prose, so they differ less than the New Testament did.
     - Pairs of 250-450 characters mostly pad a window of 1,024 unless packed (D11).
   - (b) The first plan's choice: Herodotus by book and chapter, and Euclid by proposition. Pros:
     two styles, narrative and formal proof. Cons, measured: about 2,000 pairs; chapters of several
     hundred to over 1,000 characters; Euclid's propositions fit 1,024 in only 47% of cases. Too
     small and too long for the windows this framework trains.
   - (c) The New Testament alone. Pros: exact verse alignment, short pairs. Cons: one register and one
-    backdrop; a religious text as the only one.
+    backdrop; a religious text as the only one; its paired English (the WEB) translates a
+    different Greek text.
   - (d) A standard translation corpus (WMT, Europarl). Pros: production scale. Cons: millions of
     pairs, beyond what this framework trains in float64 on one CPU (about a million parameters a day
     on `jebel`); licences vary; not the classical texts the corpora come from.
@@ -165,8 +165,8 @@ Each lists the options considered, with pros and cons, and the choice.
 - **D8. Golden run and timing. Settled.** New entries: a small encoder-decoder in each
   implementation; earlier entries bit-identical. The crate's attention gains a key/value input:
   tier 1 A/B of self-attention, which must not move.
-- **D9. The study. Settled (amended 2026-11-03: D4's two corpora, D11's windows).** On each of D4's
-  two corpora, in D11's packed windows of 1,024, an encoder-decoder against
+- **D9. The study. Settled (amended 2026-11-03: D4's two corpora, the histories and the *Lives*;
+  D11's windows).** On each of D4's two corpora, in D11's packed windows of 1,024, an encoder-decoder against
   a decoder-only model that reads the Greek as a prefix before a separator and then writes the
   English (the other production form, with loss on the English only), at equal parameters; and
   each against a decoder-only English model with no source (what the source buys). Bits per

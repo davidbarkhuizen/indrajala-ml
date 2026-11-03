@@ -30,7 +30,7 @@ PINNED_REF = "v2026-09-16"
 _RAW_BASE = f"https://raw.githubusercontent.com/davidbarkhuizen/indrajala-datasets-mnist/{PINNED_REF}/data"
 TEXT_PINNED_REF = "v2026-10-09"
 # the parallel corpora's tag (the cross-attention workplan, D4)
-PARALLEL_PINNED_REF = "v2026-11-03"
+PARALLEL_PINNED_REF = "v2026-11-03.2"
 
 
 def _text_url(repository: str, filename: str, ref: str = TEXT_PINNED_REF) -> str:
@@ -78,13 +78,13 @@ DATASETS = [
         # the parallel corpora (the cross-attention workplan, D4): CC BY-SA 4.0, adapted from the
         # Perseus Digital Library (the repository's LICENSE-TEXT.md, with its copyright check per volume)
         "local_path": "data/perseus-parallel/histories.jsonl",
-        "sha256": "d1fbe9e52340543822e74a30fcbe64945213d88c95f273f2d7696523731ff978",
+        "sha256": "24c12bb58071382f10c7f98c5b0c7baf2888b5d55ef6668be2342a537a9f3334",
         "url": _text_url("indrajala-datasets-perseus-parallel", "histories.jsonl", PARALLEL_PINNED_REF),
     },
     {
-        "local_path": "data/perseus-parallel/new-testament.jsonl",
-        "sha256": "0750b9a6764e56a16c95b79a213f2ef3ad8731fb975998830ec3cbcb9cedab8e",
-        "url": _text_url("indrajala-datasets-perseus-parallel", "new-testament.jsonl", PARALLEL_PINNED_REF),
+        "local_path": "data/perseus-parallel/lives.jsonl",
+        "sha256": "d2f869e50aca0d27cc23df64be966e83bd9e0ac06784fc5deabf99b9c25ccc4e",
+        "url": _text_url("indrajala-datasets-perseus-parallel", "lives.jsonl", PARALLEL_PINNED_REF),
     },
 ]
 
