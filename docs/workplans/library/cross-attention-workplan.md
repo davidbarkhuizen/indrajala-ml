@@ -4,8 +4,10 @@
 production (the owner's direction, 2026-10-10). Revised 2026-11-03 at the owner's direction (windows
 of 1,024, more texts): D4 rewritten on a measurement of Perseus's parallel texts, D11 new (packed
 pairs), D3 and D9 amended to match; D12 (the model's width and head size) left to the study's
-registration. The dataset repository (D4) is the owner's to create, as the
-corpora's were. Stage 1 (this plan) done.**
+registration. Stage 1 (this plan) done. Stage 2 (2026-11-03): the dataset repository at its tag
+`v2026-11-03` (14,602 pairs of the histories, 7,908 of the New Testament; its `report.md` the
+alignment report), its fetch entry and the loader of packed pairs here (D13 new: a packed pair's
+layout).**
 
 Roadmap step 15 ([primitives-roadmap.md](../../primitives-roadmap.md)): attention from one sequence to
 another, and the encoder-decoder transformer it builds (Vaswani et al. 2017, §3.1, §3.2.3), on a
@@ -103,6 +105,19 @@ Each lists the options considered, with pros and cons, and the choice.
     Plutarch's *Lives* and the orators (138 Plutarch works and 63 Demosthenes speeches have both
     texts) are a reserve for scale, not built now.
 
+    **Built (stage 2, 2026-11-03),** `indrajala-datasets-perseus-parallel` at `v2026-11-03`; its
+    `report.md` is the alignment report and its `LICENSE-TEXT.md` the licence check per volume.
+    - **The histories:** 14,602 pairs, 4.75M Greek and 5.76M English characters.
+    - **The New Testament:** 7,908 pairs.
+    - **Thucydides:** Jowett's translation isn't at the pinned commit. Of the three that are
+      (Crawley, C. F. Smith, Dale), Crawley aligns best.
+    - **Pausanias:** Books 1-5 only. Books 6-10 are Jones's volumes of 1933 and 1935, whose
+      copyright wasn't checked. Books 1-5 (1918, 1926) are in the US public domain, but under
+      life-plus-70 terms only from 2034 and 2035, and the repository says so.
+    - **Splits:** each held-out book is cut at its middle pair into validation, then test.
+    - **The New Testament's texts differ:** the WEB translates the Majority Text, not
+      Westcott-Hort, so some English has no Greek behind it.
+
     **Splits** hold out whole books, a different book of each work. The New Testament's synoptic
     gospels share passages, so they hold out together or not at all, and the alignment report lists
     the near-duplicate pairs across the split.
@@ -190,14 +205,45 @@ Each lists the options considered, with pros and cons, and the choice.
   from the width. So the encoder's and decoder's `d`, heads and `key_size` are set when the study
   (D9) is registered, sized by that data and by `jebel`'s time, with `d_k` of at least 32.
 
+- **D13. A packed pair's layout. Settled: (a) (new 2026-11-03, at stage 2).** Step 11's rule
+  makes a separator end its paragraph: it belongs to the paragraph before it, and its target, the
+  next paragraph's first character, counts. In a target window that would predict each pair's
+  first English character from a position of the previous pair's segment, so its cross-attention
+  would read the previous pair's Greek.
+  - (a) *Chosen.* The source window packs each pair's Greek followed by the separator, as step
+    11 packs paragraphs, so the separator ends its pair. The target row is the separator, then
+    each pair's English followed by the separator: the decoder's input is the row less its last
+    token, its labels the row less its first (step 9's shift), so a separator is both the end of
+    one pair and the start of the next. The decoder's segments take the opposite rule: a target
+    separator opens the pair after it. Pair k is segment k on both sides, and every English
+    character, the first included, is predicted from its own pair's Greek; the last label of each
+    pair is the separator, which ends a generated translation (D7). Pads go before a row's first
+    token (step 11's D8), and a window holds whole pairs only.
+    Pros:
+    - Every target counted is predicted from its own pair's source.
+    - No new special token: the separator is the start and the end token, as `</s>` is in T5's and
+      BART's decoders.
+    - Decoding (D7) starts each translation from one separator and stops at the next.
+    Cons:
+    - A second segment rule (a separator opens its segment) beside step 11's, for the decoder's
+      side of an encoder-decoder network: a flag to segments in every implementation and the crate.
+  - (b) A third special token, a start token: each target pair is the start token, the English and
+    the separator, with step 11's rule on both sides. Pros: one segment rule. Cons: a token more a
+    pair; the start token's position is the previous pair's last label, a target that must not
+    count, so a new rule for the loss instead of for segments.
+  - (c) Step 11's layout as it is, the separator ending each target pair. Pros: no change. Cons:
+    each pair's first English character is predicted from the previous pair's segment and source,
+    and the window's first pair's first character not at all.
+
 ## Stages
 
 1. **This workplan.**
 2. **The dataset repository** (D4), the owner's to create; its `clean.py`, the licence check per
    volume, the alignment report (pairs, lengths, the pairs dropped by D11, the cross-split
    near-duplicates) and tag; `scripts/data/fetch_datasets.py`'s entry; a loader of packed pairs
-   (D11).
-3. **Specs**: `CrossAttention`, `EncoderDecoderNetwork`, validation, format 2.
+   (D11, D13). Done 2026-11-03.
+3. **Specs**: `CrossAttention`, `EncoderDecoderNetwork`, validation, format 2; the decoder's
+   segment rule (D13: a target separator opens its pair).
 4. **numpy**: the network (D2), `CrossAttention` (D3); tests by hand (with one memory token, every
    weight is 1; padding in the memory changes nothing).
 5. **The crate**: the key/value input through the attention ops; "Bump rust/" with its A/B.
