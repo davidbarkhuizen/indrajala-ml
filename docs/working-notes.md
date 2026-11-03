@@ -188,6 +188,13 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
 - **Development on `pyramidon`, timing and long studies on `jebel`** (measurement.md section 4).
   Before a run on `jebel`: `uptime`, its processes, `pgrep -f '^/usr/bin/python3
   /usr/bin/unattended-upgrade'` and `pgrep -x dpkg`.
+- **`ab.py run` refuses a `jebel` checkout that isn't on `main`** ("the checkout ... isn't on
+  main"): a study controller that checks out a pinned commit (the GQA controller, 2026-11-03) leaves
+  it detached. Check `git status` there and `git switch main` before an A/B.
+- **A crate change to the window program needs ml's `window_recurrent_timing.py` cases too:**
+  indrajala-studies' `window_study_timing.py` defaults to the long test alone (forward only). #1212
+  ran both: `--bench cmd -- scripts/measurement/window_recurrent_timing.py` covers the learn
+  (backward) and forward cases.
 - **`jebel` at or below 65 W.** After a reboot PL1 comes back at 95 W: `ssh jebel 'cd
   ~/code/indrajala-ml && .venv/bin/python scripts/measurement/ab.py check --apply-setup'`, then check
   `/sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw` is 65000000.

@@ -84,6 +84,7 @@ docs cite them by section:
 | FFN activations: GELU and SwiGLU (roadmap step 13, D1-D11; its study abandoned) | #644 | #1176, #1177, #1182-#1187, crate #90, #92, this PR | `git show dcedf28:docs/workplans/library/ffn-activations-workplan.md` |
 | Grouped- and multi-query attention (roadmap step 14, D1-D13; its study abandoned for the literature) | #645 | #1189-#1197, crate #93, this PR | `git show 3a09724:docs/workplans/library/grouped-query-attention-workplan.md` |
 | Paper 1: learning finite-state transducers through their approximations, with proof (D1-D39; retired 2026-11-03 after the preprint, doi:10.5281/zenodo.23826655) | indrajala-research's | T1-T12, R1-R9; datapack doi:10.5281/zenodo.23733575; tags `paper1-v1` to `paper1-v1.2` | `git show 0d1aaef:docs/workplans/paper-workplan.md` in indrajala-research |
+| The implementation audit's remedies (§16; D1-D11) | #1202, #1203 | #1204-#1212, crate #94, studies #15, research #139, this PR | `git show 85d1705:docs/workplans/library/audit-remedies-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -100,6 +101,42 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From the audit remedies (retired 2026-11-03)
+
+Done: the implementation audit's two supported changes and four optional ones
+([nn-implementation-analysis.md](nn-implementation-analysis.md) §16), each in all three
+implementations, off by default, with golden entries (161 locally, 53 in the Rust reference; no
+earlier entry moved):
+- **The explicit output loss** (D2, #1204): `Dense.loss` is named on the output layer and `None`
+  on a hidden one; the presets name `"squared"`.
+- **The k-means codes** (D3, #1205): `model/codes.py`'s `factor_states`, `fit_codes`,
+  `initialise_codes`, the harness's `kmeans` by bits; indrajala-studies calls them (studies #15).
+- **Re-seeding dead codes** (D4, #1206): `codes.reseed_dead_codes`, the optimizers' `reset_rows`.
+- **The codebook's rate** (D5, #1207): the optimizer's `learning_rate_scales`, set by
+  `set_code_learning_rate_scale`; indrajala-studies' `FactorRates` wrapper replaced by it.
+- **SimVQ's codes** (D6, #1208): `Codes(parameterisation="linear")`, `E = Q W`, `W` stepped.
+- **The selection set** (D7, #1209): the trainer's `selection=`, recorded in `RunCheckpoint`.
+- **He initialisation** (D8, #1210): `init="he"` on `Dense` and `Conv`.
+- **The FiLM state input** (D9, crate #94, #1212): `StateInput(scale=True)`, `x_t * (1 + G c) + P c`.
+- **MRI** (D10, #1211): the linear classifier adapts every unit the output needs.
+
+Three departures from the plan's text, each in its stage's *Built* note: D5's scales live in the
+optimizer, keyed by layer index, not on each part; D4 is a function beside the k-means one, not a
+network method; and D6's `set_codes` resets `W` to the identity (a re-seed solves `Q`'s row), so a
+k-means or re-seeded code lands on the state, not at `x W`. The tier 1 A/Bs on `jebel` held: #1207
+and #1209 (`prepared_dataset_timing`), #1212 (the window program; one row's +4.0% after ONNO was
+within noise at ONNONOON). Left:
+
+- **The studies (D11):** each codebook primitive is a candidate in indrajala-research's
+  state-formation workplan (research #139), judged only by a registered study there, on
+  fresh-seed certified rates against the failure kind it targets. Nothing here adopts one.
+- **`window_study_timing.py`'s default is the long test alone:** a crate change to the window
+  program also needs `window_recurrent_timing.py`'s learn and forward cases (#1212's second A/B);
+  in #1212's first, the numpy `matmul 256` control moved -22.9%, which nothing in the crate
+  reaches (unexplained).
+- **`jebel`'s `ab.py archive` can't open its PR** (`gh` unauthenticated there): each archive PR is
+  opened from `pyramidon` (working-notes).
 
 ## From grouped-query attention (retired 2026-11-03)
 
