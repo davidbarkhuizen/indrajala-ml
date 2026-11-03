@@ -394,7 +394,11 @@ Each lists the options considered, with pros and cons, and the choice.
      pure Python, within 1e-12 on numpy; a batch of sources is each alone by bits; the three
      implementations decode alike within rounding.
    - **8c, chrF:** chrF (D6) and the evaluation the study reads: bits per character under teacher
-     forcing and chrF of greedy and sampled translations.
+     forcing and chrF of greedy and sampled translations. Done 2026-11-03: `generation/chrf.py`, sacreBLEU 2.x's
+     default CHRF (char order 6, beta 2, whitespace removed, corpus statistics), reproducing
+     sacreBLEU 2.5.1's scores to 1e-12 on a recorded fixture; `training/translation_evaluate.py`,
+     bits per character under teacher forcing (the training loss's counted targets) and chrF of
+     greedy and sampled translations of each held-out pair's Greek. Stage 8 done.
 9. **Fixtures, checkpoints and golden entries** (D8).
 10. **The study** (D9).
 11. **Docs**; the workplan retired.
