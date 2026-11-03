@@ -114,6 +114,10 @@ class NumpyBackend:
         return matrix[:, start:stop]
 
     @staticmethod
+    def reshape(matrix: FloatArray, rows: int, columns: int) -> FloatArray:
+        return matrix.reshape(rows, columns)
+
+    @staticmethod
     def concatenate_columns(matrices: Sequence[FloatArray]) -> FloatArray:
         return np.concatenate(matrices, axis=1)
 
@@ -213,6 +217,10 @@ class RustBackend:
     @staticmethod
     def columns(matrix: pa.Array, start: int, stop: int) -> pa.Array:
         return matrix[:, start:stop]
+
+    @staticmethod
+    def reshape(matrix: pa.Array, rows: int, columns: int) -> pa.Array:
+        return matrix.reshape((rows, columns))
 
     @staticmethod
     def concatenate_columns(matrices: Sequence[pa.Array]) -> pa.Array:

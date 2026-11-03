@@ -27,6 +27,7 @@ from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialSequenceBackpropNetwork,
 )
 from indrajala_ml.model.networks.python.window_recurrent_backprop_network import WindowRecurrentBackpropNetwork
+from indrajala_ml.model.networks.rust.encoder_decoder_rust_array_network import EncoderDecoderRustArrayNetwork
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentArrayNetwork,
@@ -86,11 +87,13 @@ def network_from_state(state: dict[str, Any]) -> Any:
 def _sequential(file: NetworkFile) -> Any:
     network: Any
     if file.shape == ENCODER_DECODER:
-        # numpy's for now (the cross-attention workplan: Rust's is stage 6, pure Python's stage 7);
-        # a numpy file loads into numpy
-        if file.implementation != NUMPY.name:
-            raise ValueError(f"an encoder-decoder loads into numpy only for now; this file's is {file.implementation}")
-        network = EncoderDecoderArrayNetwork.from_file(file)
+        # numpy's and Rust's (the cross-attention workplan, stages 4c and 6b; pure Python's is stage 7)
+        if file.implementation == PYTHON:
+            raise ValueError("an encoder-decoder loads into numpy or Rust only for now; this file's is python")
+        encoder_decoder = (
+            EncoderDecoderArrayNetwork if file.implementation == NUMPY.name else EncoderDecoderRustArrayNetwork
+        )
+        network = encoder_decoder.from_file(file)
         restore_file(network, file)
         return network
     if file.shape == WINDOW_RECURRENT:

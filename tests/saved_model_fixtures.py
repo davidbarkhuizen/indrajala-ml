@@ -93,6 +93,7 @@ from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialSequenceBackpropNetwork,
 )
 from indrajala_ml.model.networks.python.window_recurrent_backprop_network import WindowRecurrentBackpropNetwork
+from indrajala_ml.model.networks.rust.encoder_decoder_rust_array_network import EncoderDecoderRustArrayNetwork
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentArrayNetwork,
@@ -439,10 +440,11 @@ def _window(
     return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True, class_name=class_name)
 
 
-def _encoder_decoder() -> SavedModelFixture:
+def _encoder_decoder(implementation: str) -> SavedModelFixture:
+    cls = EncoderDecoderArrayNetwork if implementation == "numpy" else EncoderDecoderRustArrayNetwork
     return SavedModelFixture(
-        "numpy",
-        lambda: EncoderDecoderArrayNetwork(ENCODER_DECODER_MODEL, SOURCE_TOKENS, TOKENS, Adam(**ADAM)),
+        implementation,
+        lambda: cls(ENCODER_DECODER_MODEL, SOURCE_TOKENS, TOKENS, Adam(**ADAM)),
         "predict_probabilities",
         {},
         format2=True,
@@ -643,7 +645,8 @@ FIXTURES: dict[str, SavedModelFixture] = {
     "WindowRecurrentArrayNetwork": _window("numpy"),
     "WindowRecurrentRustArrayNetwork": _window("rust"),
     "WindowRecurrentBackpropNetwork": _window("python"),
-    "EncoderDecoderArrayNetwork": _encoder_decoder(),
+    "EncoderDecoderArrayNetwork": _encoder_decoder("numpy"),
+    "EncoderDecoderRustArrayNetwork": _encoder_decoder("rust"),
     **{
         f"ContinuousWindow{name}": _window(implementation, CONTINUOUS_RECURRENCE, name)
         for name, implementation in (

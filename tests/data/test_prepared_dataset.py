@@ -147,8 +147,8 @@ NUMPY_CONSTRUCTORS: dict[str, Callable[[type[Any]], Any]] = {
     ),
     "EncoderDecoderArrayNetwork": lambda cls: cls(ENCODER_DECODER, SOURCE_TOKENS, DIMENSION - SOURCE_TOKENS, Adam()),
 }
-# numpy only until their Rust twin (the encoder-decoder's: the cross-attention workplan, stage 6)
-NUMPY_ONLY = {"EncoderDecoderArrayNetwork"}
+# numpy only until their Rust twin: none now
+NUMPY_ONLY: set[str] = set()
 
 
 def _rust_twin(name: str) -> str:

@@ -26,6 +26,9 @@ class BackendArray(Protocol):
 
     def __setitem__(self, index: Any, value: float, /) -> None: ...
 
+    # elementwise, in one rounding per value (an encoder-decoder's memory gradients, summed in order)
+    def __add__(self, other: Any, /) -> Any: ...
+
 
 class ArrayNetworkLayer[A: BackendArray](Protocol):
     """What ArrayNetworkBase drives layer by layer: dense, conv and max-pool layers alike."""
@@ -257,6 +260,10 @@ class ArrayBackend[A: BackendArray](Protocol):
     def columns(self, matrix: A, start: int, stop: int) -> A: ...
 
     def concatenate_columns(self, matrices: Sequence[A]) -> A: ...
+
+    # a matrix's values, row-major, as rows by columns (an encoder-decoder's memory gradient, its
+    # (N * S, d_m) rows as the encoder's (N, S * d_m) output, the cross-attention workplan, D2)
+    def reshape(self, matrix: A, rows: int, columns: int) -> A: ...
 
     def argmax(self, vector: A) -> int: ...
 

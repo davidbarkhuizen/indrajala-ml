@@ -42,11 +42,12 @@ from indrajala_ml.model.specs.layer_specs import (
     Residual,
     StateInput,
 )
-from indrajala_ml.model.specs.update_rules import SGD
+from indrajala_ml.model.specs.update_rules import SGD, Adam
 from indrajala_ml.model.specs.window_recurrence import Codes, Factor, WindowRecurrence
 from indrajala_ml.pcg64 import SeedSequence, generator_state
 from tests.array_network_contract import snapshot_bits
 from tests.helpers import all_subclasses, model_modules
+from tests.model.networks import test_encoder_decoder_numpy as encoder_decoders
 from tests.python_array_snapshot import assert_seeded_alike
 
 model_modules()
@@ -150,14 +151,21 @@ def rust_counterpart(numpy_name: str) -> type[Any]:
     return RUST_CLASSES[numpy_name.replace("ArrayNetwork", "RustArrayNetwork")]
 
 
-# numpy only until its Rust counterpart (the cross-attention workplan: the crate is stage 5, its Rust
-# layers and parity stages 6 and 7); its seeded draws are tested in test_encoder_decoder_numpy.py
-NUMPY_ONLY = {"EncoderDecoderArrayNetwork"}
+# (numpy class name, its constructor's arguments): test_encoder_decoder_numpy.py's model with
+# dropout on a self-attention and a cross-attention, so a step draws (the cross-attention workplan, 6b)
+ENCODER_DECODER: dict[str, tuple[Any, ...]] = {
+    "EncoderDecoderArrayNetwork": (
+        encoder_decoders.spec(dropout=0.1),
+        encoder_decoders.WINDOW,
+        encoder_decoders.WINDOW,
+        Adam(),
+    ),
+}
 
 
 def test_every_array_network_class_is_covered():
-    covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT, *SEQUENTIAL}
-    assert covered | NUMPY_ONLY == set(NUMPY_CLASSES)
+    covered = {*MULTICLASS, *CONV, *SINGLE_OUTPUT, *SEQUENTIAL, *ENCODER_DECODER}
+    assert covered == set(NUMPY_CLASSES)
     assert {rust_counterpart(name) for name in covered} == set(RUST_CLASSES.values())
     assert set(NUMPY_CLASSES.values()) | set(RUST_CLASSES.values()) == set(all_subclasses(ArrayNetworkBase)) - {
         NumpyArrayNetworkBase,
@@ -184,6 +192,8 @@ def assert_seeded_randomized_identical(build: Callable[[type[Any], int], Any], n
 
 
 def _rows(width: int, network: Any) -> list[tuple[tuple[float, ...], Any]]:
+    if network.format2_shape == "encoder_decoder":
+        return encoder_decoders.batch(encoder_decoders.windows())
     rng = random.Random(width)
     if network.format2_shape in ("sequence", "window_recurrent"):
         # token ids, and a class per token
@@ -243,6 +253,14 @@ def test_single_output_randomized_is_identical_after_the_same_seed(numpy_name: s
 @pytest.mark.parametrize("numpy_name", SEQUENTIAL)
 def test_sequential_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
     assert_seeded_randomized_identical(lambda cls, s: cls.randomized(*SEQUENTIAL[numpy_name], seed=s), numpy_name, seed)
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+@pytest.mark.parametrize("numpy_name", ENCODER_DECODER)
+def test_encoder_decoder_randomized_is_identical_after_the_same_seed(numpy_name: str, seed: int):
+    assert_seeded_randomized_identical(
+        lambda cls, s: cls.randomized(*ENCODER_DECODER[numpy_name], seed=s), numpy_name, seed
+    )
 
 
 @pytest.mark.parametrize("fan_in", [2921, 5579])

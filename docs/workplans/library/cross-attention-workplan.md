@@ -324,7 +324,14 @@ Each lists the options considered, with pros and cons, and the choice.
      draws. Done 2026-11-03.
    - **6b, the network:** a Rust encoder-decoder network (the numpy one's passes over the Rust
      backend's array ops), seeded-init parity numpy = Rust, and the stated numpy-only exceptions
-     removed.
+     removed. Done 2026-11-03. `EncoderDecoderNetwork[A]` (`encoder_decoder_network.py`) holds the
+     passes over the backend's operations (`columns`, a new `reshape`, `matrix`, `row`); numpy's
+     `EncoderDecoderArrayNetwork` and Rust's `EncoderDecoderRustArrayNetwork` are its two
+     backends. A decoder's CrossAttention is found by what it does (`memory_downstream_batch`), not
+     by class. `load_network` builds either, and refuses only pure Python's (stage 7). Seeded draws
+     are numpy's by bits. Training matches numpy's within the products' rounding. A Rust file
+     loads and trains on by bits. The window op registry's exclusion of `cross_attention` stays:
+     a window never holds one.
 7. **Pure Python**; parity.
 8. **Decoding** (D7) and chrF (D6).
 9. **Fixtures, checkpoints and golden entries** (D8).
