@@ -85,7 +85,7 @@ docs cite them by section:
 | Grouped- and multi-query attention (roadmap step 14, D1-D13; its study abandoned for the literature) | #645 | #1189-#1197, crate #93, this PR | `git show 3a09724:docs/workplans/library/grouped-query-attention-workplan.md` |
 | Paper 1: learning finite-state transducers through their approximations, with proof (D1-D39; retired 2026-11-03 after the preprint, doi:10.5281/zenodo.23826655) | indrajala-research's | T1-T12, R1-R9; datapack doi:10.5281/zenodo.23733575; tags `paper1-v1` to `paper1-v1.2` | `git show 0d1aaef:docs/workplans/paper-workplan.md` in indrajala-research |
 | The implementation audit's remedies (§16; D1-D11) | #1202, #1203 | #1204-#1212, crate #94, studies #15, research #139, this PR | `git show 85d1705:docs/workplans/library/audit-remedies-workplan.md` |
-| Cross-attention: the encoder-decoder on Greek-English translation (roadmap step 15, D1-D18; its study decided from the literature) | #646 | #1219-#1236, crate #95, #96, this PR | `git show SHA_PLACEHOLDER:docs/workplans/library/cross-attention-workplan.md` |
+| Cross-attention: the encoder-decoder on Greek-English translation (roadmap step 15, D1-D18; its study decided from the literature) | #646 | #1219-#1236, crate #95, #96, this PR | `git show 2a512fb:docs/workplans/library/cross-attention-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
