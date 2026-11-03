@@ -80,6 +80,7 @@ docs cite them by section:
 | The training recipe: schedules, AdamW, clipping (roadmap step 10, D1-D11) | #641 | #1150-#1156, crate #86, #1160 | `git show b446c31:docs/workplans/library/training-recipe-workplan.md` |
 | Segments: packing, document masks and padding (roadmap step 11, D1-D11) | #642 | #1157, #1158, #1162-#1166, crate #87, #1159, this PR | `git show 69e2e93:docs/workplans/library/segments-workplan.md` |
 | Context length: tiled attention, windows cut anew every epoch, the study (roadmap step 12, D1-D13) | #643 | #647, #1168-#1175, crate #88, #1178, this PR | `git show ec20e8c:docs/workplans/library/context-length-workplan.md` |
+| FFN activations: GELU and SwiGLU (roadmap step 13, D1-D11; its study abandoned) | #644 | #1176, #1177, #1182-#1187, crate #90, #92, this PR | `git show dcedf28:docs/workplans/library/ffn-activations-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -88,7 +89,7 @@ candidate optimizations) were retired the same way: `git show 0a04977:docs/optim
 
 What they built is documented in the README (Models, Saving and loading, Update rules, Batch
 normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
-tokens, Rotary positions, Generation, The addition study), [measurement.md](measurement.md)
+tokens, Rotary positions, Generation, Activations, The addition study), [measurement.md](measurement.md)
 and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
 `scripts/studies/residual_depth_study.py`'s, the patch-attention study's in
@@ -96,6 +97,31 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From FFN activations (retired 2026-11-03)
+
+Done: `erf` (fdlibm's) in all three implementations and the crate (D2); `"gelu"`, `"gelu_tanh"`
+and `"silu"` as `Dense` activations, the crate's dense ops one activation-parameterised family
+(D1, D5, D9; crate #90); `GatedDense`, the gated FFN (SwiGLU, GEGLU), at equal parameters with a
+ReLU FFN (D3, D4; crate #92); golden entries and fixtures (D6). The study (D7, D11) was registered
+(#1187) and **abandoned by the owner on 2026-11-03 after 24 of its 80 runs**: its claims F1-F3 are
+not tested, and the 24 runs are kept but not analysed (no conclusions from a registered study's
+partial data). So, by the registration's own rule, ReLU stays the sequence models' FFN; the GQA
+study's SwiGLU (its D13) came from the literature, not from this study. Left:
+
+- **The partial runs:** Tiny Shakespeare's 20 and 4 of Herodotus's contiguous GELU, in pyramidon's
+  `data/studies/ffn-activations/sweep/` (gitignored, with a manifest), from main `dcedf28`, crate
+  `070e61d`.
+- **8 workers on `stone` buy nothing:** stone's i7-1255U is a 15 W part; with 8 jobs every core
+  ran at 0.9-1.1 GHz (its power cap, 72 C), a Herodotus epoch took 640-690 s against 76 s for one
+  job alone, so 8 workers did about one lone job's work. The registration's "8 workers run 1.34
+  times one job's time" doesn't hold on stone, and its estimate (7-10 h for the 80 runs) was about
+  2 to 2.5 days. A budget sized on stone needs its throughput measured at the worker count it will run.
+- **The crate's ReLU names are gone** (`layer_relu_*`, `array_relu_mask` became the activation
+  family): a breaking change for its next PyPI release.
+- **The single-example ReLU `hidden_delta` at 30 x 784 on Rust is +6.5%** (about 0.2 us a call,
+  #1183), accepted as D9's cost on the legacy single-example path.
+- **Not planned:** the study itself, if a later model needs the FFN decided by measurement.
 
 ## From context length (retired 2026-11-02)
 
@@ -826,7 +852,7 @@ The workplan settled `Attention(heads, key_size)`, the parameters packed with he
 
 - **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
   Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
-  Planned with SwiGLU as roadmap step 13 ([ffn-activations-workplan.md](workplans/library/ffn-activations-workplan.md)).
+  Done with SwiGLU in roadmap step 13 (README, Activations; next-steps, From FFN activations).
 - **The study's other arms** (D8 (b), (c)): run on 2026-10-09 (`scripts/studies/patch_geometry_study.py`,
   findings in its docstring). Patch 4 (`T = 49`) costs every arm 0.4 to 1.2 points at 5 epochs;
   the low-rank bound still doesn't measurably bind (+0.42 +- 0.83 for `key_size=32`); heads start
