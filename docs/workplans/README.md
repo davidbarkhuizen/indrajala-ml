@@ -21,6 +21,7 @@ None open: steps 1-15 are done (their workplans retired, next-steps.md).
 
 | workplan | scope |
 | --- | --- |
+| [crate-structure-workplan.md](infrastructure/crate-structure-workplan.md) | the core's flat modules as a layered tree (`num`, `ops`/`linalg`/`random`, `nn`, `program`), names without stutter, the bindings' source mirroring it; Python's names unchanged |
 | [multithreading-workplan.md](infrastructure/multithreading-workplan.md) | the crate's outstanding kernel work (stage −1), then a thread pool, one thread budget a process, and threaded attention, conv and the window program |
 
 Retired plans are listed in [next-steps.md](../next-steps.md).
