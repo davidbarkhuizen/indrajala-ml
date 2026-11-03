@@ -53,7 +53,7 @@ indrajala_math
 │   ├── scalar                   relu, max, powi (today's scalar)
 │   ├── exp                      correctly rounded exp, sigmoid, tanh (today's cr_exp; tanh_in_place from recurrent)
 │   ├── erf
-│   └── activation               gelu, gelu_tanh and their derivatives, the constants
+│   └── activation               the Activation enum (it works on slices), gelu, gelu_tanh, their derivatives
 ├── ops                          elementwise over Arrays
 │   ├── arith                    same-shape, scalar and broadcast-row arithmetic (today's ops)
 │   ├── unary                    exp, erf, softmax, sum_axis0, argmax (from ufuncs)
@@ -63,8 +63,8 @@ indrajala_math
 │   ├── legacy                   numpy's np.random MT19937 global (today's random)
 │   └── generator                numpy's default_rng: PCG64, SeedSequence (today's generator)
 ├── nn                           one function per layer pass
-│   ├── activation               the Activation enum, and the activation layer's passes
-│   ├── dense                    affine, forward, deltas, gradients, skip variants; linear (from batch_norm)
+│   ├── dense                    sigmoid and activation layers: forwards, deltas, gradients, skip variants;
+│   │                            affine; linear (from batch_norm)
 │   ├── dropout                  the dropout layer's passes (from fused)
 │   ├── softmax                  the softmax output layer's passes (from fused)
 │   ├── gated                    the gated layer (from fused)
@@ -83,6 +83,10 @@ A kernel two layers share moves to the lowest layer that uses it, so every `use 
 down the list or within a module. A small test (`core/tests/layers.rs`) greps the sources and fails
 on an upward import, so the rule outlives this plan. The multithreading plan's pool and `CpuInfo`
 (its D3, D5) go in a fifth, bottom layer, `sys`, beside `num`.
+
+`batch_norm` keeps its own private activation enum (ReLU and sigmoid by name), a duplicate of
+`num::activation`'s in part; merging them would be a change, not a move (D5), so it goes to
+next-steps.md.
 
 Large single-concern modules (`linalg`, 1,207 lines; `program`, 1,326) stay one file each: their
 size is one concern's, and splitting them is not this plan's. `attention` (1,562) splits in two,
