@@ -42,9 +42,9 @@ from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.layers.rust.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
-from indrajala_ml.model.layers.rust.cross_attention_rust_array_layer import CrossAttentionRustArrayLayer
 from indrajala_ml.model.layers.rust.batch_norm_rust_array_layer import BatchNormRustArrayLayer
 from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer, LinearConvRustArrayLayer
+from indrajala_ml.model.layers.rust.cross_attention_rust_array_layer import CrossAttentionRustArrayLayer
 from indrajala_ml.model.layers.rust.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustArrayLayer
 from indrajala_ml.model.layers.rust.layer_norm_rust_array_layer import LayerNormRustArrayLayer

@@ -64,7 +64,7 @@ class CrossAttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Arr
         self.training = False
         self.rng = pa.default_rng()
         self._dropout_rng: pa.Generator | None = None
-        self._segments: dict[str, pa.Array] = {}
+        self._segments: tuple[pa.Array | None, pa.Array | None] = (None, None)
 
     @property
     def projection_shapes(self) -> tuple[tuple[int, int], ...]:
@@ -88,22 +88,22 @@ class CrossAttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Arr
             for array in (pa.Array.zeros((rows, fan_in)), pa.Array.zeros(rows))
         ]
 
-    def _segment_options(self, examples: int, context: ForwardContext) -> dict[str, pa.Array]:
+    def _segment_ids(self, examples: int, context: ForwardContext) -> tuple[pa.Array | None, pa.Array | None]:
         # the ops' segments and memory_segments: both or neither; one side without segments has its
         # every token in segment 1, the other's own kept (numpy's rule)
         queries, keys = context.segments, context.memory_segments
         if queries is None and keys is None:
-            return {}
+            return None, None
         if queries is None:
             queries = pa.Array([[1.0] * self.tokens for _ in range(examples)])
         if keys is None:
             keys = pa.Array([[1.0] * self.memory_tokens for _ in range(examples)])
-        return {"segments": queries, "memory_segments": keys}
+        return queries, keys
 
     def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         assert context.memory is not None, "a CrossAttention reads the encoder's output, the context's memory (D2)"
         self._memory: pa.Array = context.memory
-        self._segments = self._segment_options(X.shape[0], context)
+        self._segments = self._segment_ids(X.shape[0], context)
         self.A, self._Q, self._K, self._V, self._H, self._m, self._l, self._dropout_rng = pa.cross_attention_forward_batch(
             X,
             self._memory,
@@ -113,7 +113,8 @@ class CrossAttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Arr
             dropout=self.dropout,
             training=self.training,
             rng=self.rng,
-            **self._segments,
+            segments=self._segments[0],
+            memory_segments=self._segments[1],
         )
         return self.A
 
@@ -138,7 +139,8 @@ class CrossAttentionRustArrayLayer(Hidden[pa.Array], AttentionProjections[pa.Arr
             key_value_heads=self.key_value_heads,
             dropout=self.dropout,
             dropout_rng=self._dropout_rng,
-            **self._segments,
+            segments=self._segments[0],
+            memory_segments=self._segments[1],
         )
 
     def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:

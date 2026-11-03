@@ -80,7 +80,10 @@ def passes(layer: Any, X: Any, memory_context: ForwardContext, G: Any) -> dict[s
 
 
 def as_numpy(value: Any) -> FloatArray:
-    return value if isinstance(value, np.ndarray) else rust_to_numpy(value)
+    if isinstance(value, pa.Array):
+        return rust_to_numpy(value)
+    numpy: FloatArray = value
+    return numpy
 
 
 def inputs(seed: int = 1) -> tuple[FloatArray, FloatArray, FloatArray]:
@@ -154,7 +157,7 @@ def test_dropout_draws_numpys_masks_from_generators_in_the_same_state():
 @pytest.mark.usefixtures("attention_exp")
 def test_one_example_is_a_batch_of_one():
     _, rust = layers()
-    X, memory, G = inputs(3)
+    X, memory, _ = inputs(3)
     context = ForwardContext(memory=pa.Array(memory[:1].tolist()))
     batch = rust_to_numpy(rust.forward_batch(pa.Array(X[:1].tolist()), context=context))
     one = rust_to_numpy(rust.forward(pa.Array(X[0].tolist()), context=context))
