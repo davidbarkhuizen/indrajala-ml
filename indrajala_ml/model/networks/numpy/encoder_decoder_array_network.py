@@ -1,0 +1,204 @@
+# pyright: reportConstantRedefinition=false
+# (matrices are named as in the literature, X, M, which strict mode takes for constants)
+"""
+An encoder-decoder network in numpy (the cross-attention workplan, D2, D14; Vaswani et al. 2017,
+§3.1): an EncoderDecoder's two stacks, the encoder over the source's ids and the decoder over the
+target's, the decoder's CrossAttention layers reading the encoder's output, its memory.
+
+One example's state is its source's S ids, then its target input's T ids, so the trainers, their
+examples and prepared datasets carry it as any sequence network's state; its label is the target's
+T labels, one class per token, as a sequence network's (a packed pair window's decoder_input and
+labels, parallel_data.py), a left pad's label the pad itself, which is no class and doesn't count.
+The network's input is S + T ids wide.
+
+The forward pass runs the encoder over the source, in its own context (its segments: step 11's
+rule, a separator ending its pair), then the decoder over the target, in its context (its
+segments by D13's rule, a separator opening its pair) with the encoder's output as its memory and
+the source's segments as the memory's. The backward pass runs the decoder's layers back from the
+output layer, as a sequence network's; then the memory's gradient, each CrossAttention's summed in
+layer order (a left fold, D2), runs back through the encoder from its last layer. Every layer's
+gradient is then accumulated, the encoder's then the decoder's, and the optimizer steps them all.
+
+Its layers are the encoder's then the decoder's, one list (EncoderDecoder.layers(), expanded), so
+randomize, snapshot, restore and checkpoint work over them as over any network's. A one-example
+learn is a batch of one. Saving to a file, format 2's "encoder_decoder" (stage 4c), and decoding
+(stage 8) come later.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterator, Sequence
+from dataclasses import replace
+from typing import Any, ClassVar, NoReturn, Self
+
+import numpy as np
+
+from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
+from indrajala_ml.model.layers.array.array_layer_builder import build_encoder_decoder_layers
+from indrajala_ml.model.layers.forward_context import ForwardContext
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
+from indrajala_ml.model.layers.numpy.cross_attention_array_layer import CrossAttentionArrayLayer
+from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
+from indrajala_ml.model.persistence.format2 import ENCODER_DECODER
+from indrajala_ml.model.protocols.array_protocols import ArrayNetworkLayer
+from indrajala_ml.model.specs.array_network_shapes import TokenWiseOutput
+from indrajala_ml.model.specs.bounds import validate_class_count
+from indrajala_ml.model.specs.layer_specs import Dense, Embedding, EncoderDecoder, LayerSpec
+from indrajala_ml.model.specs.spec_hooks import GivenRule
+from indrajala_ml.model.specs.spec_shapes import InputShape
+from indrajala_ml.model.specs.update_rules import UpdateRule
+
+Passes = tuple[list[FloatArray], list[FloatArray], ForwardContext, ForwardContext]
+
+
+class _Memory:
+    """The encoder's last layer's next layer, as its hidden delta reads it: the memory's gradient."""
+
+    def __init__(self, delta: FloatArray) -> None:
+        self.delta = delta
+
+    def downstream_batch(self, *, context: ForwardContext) -> FloatArray:
+        return self.delta
+
+
+class EncoderDecoderArrayNetwork(GivenRule, TokenWiseOutput[FloatArray], NumpyArrayNetworkBase):
+    """
+    An EncoderDecoder over source_tokens source ids and target_tokens target ids, trained by
+    update_rule: a softmax over class_count classes for each target token, its loss the mean of
+    the counted tokens' cross-entropies (the decoder's token-wise output layer's).
+    """
+
+    format2_shape: ClassVar[str] = ENCODER_DECODER
+    preset_arguments: ClassVar[tuple[str, ...] | None] = None
+
+    def __init__(self, spec: EncoderDecoder, source_tokens: int, target_tokens: int, update_rule: UpdateRule) -> None:
+        output = spec.decoder[-1]
+        assert isinstance(output, Dense), f"a decoder ends in its output layer; got {output!r}"
+        validate_class_count(output.size)
+        source, target = spec.encoder[0], spec.decoder[0]
+        assert isinstance(source, Embedding) and isinstance(target, Embedding), (
+            f"an encoder and a decoder start with an Embedding (D14); got {source!r} and {target!r}"
+        )
+        self.spec = spec
+        self.source_tokens = source_tokens
+        self.target_tokens = target_tokens
+        self.tokens = target_tokens
+        self.class_count = output.size
+        self.dimension = source_tokens + target_tokens
+        self.update_rule = update_rule
+        self._source = source
+        self._target = target
+        super().__init__(spec.layers(), (self.dimension,))
+
+    def _build_layers(self, specs: Sequence[LayerSpec], input_shape: InputShape) -> list[ArrayNetworkLayer[FloatArray]]:
+        encoder, decoder = build_encoder_decoder_layers(self.spec, self.source_tokens, self.target_tokens, NUMPY_NAME)
+        self.encoder_layers: list[ArrayNetworkLayer[FloatArray]] = encoder
+        self.decoder_layers: list[ArrayNetworkLayer[FloatArray]] = decoder
+        self._crosses = [layer for layer in decoder if isinstance(layer, CrossAttentionArrayLayer)]
+        return [*encoder, *decoder]
+
+    # the passes
+
+    def _passes(self, X: FloatArray) -> Passes:
+        # both stacks' activations, each list from its input, and their contexts
+        assert X.ndim == 2 and X.shape[1] == self.dimension, (
+            f"an encoder-decoder's state is its {self.source_tokens} source ids then its {self.target_tokens} target "
+            f"ids; got rows of {X.shape[1:]}"
+        )
+        source, target = X[:, : self.source_tokens], X[:, self.source_tokens :]
+        encoder_context = self.backend.segment_context(source, self._source.separator, self._source.pad)
+        encoded = [source]
+        for layer in self.encoder_layers:
+            encoded.append(layer.forward_batch(encoded[-1], context=encoder_context))
+        decoder_context = replace(
+            self.backend.segment_context(target, self._target.separator, self._target.pad, True),
+            memory=encoded[-1],
+            memory_segments=encoder_context.segments,
+        )
+        decoded = [target]
+        for layer in self.decoder_layers:
+            decoded.append(layer.forward_batch(decoded[-1], context=decoder_context))
+        return encoded, decoded, encoder_context, decoder_context
+
+    def _forward_batch(self, X: FloatArray) -> FloatArray:
+        return self._passes(X)[1][-1]
+
+    def _forward_input(self, x: FloatArray) -> FloatArray:
+        return self._forward_batch(x[np.newaxis, :])[0]
+
+    def forward_rows(self, prepared: PreparedDataset) -> Iterator[FloatArray]:
+        states = self._prepared_states(prepared)
+        for start in range(0, len(prepared), CLASSIFY_CHUNK_ROWS):
+            yield self._forward_batch(
+                self.backend.row_range(states, start, min(start + CLASSIFY_CHUNK_ROWS, len(prepared)))
+            )
+
+    def _learn_input(self, learning_rate: float, x: FloatArray, category: Any) -> None:
+        # a one-example step is a batch of one: the encoder-decoder has no single-example path
+        self._learn_batch_input(learning_rate, x[np.newaxis, :], [category])
+
+    def _learn_batch_input(
+        self, learning_rate: float, X: FloatArray, categories: Sequence[Any], clip_norm: float | None = None
+    ) -> None:
+        self._set_training_mode(True)
+        try:
+            encoded, decoded, encoder_context, decoder_context = self._passes(X)
+        finally:
+            self._set_training_mode(False)
+
+        decoder, encoder = self.decoder_layers, self.encoder_layers
+        decoder[-1].compute_output_delta_batch(self._target_batch_array(categories), context=decoder_context)
+        for i in reversed(range(len(decoder) - 1)):
+            decoder[i].compute_hidden_delta_batch(decoder[i + 1], context=decoder_context)
+
+        # the memory's gradient: each CrossAttention's, a left fold in layer order (D2)
+        memory_delta = self._crosses[0].memory_downstream_batch()
+        for cross in self._crosses[1:]:
+            memory_delta = memory_delta + cross.memory_downstream_batch()
+        encoder[-1].compute_hidden_delta_batch(
+            _Memory(memory_delta.reshape(encoded[-1].shape)), context=encoder_context
+        )
+        for i in reversed(range(len(encoder) - 1)):
+            encoder[i].compute_hidden_delta_batch(encoder[i + 1], context=encoder_context)
+
+        for layer, activations in zip(encoder, encoded, strict=False):
+            layer.accumulate_gradient_batch(activations, context=encoder_context)
+        for layer, activations in zip(decoder, decoded, strict=False):
+            layer.accumulate_gradient_batch(activations, context=decoder_context)
+        self.optimizer.step(self.layers, learning_rate, len(categories), clip_norm)
+
+    # the targets: one class per target token, as a sequence network's
+
+    def _labels(self, category: Sequence[int]) -> Sequence[int]:
+        assert len(category) == self.tokens, (
+            f"an encoder-decoder's label is one class per target token, {self.tokens}; got {len(category)}"
+        )
+        return category
+
+    def _target_array(self, category: Sequence[int]) -> FloatArray:
+        return self._target_batch_array([category])[0]
+
+    def _target_batch_array(self, categories: Sequence[Sequence[int]]) -> FloatArray:
+        # a pad's label (a left pad's, before the window's first separator) is no class: its row stays
+        # zero, and its target doesn't count, its input being a pad (the segments workplan, D6)
+        pad = self._target.pad
+        target_batch = self.backend.zeros((len(categories), self.tokens * self.class_count))
+        for row, category in enumerate(categories):
+            for t, label in enumerate(self._labels(category)):
+                if label == pad:
+                    continue
+                assert 0 <= label < self.class_count, f"a target label is a class or the pad; got {label}"
+                target_batch[row, t * self.class_count + label] = 1.0
+        return target_batch
+
+    # format 2's file is stage 4c's
+
+    def save(self, path: str) -> NoReturn:
+        raise NotImplementedError("an encoder-decoder's format-2 file is the cross-attention workplan's stage 4c")
+
+    @classmethod
+    def from_format2(cls, state: dict[str, Any]) -> Self:
+        raise NotImplementedError("an encoder-decoder's format-2 file is the cross-attention workplan's stage 4c")
+
+
+NUMPY_NAME = NumpyArrayNetworkBase.backend.name

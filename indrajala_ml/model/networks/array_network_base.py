@@ -74,10 +74,7 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         # segments workplan, D3-D6)
         first = self.layer_specs[0] if self.layer_specs else None
         self._segments = first if isinstance(first, Embedding) and first.segments else None
-        self.layers = cast(
-            "list[ArrayNetworkLayer[A]]",
-            build_array_layers(specs, input_shape, self.backend.name, self._window_state_size()),
-        )
+        self.layers = self._build_layers(specs, input_shape)
         self.output_layer = cast("WeightedArrayLayer[A]", self.layers[-1])
         # the dropout and batch-norm layers, which _set_training_mode switches
         self._training_mode_layers = [layer for layer in self.layers if isinstance(layer, TrainingModeLayer)]
@@ -90,6 +87,13 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         # training step (the batch-norm workplan, D4)
         self.batch_norm_index = batch_norm_index(specs)
         self.optimizer = self._new_optimizer()
+
+    def _build_layers(self, specs: Sequence[LayerSpec], input_shape: InputShape) -> list[ArrayNetworkLayer[A]]:
+        """The network's layers, one per expanded spec: the encoder-decoder network builds its two stacks'."""
+        return cast(
+            "list[ArrayNetworkLayer[A]]",
+            build_array_layers(specs, input_shape, self.backend.name, self._window_state_size()),
+        )
 
     @property
     def rng(self) -> Any:
