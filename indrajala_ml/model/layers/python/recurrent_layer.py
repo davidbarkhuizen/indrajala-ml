@@ -144,6 +144,73 @@ class StateInputLayer(ParameterFreeLayer[TokenNode]):
             row.set_weights(list(weights))
 
 
+class FilmStateInputLayer(StateInputLayer):
+    """
+    FilmStateInputArrayLayer in pure Python (the audit-remedies workplan, D9): out_t = x_t * (1 + G c)
+    + P c, G one weight set per row after P's, starting at zero and drawing nothing; the downstream
+    delta_t * (1 + G c); the state's gradient the fold of S P plus the fold of M G (S the delta summed
+    over the tokens, M the delta times x so summed, per feature); G's gradient M c.
+    """
+
+    example_fields: ClassVar[tuple[str, ...]] = (
+        "_example",
+        "_state",
+        "_token_sum",
+        "_gamma",
+        "_inputs",
+        "_product_sum",
+    )
+
+    def __init__(self, input_layer: InputLayer, tokens: int, features: int, state_size: int) -> None:
+        super().__init__(input_layer, tokens, features, state_size)
+        self.scales = [ProjectionRow(state_size) for _ in range(features)]  # G's rows
+        self._gamma: list[float] = [1.0] * features
+        self._inputs: list[float] = []
+        self._product_sum: list[float] = []
+
+    def forward(self, *, context: ForwardContext = NO_CONTEXT) -> None:
+        d = self.features
+        projected = [_dot(row.weights, self._state) for row in self.rows]
+        self._gamma = [1.0 + _dot(row.weights, self._state) for row in self.scales]
+        self._inputs = [input_node.value() for input_node in self.input_layer.nodes]
+        for i, (node, x) in enumerate(zip(self.nodes, self._inputs, strict=True)):
+            node.activate(x * self._gamma[i % d] + projected[i % d])
+
+    def compute_hidden_deltas(self, next_layer: TrainableLayer, *, context: ForwardContext = NO_CONTEXT) -> None:
+        for own_index, node in enumerate(self.nodes):
+            node.delta = next_layer.downstream_sum(own_index)
+        d, T = self.features, self.tokens
+        self._token_sum = [fold([self.nodes[t * d + j].delta for t in range(T)]) for j in range(d)]
+        self._product_sum = [
+            fold([self.nodes[t * d + j].delta * self._inputs[t * d + j] for t in range(T)]) for j in range(d)
+        ]
+        self.state_deltas[self._example] = [
+            fold([self._token_sum[j] * self.rows[j].weights[k] for j in range(d)])
+            + fold([self._product_sum[j] * self.scales[j].weights[k] for j in range(d)])
+            for k in range(self.state_size)
+        ]
+
+    def downstream_sum(self, own_index: int) -> float:
+        return self.nodes[own_index].delta * self._gamma[own_index % self.features]
+
+    def accumulate_gradients(self, *, context: ForwardContext = NO_CONTEXT) -> None:
+        super().accumulate_gradients(context=context)
+        for row, product_sum in zip(self.scales, self._product_sum, strict=True):
+            accum = row.weight_gradient_accum
+            for k, c_k in enumerate(self._state):
+                accum[k] += product_sum * c_k
+
+    def weight_sets(self) -> Sequence[ProjectionRow]:
+        return [*self.rows, *self.scales]
+
+    def snapshot_state(self) -> list[tuple[list[float]]]:
+        return [(list(row.weights),) for row in (*self.rows, *self.scales)]
+
+    def restore_state(self, layer_snapshot: Sequence[Sequence[list[float]]]) -> None:
+        for row, (weights,) in zip((*self.rows, *self.scales), layer_snapshot, strict=True):
+            row.set_weights(list(weights))
+
+
 class _Part:
     """What the network's own parts share: their weight sets, saved and stepped as a layer's."""
 

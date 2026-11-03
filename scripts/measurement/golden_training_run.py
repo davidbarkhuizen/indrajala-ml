@@ -143,6 +143,12 @@ The scaled codebook entries (the audit-remedies workplan, stage 5, D5) are added
 ones: WINDOW_RECURRENCE's window networks, their codes stepped at CODE_RATE_SCALE times the rate
 (set_code_learning_rate_scale) from the start. No earlier entry moved when they were recorded.
 
+The FiLM entries (the audit-remedies workplan, stage 9, D9) are added after the scaled codebook
+ones: FILM_WINDOW_SPECS, WINDOW_SPECS with its state inputs FiLM's (StateInput(scale=True),
+x_t * (1 + G c) + P c), beside WINDOW_RECURRENCE, in all three implementations; G is injected as the
+window's other weights are, so it starts away from zero. No earlier entry moved when they were
+recorded.
+
 Dropout: every network's own generator is seeded from SEED, so the numpy and Rust dropout
 networks train at the same drop_probability and draw the same masks. The dropout entries were
 re-recorded when their masks moved from the global streams to the network's generator (the RNG
@@ -728,6 +734,15 @@ CONTINUOUS_NETWORKS = {
     "rust continuous window model": WindowRecurrentRustArrayNetwork,
     "python continuous window model": WindowRecurrentBackpropNetwork,
 }
+# WINDOW_SPECS with FiLM state inputs (the audit-remedies workplan, stage 9, D9)
+FILM_WINDOW_SPECS: list[LayerSpec] = [
+    StateInput(scale=True) if isinstance(spec, StateInput) else spec for spec in WINDOW_SPECS
+]
+FILM_NETWORKS = {
+    "numpy film window model": WindowRecurrentArrayNetwork,
+    "rust film window model": WindowRecurrentRustArrayNetwork,
+    "python film window model": WindowRecurrentBackpropNetwork,
+}
 
 
 def _sequential_network(name: str, input_shape: InputShape, specs: list[LayerSpec], rule: UpdateRule) -> Any:
@@ -1204,6 +1219,17 @@ def _entries() -> Iterator[tuple[str, Callable[[], dict[str, Any]]]]:
                 sequence_rows,
                 "predict_probabilities",
                 prepare=lambda network: network.set_code_learning_rate_scale([CODE_RATE_SCALE]),
+            ),
+        )
+    for name, window_cls in FILM_NETWORKS.items():
+        yield (
+            name,
+            partial(
+                _run_network,
+                name,
+                partial(window_cls, (WINDOW_COLUMNS,), FILM_WINDOW_SPECS, WINDOW_RECURRENCE, Adam()),
+                sequence_rows,
+                "predict_probabilities",
             ),
         )
 

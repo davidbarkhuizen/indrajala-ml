@@ -651,6 +651,8 @@ def _program_op(layer: Any) -> tuple[Any, ...]:
     if isinstance(layer, token_layers.PositionRustArrayLayer):
         return ("position",)
     if isinstance(layer, rust_parts.StateInputRustArrayLayer):
+        if isinstance(layer, rust_parts.FilmStateInputRustArrayLayer):
+            return ("state_input", layer.tokens, True)  # FiLM's (the audit-remedies workplan, D9)
         return ("state_input", layer.tokens)
     if isinstance(layer, residual_layers.ForkRustArrayLayer):
         return ("fork",)

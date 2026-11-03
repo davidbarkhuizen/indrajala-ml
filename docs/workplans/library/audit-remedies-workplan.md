@@ -316,7 +316,11 @@ move), and its timing tier (docs/measurement.md §1).
    they pin the draw. Planned: `init` on `Dense` and `Conv`; `randomize` in all three; format 2.
    Tests: the draw's bounds and variance; numpy, Rust and pure Python draw the same `W` from one
    seed; `"fan_in"` keeps every bit. Golden: one entry (a ReLU network with `"he"`). Tier 0.
-9. **The FiLM state input (D9).** 9a, in `indrajala-math-rust`: `state_input_forward`/`_backward`
+9. **The FiLM state input (D9).** *Built:* 9a, indrajala-math-rust #94:
+   `state_input_film_forward`/`_backward` as new ops beside the additive ones (left untouched), and
+   the program's `("state_input", tokens, True)`, `gamma` cached for the downstream delta. 9b: a
+   FiLM subclass per implementation, which the builders pick on `StateInput(scale=True)`; format 2
+   writes `scale` only when set; golden: three entries, G injected away from zero. Planned: 9a, in `indrajala-math-rust`: `state_input_forward`/`_backward`
    with an optional `G`, and the program's op flag, with the crate's tests. 9b, here: the bump;
    `StateInput(scale=True)` in the three implementations and the window program's op; format 2.
    Tests: at `G = 0` the additive layer's bits; the gradient against a finite difference; the

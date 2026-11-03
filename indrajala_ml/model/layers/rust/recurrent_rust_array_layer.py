@@ -107,6 +107,56 @@ class StateInputRustArrayLayer:
         self.grad_P = self._grad_P
 
 
+
+class FilmStateInputRustArrayLayer(StateInputRustArrayLayer):
+    """FilmStateInputArrayLayer on the Rust backend (state_input_film_forward, state_input_film_backward)."""
+
+    decayed: ClassVar[tuple[bool, ...]] = (True, True)
+
+    def __init__(self, tokens: int, features: int, state_size: int) -> None:
+        super().__init__(tokens, features, state_size)
+        self.G: pa.Array = pa.Array.zeros((features, state_size))
+        self.grad_G: pa.Array = pa.Array.zeros((features, state_size))
+
+    def parameters(self) -> tuple[pa.Array, ...]:
+        return (self.P, self.G)
+
+    def gradients(self) -> tuple[pa.Array, ...]:
+        return (self.grad_P, self.grad_G)
+
+    def set_parameters(self, parameters: Sequence[pa.Array]) -> None:
+        self.P, self.G = parameters
+
+    def reset_gradient_accum(self) -> None:
+        super().reset_gradient_accum()
+        self.grad_G = pa.Array.zeros((self.features, self.state_size))
+
+    def forward_batch(self, X: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        out, self._gamma = pa.state_input_film_forward(X, self.state, self.P, self.G, self.tokens)
+        self._X = X
+        return out
+
+    def _backward(self, downstream: pa.Array) -> None:
+        # the input's delta and the state's gradient now; P's and G's, which the op gives with
+        # them, kept for accumulate_gradient_batch
+        self.delta_batch = downstream
+        self._downstream, self.state_delta, self._grad_P, self._grad_G = pa.state_input_film_backward(
+            downstream, self._X, self.state, self.P, self.G, self._gamma, self.grad_P, self.grad_G, self.tokens
+        )
+
+    def downstream(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        return self._downstream.reshape(self.size)
+
+    def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
+        return self._downstream
+
+    def accumulate_gradient(self, input_activation: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.grad_P, self.grad_G = self._grad_P, self._grad_G
+
+    def accumulate_gradient_batch(self, input_activation_batch: pa.Array, *, context: ForwardContext = NO_CONTEXT) -> None:
+        self.grad_P, self.grad_G = self._grad_P, self._grad_G
+
+
 class AttentionPoolingRustArrayLayer:
     """AttentionPoolingArrayLayer's query on the Rust backend: RecurrenceRustArrayLayer runs it."""
 

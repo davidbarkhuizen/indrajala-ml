@@ -74,7 +74,9 @@ ROTARY: list[LayerSpec] = [
     LayerNorm(),
     DIGITS,
 ]
-WINDOWS = {"the tests' window": WINDOW, "every kind": EVERY_KIND, "rotary": ROTARY}
+# EVERY_KIND with FiLM state inputs (the audit-remedies workplan, D9)
+FILM: list[LayerSpec] = [StateInput(scale=True) if isinstance(spec, StateInput) else spec for spec in EVERY_KIND]
+WINDOWS = {"the tests' window": WINDOW, "every kind": EVERY_KIND, "rotary": ROTARY, "film": FILM}
 
 # the studies' cells from the library's presets: the window-recurrent adder's 27 column tokens and 3
 # digits; the division family at p 7, the sum and difference queried (11 tokens, 3 a column, 8 classes)
@@ -159,7 +161,7 @@ def test_every_layer_class_a_window_holds_has_an_op():
     }
     held = {
         type(layer)
-        for window in (EVERY_KIND, ROTARY)
+        for window in (EVERY_KIND, ROTARY, FILM)
         for layer in WindowRecurrentRustArrayNetwork.randomized(
             (K,), window, RECURRENCES["one factor"], Adam(), seed=7
         ).layers
@@ -167,7 +169,7 @@ def test_every_layer_class_a_window_holds_has_an_op():
     assert set(window_kinds.values()) | {LAYER_CLASSES["rust"].fork, LAYER_CLASSES["rust"].add} == held
     networks = [
         WindowRecurrentRustArrayNetwork.randomized((K,), window, RECURRENCES["one factor"], Adam(), seed=7)
-        for window in (EVERY_KIND, ROTARY)
+        for window in (EVERY_KIND, ROTARY, FILM)
     ]
     for layer in (layer for network in networks for layer in network.layers):
         assert _program_op(layer)[0]
