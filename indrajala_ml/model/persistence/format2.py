@@ -26,6 +26,13 @@ network resumes training by bits, its dropout masks included.
   "codes" null for a continuous factor (the window-recurrent claims workplan, stage 4), the state
   its factors in order (the factored-state workplan, stage 4). All three implementations build it
   (stages 4-6).
+- shape "encoder_decoder" (the cross-attention workplan, D14) is an encoder-decoder network's:
+  "encoder" holds the encoder's layer entries and "layers" the decoder's; input is {"source":
+  {"dimension": S}, "target": {"dimension": T}}, the source's and the target's ids; weights,
+  optimizer_state's layers and snapshots run over expand_specs(encoder + decoder), the encoder's
+  layers first. A decoder's "cross_attention" entry holds its fields when not the default, and its
+  weights are an attention's, [Wq, bq, Wk, bk, Wv, bv, Wo, bo], Wk and Wv reading the memory's
+  width; its Embedding's entry has "separator_opens": true (D13).
 - preset holds a preset's class and constructor arguments, from which its load rebuilds it. A
   Sequential network's file has none.
 - input is {"dimension": d} or {"height": h, "width": w, "channels": c}, with "input_bounds" in
@@ -115,6 +122,8 @@ ENSEMBLE = "ensemble"
 IMPLEMENTATIONS = (PYTHON, "numpy", "rust")
 # a window-recurrent network's (the window-recurrent adder workplan): its file adds its recurrence
 WINDOW_RECURRENT = "window_recurrent"
+# an encoder-decoder network's file (the cross-attention workplan, D14)
+ENCODER_DECODER = "encoder_decoder"
 SHAPES = ("multiclass", "single_output", "sequence", WINDOW_RECURRENT)
 
 

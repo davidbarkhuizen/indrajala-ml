@@ -2,7 +2,8 @@
 validate_layer_specs: which lists of layer specs (layer_specs.py) every implementation builds. It
 accepts only the combinations every builder maps, so every accepted list is parity-testable.
 validate_window_recurrent: which windows and recurrences (window_recurrence.py) make a
-window-recurrent network.
+window-recurrent network. validate_encoder_decoder: which encoders and decoders make an
+encoder-decoder network (the cross-attention workplan, D14).
 """
 
 from __future__ import annotations
@@ -17,9 +18,11 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Branches,
+    CrossAttention,
     Dense,
     Dropout,
     Embedding,
+    EncoderDecoder,
     GatedDense,
     LayerNorm,
     LayerSpec,
@@ -86,6 +89,19 @@ def _check_attention(spec: Attention) -> None:
     )
 
 
+def _check_cross_attention(spec: CrossAttention) -> None:
+    assert spec.heads >= 1, f"a CrossAttention has at least one head; got {spec!r}"
+    assert spec.key_size is None or spec.key_size >= 1, f"a key_size is at least 1; got {spec!r}"
+    assert 0.0 <= spec.dropout < 1.0, f"a CrossAttention's dropout is in [0.0, 1.0); got {spec!r}"
+    g = spec.key_value_heads
+    assert g is None or (g >= 1 and spec.heads % g == 0), (
+        f"a CrossAttention's key_value_heads is at least 1 and divides its heads; got {spec!r}"
+    )
+    assert g != spec.heads, (
+        f"a CrossAttention whose every query head has its own key/value head says key_value_heads=None; got {spec!r}"
+    )
+
+
 def _check_dropout(spec: Dropout) -> None:
     assert 0.0 <= spec.p < 1.0, f"a Dropout's p is in [0.0, 1.0); got {spec!r}"
 
@@ -137,10 +153,10 @@ def _check_token_residual(spec: Residual, in_body: bool, window: bool) -> None:
         _check_dropout(last)
         *layers, last = layers
     affine = isinstance(last, Dense) and last.activation == "linear" and last.bias
-    assert affine or isinstance(last, Attention), (
-        f'a token block\'s body ends in Attention or an affine layer, Dense(n, "linear", bias=True) '
-        f"(the layer-norm and attention workplan, D1, D6), then may end in a Dropout (the attention-dropout "
-        f"workplan, D2); got {spec!r}"
+    assert affine or isinstance(last, Attention | CrossAttention), (
+        f"a token block's body ends in Attention, CrossAttention (a decoder's, the cross-attention workplan, D14) "
+        f'or an affine layer, Dense(n, "linear", bias=True) (the layer-norm and attention workplan, D1, D6), then '
+        f"may end in a Dropout (the attention-dropout workplan, D2); got {spec!r}"
     )
     if isinstance(last, Dense):
         _check_hidden_dense(last)
@@ -150,6 +166,8 @@ def _check_token_residual(spec: Residual, in_body: bool, window: bool) -> None:
             layers = layers[:-1]
     elif isinstance(last, Attention):
         _check_attention(last)
+    elif isinstance(last, CrossAttention):
+        _check_cross_attention(last)
     _check_token_layers(layers, in_body=True, window=window)
 
 
@@ -275,8 +293,14 @@ def validate_layer_specs(specs: Sequence[LayerSpec]) -> None:
     _validate_layer_specs(specs, window=False)
 
 
-def _validate_layer_specs(specs: Sequence[LayerSpec], window: bool) -> None:
+def _validate_layer_specs(specs: Sequence[LayerSpec], window: bool, memory: bool = False) -> None:
+    # memory: the specs are an encoder-decoder's decoder, whose CrossAttention reads the encoder's output
     assert specs, "a network needs at least one layer"
+    cross = next((spec for spec in expand_specs(specs) if isinstance(spec, CrossAttention)), None)
+    assert memory or cross is None, (
+        f"a CrossAttention reads an encoder's output, so it stands only in an EncoderDecoder's decoder (the "
+        f"cross-attention workplan, D14); got {cross!r}"
+    )
     *hidden, output = specs
 
     if hidden and isinstance(hidden[0], TokenStart):
@@ -458,3 +482,50 @@ def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -
         f"window-recurrent adder workplan, W1b-ii, W18); got {list(specs)!r}"
     )
     spec_shapes(specs, input_shape)
+
+
+def validate_encoder_decoder(spec: EncoderDecoder) -> None:
+    """
+    Rejects an encoder-decoder some implementation can't build (the cross-attention workplan, D14).
+    The encoder: an Embedding with segments, step 11's rule (a separator ends its pair), then token
+    layers as a sequence model's, whose every Attention is not causal (the encoder reads its whole
+    source), ending in a LayerNorm, with no output layer and no CrossAttention. The decoder: a
+    sequence model (validate_layer_specs's rules) from an Embedding with segments and
+    separator_opens (D13), whose every Attention is causal, with at least one CrossAttention ending
+    a residual block's body, and a token-wise softmax output layer. Sizes are checked by
+    encoder_decoder_shapes.
+    """
+    encoder, decoder = spec.encoder, spec.decoder
+    assert encoder and decoder, f"an encoder-decoder has an encoder and a decoder; got {spec!r}"
+    start = encoder[0]
+    assert isinstance(start, Embedding) and start.segments and not start.separator_opens, (
+        f"an encoder starts with an Embedding with segments, a separator ending each source pair (D13); got {start!r}"
+    )
+    _check_token_start(start)
+    assert len(encoder) >= 2 and isinstance(encoder[-1], LayerNorm), (
+        f"an encoder ends in a LayerNorm, its output the decoder's memory (D14); got {list(encoder)!r}"
+    )
+    output = next((s for s in expand_specs(encoder) if isinstance(s, Dense) and s.output), None)
+    assert output is None, f"an encoder has no output layer: its output is the memory (D14); got {output!r}"
+    cross = next((s for s in expand_specs(encoder) if isinstance(s, CrossAttention)), None)
+    assert cross is None, f"a CrossAttention stands in the decoder, not the encoder (D14); got {cross!r}"
+    causal = next((s for s in expand_specs(encoder) if isinstance(s, Attention) and s.causal), None)
+    assert causal is None, f"an encoder reads its whole source: its attention isn't causal (D14); got {causal!r}"
+    _check_token_layers(encoder[1:], in_body=False, window=False)
+
+    start = decoder[0]
+    assert isinstance(start, Embedding) and start.segments and start.separator_opens, (
+        "a decoder starts with an Embedding with segments and separator_opens, a separator opening each target "
+        f"pair (D13); got {start!r}"
+    )
+    assert token_wise_output(decoder), (
+        f"a decoder ends in a token-wise output layer, with no TokenMean (D14); got {list(decoder)!r}"
+    )
+    _validate_layer_specs(decoder, window=False, memory=True)
+    attention = [s for s in expand_specs(decoder) if isinstance(s, Attention)]
+    assert all(s.causal for s in attention), (
+        f"a decoder's self-attention is causal (D14); got {next(s for s in attention if not s.causal)!r}"
+    )
+    assert any(isinstance(s, CrossAttention) for s in expand_specs(decoder)), (
+        f"a decoder reads the encoder through at least one CrossAttention (D14); got {list(decoder)!r}"
+    )
