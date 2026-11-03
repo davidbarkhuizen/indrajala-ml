@@ -40,7 +40,7 @@ PAIRS = [
 ]
 
 
-def spec(memory_width: int = 8, width: int = 6) -> EncoderDecoder:
+def spec(memory_width: int = 8, width: int = 6, dropout: float = 0.0) -> EncoderDecoder:
     def ffn(d: int) -> Residual:
         return Residual((LayerNorm(), Dense(2 * d, "relu"), Dense(d, "linear", bias=True)))
 
@@ -53,8 +53,8 @@ def spec(memory_width: int = 8, width: int = 6) -> EncoderDecoder:
         ),
         (
             Embedding(len(TARGET) + 2, width, segments=True, separator_opens=True),
-            Residual((LayerNorm(), Attention(heads=2, causal=True))),
-            Residual((LayerNorm(), CrossAttention(heads=2))),
+            Residual((LayerNorm(), Attention(heads=2, causal=True, dropout=dropout))),
+            Residual((LayerNorm(), CrossAttention(heads=2, dropout=dropout))),
             ffn(width),
             Residual((LayerNorm(), CrossAttention(heads=2, key_value_heads=1))),
             LayerNorm(),

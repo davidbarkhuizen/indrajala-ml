@@ -34,7 +34,6 @@ from dataclasses import replace
 from typing import Any, ClassVar, Protocol, Self, runtime_checkable
 
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
-
 from indrajala_ml.model.layers.array.array_layer_builder import build_encoder_decoder_layers
 from indrajala_ml.model.layers.forward_context import ForwardContext
 from indrajala_ml.model.persistence.format2 import ENCODER_DECODER, NetworkFile
@@ -165,7 +164,8 @@ class EncoderDecoderNetwork[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         # the memory's gradient: each CrossAttention's, a left fold in layer order (D2)
         memory_delta: A = self._crosses[0].memory_downstream_batch()
         for cross in self._crosses[1:]:
-            memory_delta = memory_delta + cross.memory_downstream_batch()
+            total: A = memory_delta + cross.memory_downstream_batch()
+            memory_delta = total
         encoder[-1].compute_hidden_delta_batch(
             _Memory(self.backend.reshape(memory_delta, *encoded[-1].shape)), context=encoder_context
         )

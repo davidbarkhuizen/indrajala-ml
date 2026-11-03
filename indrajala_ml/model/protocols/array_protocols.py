@@ -26,6 +26,9 @@ class BackendArray(Protocol):
 
     def __setitem__(self, index: Any, value: float, /) -> None: ...
 
+    # elementwise, in one rounding per value (an encoder-decoder's memory gradients, summed in order)
+    def __add__(self, other: Any, /) -> Any: ...
+
 
 class ArrayNetworkLayer[A: BackendArray](Protocol):
     """What ArrayNetworkBase drives layer by layer: dense, conv and max-pool layers alike."""
