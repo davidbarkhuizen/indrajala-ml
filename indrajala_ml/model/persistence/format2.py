@@ -95,6 +95,9 @@ from typing import Any, ClassVar, Protocol
 
 from indrajala_ml.model.persistence.checkpoint import Checkpoint, OptimizerState
 from indrajala_ml.model.persistence.format2_json import (
+    encoder_decoder_input_from_json,
+    encoder_decoder_input_to_json,
+    encoder_decoder_to_json,
     input_shape_from_json,
     input_to_json,
     layer_from_json,
@@ -109,7 +112,7 @@ from indrajala_ml.model.persistence.format2_json import (
     rule_from_json,
     rule_to_json,
 )
-from indrajala_ml.model.specs.layer_specs import LayerSpec
+from indrajala_ml.model.specs.layer_specs import EncoderDecoder, LayerSpec
 from indrajala_ml.model.specs.spec_shapes import InputShape
 from indrajala_ml.model.specs.update_rules import UpdateRule
 from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
@@ -124,7 +127,7 @@ IMPLEMENTATIONS = (PYTHON, "numpy", "rust")
 WINDOW_RECURRENT = "window_recurrent"
 # an encoder-decoder network's file (the cross-attention workplan, D14)
 ENCODER_DECODER = "encoder_decoder"
-SHAPES = ("multiclass", "single_output", "sequence", WINDOW_RECURRENT)
+SHAPES = ("multiclass", "single_output", "sequence", WINDOW_RECURRENT, ENCODER_DECODER)
 
 
 class _Optimizer(Protocol):
@@ -189,6 +192,20 @@ def _recurrence(network: Format2Network) -> WindowRecurrence | None:
     return getattr(network, "recurrence", None)
 
 
+def _encoder_decoder(network: Format2Network) -> tuple[EncoderDecoder, int, int] | None:
+    # an encoder-decoder network's specs, source ids and target ids; every other network has none
+    spec = getattr(network, "spec", None)
+    if not isinstance(spec, EncoderDecoder):
+        return None
+    return spec, getattr(network, "source_tokens"), getattr(network, "target_tokens")  # noqa: B009
+
+
+def _encoder_split(network: Format2Network) -> tuple[int | None, int | None]:
+    # where an encoder-decoder's layers split (its encoder's specs) and its source ids; (None, None)
+    encoder_decoder = _encoder_decoder(network)
+    return (None, None) if encoder_decoder is None else (len(encoder_decoder[0].encoder), encoder_decoder[1])
+
+
 def network_to_json(network: Format2Network) -> dict[str, Any]:
     """network as a format-2 file's contents."""
     return checkpoint_to_json(
@@ -212,8 +229,15 @@ def checkpoint_to_json(network: Format2Network, checkpoint: Checkpoint[Any, Any]
                 for name in (*network.preset_arguments, *network.hyperparameters)
             },
         }
-    state["input"] = input_to_json(network.input_shape, _input_bounds(network))
-    state["layers"] = [layer_to_json(spec) for spec in network.layer_specs]
+    encoder_decoder = _encoder_decoder(network)
+    if encoder_decoder is None:
+        state["input"] = input_to_json(network.input_shape, _input_bounds(network))
+        state["layers"] = [layer_to_json(spec) for spec in network.layer_specs]
+    else:
+        # the source's and the target's ids, and each stack's entries (the cross-attention workplan, D14)
+        spec, source_tokens, target_tokens = encoder_decoder
+        state["input"] = encoder_decoder_input_to_json(source_tokens, target_tokens)
+        state.update(encoder_decoder_to_json(spec))
     recurrence = _recurrence(network)
     if recurrence is not None:
         state["recurrence"] = recurrence_to_json(recurrence)
@@ -243,6 +267,11 @@ class NetworkFile:
     rng: dict[str, Any] | None
     # a window-recurrent network's recurrence; None for every other shape
     recurrence: WindowRecurrence | None = None
+    # an encoder-decoder's: its encoder's specs, layers' first encoder_length (layers is the
+    # encoder's then the decoder's, its one index space), and its source's ids, input_shape's first
+    # source_tokens; None for every other shape
+    encoder_length: int | None = None
+    source_tokens: int | None = None
 
 
 def network_from_json(state: dict[str, Any]) -> NetworkFile:
@@ -257,17 +286,30 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
     rule = rule_from_json(state["update_rule"])
     python = state["implementation"] == PYTHON
     layers = [layer_from_json(spec) for spec in state["layers"]]
+    encoder_decoder = state["shape"] == ENCODER_DECODER
+    if encoder_decoder != ("encoder" in state):
+        raise ValueError(f"an {ENCODER_DECODER} file, and only one, has an encoder: shape {state['shape']!r}")
+    encoder_length = source_tokens = None
+    if encoder_decoder:
+        encoder = [layer_from_json(spec) for spec in state["encoder"]]
+        encoder_length = len(encoder)
+        layers = encoder + layers
     window_recurrent = state["shape"] == WINDOW_RECURRENT
     if window_recurrent != ("recurrence" in state):
         raise ValueError(f"a {WINDOW_RECURRENT} file, and only one, has a recurrence: shape {state['shape']!r}")
     recurrence = recurrence_from_json(state["recurrence"]) if window_recurrent else None
     shape = state["input"]
     bounds = shape.get("input_bounds")
+    if encoder_decoder:
+        source_tokens, target_tokens = encoder_decoder_input_from_json(shape)
+        input_shape: InputShape = (source_tokens + target_tokens,)
+    else:
+        input_shape = input_shape_from_json(shape)
     return NetworkFile(
         implementation=state["implementation"],
         shape=state["shape"],
         preset=state.get("preset"),
-        input_shape=input_shape_from_json(shape),
+        input_shape=input_shape,
         input_bounds=None if bounds is None else _argument_from_json("input_bounds", bounds),
         layers=layers,
         update_rule=rule,
@@ -275,6 +317,8 @@ def network_from_json(state: dict[str, Any]) -> NetworkFile:
         optimizer_state=optimizer_state_from_json(rule, python, state["optimizer_state"], layers, recurrence),
         rng=rng_from_json(state["rng"]) if "rng" in state else None,
         recurrence=recurrence,
+        encoder_length=encoder_length,
+        source_tokens=source_tokens,
     )
 
 
@@ -337,6 +381,10 @@ def check_loadable(network: Format2Network, file: NetworkFile) -> None:
         differences.append(f"layers {file.layers}, not {network.layer_specs}")
     if file.recurrence != _recurrence(network):
         differences.append(f"recurrence {file.recurrence}, not {_recurrence(network)}")
+    if (file.encoder_length, file.source_tokens) != _encoder_split(network):
+        differences.append(
+            f"an encoder of {file.encoder_length} specs over {file.source_tokens} ids, not {_encoder_split(network)}"
+        )
     if file.update_rule != network.optimizer.rule:
         differences.append(f"update rule {file.update_rule}, not {network.optimizer.rule}")
     if differences:

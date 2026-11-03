@@ -45,6 +45,11 @@ tests/model/persistence/test_legacy_saved_models.py loads.
   field off its default. Their states are WINDOW_COUNT windows, so a state passes between windows.
 - The continuous-state fixtures (the window-recurrent claims workplan, stage 4) are the same
   networks with CONTINUOUS_RECURRENCE, no codes, named ContinuousWindow<class name>.
+- The encoder-decoder fixture (the cross-attention workplan, stage 4c) is a format-2 file of the
+  numpy encoder-decoder, ENCODER_DECODER_MODEL over SOURCE_TOKENS and TOKENS ids: a non-causal
+  encoder, a decoder with causal self-attention and two CrossAttention layers (one with grouped
+  key/value heads and dropout), its memory wider than the decoder. Its states are both stacks' ids,
+  both embeddings over VOCABULARY, so a state's random ids include separators and pads.
 
 Each fixture is two files in tests/fixtures/saved_models/: <name>.json, the file the class's
 own save() wrote, and <name>.expected.json, what the saved network held and predicted:
@@ -80,6 +85,7 @@ from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
+from indrajala_ml.model.networks.numpy.encoder_decoder_array_network import EncoderDecoderArrayNetwork
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
@@ -96,9 +102,11 @@ from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT
 from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
+    CrossAttention,
     Dense,
     Dropout,
     Embedding,
+    EncoderDecoder,
     GatedDense,
     LayerNorm,
     LayerSpec,
@@ -198,6 +206,24 @@ LAYER_NORM: list[LayerSpec] = [
 # default) and a token-wise softmax output
 TOKENS = 5
 VOCABULARY = 7
+# an encoder-decoder over SOURCE_TOKENS source ids and TOKENS target ids (the cross-attention workplan, D14)
+SOURCE_TOKENS = 6
+ENCODER_DECODER_MODEL = EncoderDecoder(
+    (
+        Embedding(VOCABULARY, 6, segments=True),
+        Residual((LayerNorm(), Attention(heads=2))),
+        Residual((LayerNorm(), Dense(8, activation="relu"), Dense(6, activation="linear", bias=True))),
+        LayerNorm(),
+    ),
+    (
+        Embedding(VOCABULARY, 4, segments=True, separator_opens=True),
+        Residual((LayerNorm(), Attention(heads=2, causal=True))),
+        Residual((LayerNorm(), CrossAttention(heads=2))),
+        Residual((LayerNorm(), CrossAttention(heads=2, key_value_heads=1, dropout=0.1))),
+        LayerNorm(),
+        Dense(VOCABULARY - 1, output=True, activation="softmax", loss="cross_entropy"),
+    ),
+)
 SEQUENCE_MODEL: list[LayerSpec] = [
     Embedding(VOCABULARY, 4),
     Position(),
@@ -413,6 +439,16 @@ def _window(
     return SavedModelFixture(implementation, build, "predict_probabilities", {}, format2=True, class_name=class_name)
 
 
+def _encoder_decoder() -> SavedModelFixture:
+    return SavedModelFixture(
+        "numpy",
+        lambda: EncoderDecoderArrayNetwork(ENCODER_DECODER_MODEL, SOURCE_TOKENS, TOKENS, Adam(**ADAM)),
+        "predict_probabilities",
+        {},
+        format2=True,
+    )
+
+
 def _ensemble(name: str, implementation: str, classifier_name: str) -> SavedModelFixture:
     return SavedModelFixture(
         implementation,
@@ -607,6 +643,7 @@ FIXTURES: dict[str, SavedModelFixture] = {
     "WindowRecurrentArrayNetwork": _window("numpy"),
     "WindowRecurrentRustArrayNetwork": _window("rust"),
     "WindowRecurrentBackpropNetwork": _window("python"),
+    "EncoderDecoderArrayNetwork": _encoder_decoder(),
     **{
         f"ContinuousWindow{name}": _window(implementation, CONTINUOUS_RECURRENCE, name)
         for name, implementation in (
@@ -721,7 +758,8 @@ def random_label(rng: random.Random, network: Any, predict: str) -> Any:
     A label for network drawn from rng: a class, 0.0 or 1.0, a sequence network's class per token,
     or a window-recurrent network's per column of random_state's windows.
     """
-    if getattr(network, "format2_shape", None) == "sequence":
+    if getattr(network, "format2_shape", None) in ("sequence", "encoder_decoder"):
+        # a class per token: an encoder-decoder's per target token
         return tuple(rng.randrange(network.class_count) for _ in range(network.tokens))
     if _is_window(network):
         return tuple(rng.randrange(network.class_count) for _ in range(WINDOW_COUNT * network.columns))
