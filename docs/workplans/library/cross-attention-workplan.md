@@ -317,7 +317,15 @@ Each lists the options considered, with pros and cons, and the choice.
    The memory's gradient is returned as `(N * S, d_m)` rows, as `memory_downstream_batch`. Tests
    compare by bits against the crate's tiled composition, and the crate's bits fixture gains one
    cross-attention line.
-6. **Rust layers**; 7. **Pure Python**; parity.
+6. **Rust layers**; parity. Two PRs:
+   - **6a, the layer:** `CrossAttentionRustArrayLayer`, numpy's over the crate's ops (memory from
+     the forward context; dX and the memory's gradient), and the builder's Rust `cross_attention`.
+     Tests against numpy's layer within the products' rounding, a pad's query by bits, dropout's
+     draws. Done 2026-11-03.
+   - **6b, the network:** a Rust encoder-decoder network (the numpy one's passes over the Rust
+     backend's array ops), seeded-init parity numpy = Rust, and the stated numpy-only exceptions
+     removed.
+7. **Pure Python**; parity.
 8. **Decoding** (D7) and chrF (D6).
 9. **Fixtures, checkpoints and golden entries** (D8).
 10. **The study** (D9).
