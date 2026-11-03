@@ -55,8 +55,10 @@ bits.
     (2026-11-02), in all three implementations and the crate; the study puts later sequence work on
     the long-form corpora at windows of 256, the document mask the packed default (next-steps, From
     context length).
-13. **FFN activations: GELU and SwiGLU**; planned (2026-10-10,
-    [ffn-activations-workplan.md](workplans/library/ffn-activations-workplan.md)).
+13. **FFN activations: GELU and SwiGLU**: GELU, GELU-tanh, SiLU and the gated FFN
+    (`GatedDense`, SwiGLU and GEGLU); done (2026-11-02), in all three implementations and the
+    crate (README, Activations); the study was abandoned unfinished, so ReLU stays the default
+    (next-steps, From FFN activations).
 14. **Grouped- and multi-query attention**; planned (2026-10-10,
     [grouped-query-attention-workplan.md](workplans/library/grouped-query-attention-workplan.md)).
 15. **Cross-attention**, with an encoder-decoder model on Greek-English translation; planned
