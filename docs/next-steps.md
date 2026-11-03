@@ -16,7 +16,8 @@ primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
 ## After paper 1: the agreed order (the owner, 2026-10-24)
 
-1. Finish paper 1 ([paper-workplan.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/paper-workplan.md)).
+1. Finish paper 1: **done**. The stand-alone preprint was published on 2026-10-31
+   (doi:10.5281/zenodo.23826655), and the owner closed the paper on 2026-11-03: no more work on it.
 2. A statistically sound verdict on the continuous quasi-static crystallisation (out of the paper
    by D2: about 3 in 5 on two backdrops, 0 of 10 beyond): whether it keeps the solutions the snap to
    codes loses, without harm, against the paper cell at the same epoch budget; the default if so.
@@ -82,6 +83,7 @@ docs cite them by section:
 | Context length: tiled attention, windows cut anew every epoch, the study (roadmap step 12, D1-D13) | #643 | #647, #1168-#1175, crate #88, #1178, this PR | `git show ec20e8c:docs/workplans/library/context-length-workplan.md` |
 | FFN activations: GELU and SwiGLU (roadmap step 13, D1-D11; its study abandoned) | #644 | #1176, #1177, #1182-#1187, crate #90, #92, this PR | `git show dcedf28:docs/workplans/library/ffn-activations-workplan.md` |
 | Grouped- and multi-query attention (roadmap step 14, D1-D13; its study abandoned for the literature) | #645 | #1189-#1197, crate #93, this PR | `git show 3a09724:docs/workplans/library/grouped-query-attention-workplan.md` |
+| Paper 1: learning finite-state transducers through their approximations, with proof (D1-D39; retired 2026-11-03 after the preprint, doi:10.5281/zenodo.23826655) | indrajala-research's | T1-T12, R1-R9; datapack doi:10.5281/zenodo.23733575; tags `paper1-v1` to `paper1-v1.2` | `git show 0d1aaef:docs/workplans/paper-workplan.md` in indrajala-research |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
@@ -515,7 +517,7 @@ Decided with the owner, each to become a workplan or a stage:
   approximation, helps where an equally distinguishing non-approximation, which the network doesn't
   learn, doesn't. Whether it helps *because* it is an approximation needs a learnable
   non-approximation control (the programme audit's F3): the paper's T1
-  ([paper-workplan.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/paper-workplan.md)). Open: whether any approximation helps (one control,
+  (retired: `git show 0d1aaef:docs/workplans/paper-workplan.md` (indrajala-research)). Open: whether any approximation helps (one control,
   the product, at one machine), and at larger `p`; the affine map above tests one
   approximation where no cover exists.
 - **Terms** (settled with the owner, the division paper): target machine and its output function;
