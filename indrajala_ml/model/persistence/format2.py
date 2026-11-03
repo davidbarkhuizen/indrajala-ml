@@ -183,8 +183,11 @@ def _argument_from_json(name: str, value: Any) -> Any:
 
 
 def _input_bounds(network: Format2Network) -> list[tuple[float, float]] | None:
-    # a pure-Python network's; the array networks have none
-    return getattr(network, "input_bounds", None) if network.implementation == PYTHON else None
+    # a pure-Python network's; the array networks have none, and an encoder-decoder's file records
+    # none (its input is its source's and target's ids, D14)
+    if network.implementation != PYTHON or network.format2_shape == ENCODER_DECODER:
+        return None
+    return getattr(network, "input_bounds", None)
 
 
 def _recurrence(network: Format2Network) -> WindowRecurrence | None:
