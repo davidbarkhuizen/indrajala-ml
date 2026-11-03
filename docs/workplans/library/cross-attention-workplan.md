@@ -8,7 +8,8 @@ registration. Stage 1 (this plan) done. Stage 2 (2026-11-03): the dataset reposi
 entry and the loader of packed pairs here (D13 new: a packed pair's layout). The same day, at the
 owner's direction, D4's second corpus became Plutarch's *Lives* in place of the New Testament, and
 Pausanias was dropped: the repository at `v2026-11-03.2` (13,122 pairs of the histories, 9,794 of
-the *Lives*; its `report.md` the alignment report). Stage 3 (2026-11-03): the specs (D14).**
+the *Lives*; its `report.md` the alignment report). Stage 3 (2026-11-03): the specs (D14). Stage 4 (2026-11-03): the numpy layer, network
+and file.**
 
 Roadmap step 15 ([primitives-roadmap.md](../../primitives-roadmap.md)): attention from one sequence to
 another, and the encoder-decoder transformer it builds (Vaswani et al. 2017, §3.1, §3.2.3), on a
@@ -302,7 +303,11 @@ Each lists the options considered, with pros and cons, and the choice.
      target's labels, a pad's no class. `build_encoder_decoder_layers` maps each
      `CrossAttention` with its memory shape. Its gradients through both stacks pass finite
      differences.
-   - **4c, the file:** format 2 save and load, and checkpoints, resuming by bits.
+   - **4c, the file:** format 2 save and load, and checkpoints, resuming by bits. Done
+     2026-11-03. `"encoder_decoder"` files: the writer puts `"encoder"` and `"layers"` and the
+     source's and target's ids; the reader makes `NetworkFile.layers` the encoder's then the
+     decoder's, with `encoder_length` and `source_tokens`, which `check_loadable` compares;
+     `load_network` builds the numpy network. A saved-model fixture pins the file. Stage 4 done.
 5. **The crate**: the key/value input through the attention ops; "Bump rust/" with its A/B.
 6. **Rust layers**; 7. **Pure Python**; parity.
 8. **Decoding** (D7) and chrF (D6).
