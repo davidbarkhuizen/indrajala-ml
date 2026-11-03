@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 from indrajala_ml.model.layers.numpy import attention_array_layer, token_array_layer
+from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.networks.numpy.encoder_decoder_array_network import EncoderDecoderArrayNetwork
 from indrajala_ml.model.networks.python.encoder_decoder_backprop_network import EncoderDecoderBackpropNetwork
 from indrajala_ml.model.persistence.load_network import load_network
@@ -38,10 +39,12 @@ def examples() -> list[tuple[tuple[float, ...], tuple[int, ...]]]:
 
 
 def assert_close(python: Any, numpy: Any, tolerance: float = 1e-10) -> None:
-    for expected_entry, actual_entry in zip(numpy.snapshot(), as_array_snapshot(python), strict=True):
+    expected_snapshot: list[list[Any]] = numpy.snapshot()
+    for expected_entry, actual_entry in zip(expected_snapshot, as_array_snapshot(python), strict=True):
         scale = max((float(np.abs(values).max()) for values in expected_entry), default=1.0)
         for values, python_values in zip(expected_entry, actual_entry, strict=True):
-            np.testing.assert_allclose(np.asarray(python_values), values, rtol=0.0, atol=tolerance * scale)
+            actual: FloatArray = np.asarray(python_values, dtype=np.float64)
+            np.testing.assert_allclose(actual, np.asarray(values, dtype=np.float64), rtol=0.0, atol=tolerance * scale)
 
 
 @pytest.mark.parametrize("dropout", [0.0, 0.1])
