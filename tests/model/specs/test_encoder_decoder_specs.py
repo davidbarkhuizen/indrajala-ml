@@ -116,7 +116,7 @@ def test_a_cross_attention_stands_only_in_a_decoder():
             EncoderDecoder(encoder(), (Embedding(TARGET, 12, segments=True), *decoder()[1:])),
             "a decoder starts with an Embedding with segments and separator_opens",
         ),
-        (EncoderDecoder(encoder(), decoder()[:-1]), "a decoder ends in a token-wise output layer"),
+        (EncoderDecoder(encoder(), decoder()[:-1]), "the last layer must be the output layer"),
         (
             EncoderDecoder(encoder(), (decoder()[0], Residual((LayerNorm(), Attention(heads=2))), *decoder()[2:])),
             "a decoder's self-attention is causal",
