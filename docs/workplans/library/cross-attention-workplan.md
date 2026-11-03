@@ -332,7 +332,17 @@ Each lists the options considered, with pros and cons, and the choice.
      are numpy's by bits. Training matches numpy's within the products' rounding. A Rust file
      loads and trains on by bits. The window op registry's exclusion of `cross_attention` stays:
      a window never holds one.
-7. **Pure Python**; parity.
+7. **Pure Python**; parity. Two PRs:
+   - **7a, the layer:** `CrossAttentionLayer` (pure Python), self-attention's `AttentionLayer` with
+     the memory's rows for K and V, `Masking`'s `own_column`, the empty-row guard and the draws over
+     the memory's keys; the per-example context carries the memory's row (`ForwardContext.example`);
+     `segment_rows(..., separator_opens=True)` (D13); and the pure-Python builder's `CrossAttention`
+     and `build_python_encoder_decoder_layers`. Tests against numpy's layer within BLAS rounding,
+     a pad's query by bits, dropout's draws, and D13's rule against numpy's. Self-attention's
+     pure-Python bits don't move. Done 2026-11-03.
+   - **7b, the network:** a pure-Python encoder-decoder network (two layer-major passes, the
+     memory's gradient folded into the encoder's last layer), three-way parity, its saved-model
+     fixture, and `load_network`'s last refusal removed.
 8. **Decoding** (D7) and chrF (D6).
 9. **Fixtures, checkpoints and golden entries** (D8).
 10. **The study** (D9).
