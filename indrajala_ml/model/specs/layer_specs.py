@@ -34,6 +34,10 @@ a dense layer's dropout is fused with its sigmoid, because no activation stands 
 A token part's positions are a learned Position after its start, or rotary ones inside its
 attention, Attention(positions="rotary") (the rotary-positions workplan, D2, D6), not both.
 
+An encoder-decoder network (the cross-attention workplan, D2, D14) is two lists, EncoderDecoder's:
+an encoder of token layers over the source, ending in a LayerNorm, and a decoder, a sequence model
+over the target whose residual blocks may end in CrossAttention, reading the encoder's output.
+
 A window-recurrent network (the window-recurrent adder workplan) runs a sequence model's specs, its
 window, over each window of k columns, and hands a state from window to window (window_recurrence.py).
 The state enters the window through a StateInput, which stands among the window's tokens right
@@ -150,17 +154,25 @@ class Embedding:
     within its paragraph, positions count from each paragraph's start, and a target counts unless
     its input is a pad (the separator's, the next paragraph's first character, counts: the
     context-length workplan, D11). A batch with neither id trains as without segments.
+
+    separator_opens (the cross-attention workplan, D13): a separator opens the segment after it
+    instead of ending the one before, as an encoder-decoder's target row is packed: a separator,
+    then each pair's English followed by one, so the separator before a pair reads that pair's
+    source. With segments only.
     """
 
     vocabulary: int
     size: int
     segments: bool = False
+    separator_opens: bool = False
 
     def __post_init__(self) -> None:
         if self.segments and self.vocabulary < 3:
             raise ValueError(
                 f"an Embedding with segments has a symbol, a separator and a pad; got {self.vocabulary} ids"
             )
+        if self.separator_opens and not self.segments:
+            raise ValueError(f"separator_opens is a rule for segments (D13): it needs segments=True; got {self!r}")
 
     @property
     def separator(self) -> int:
@@ -219,6 +231,35 @@ class Attention:
     rotary_base: float = 10000.0
     document_mask: bool = True
     key_value_heads: int | None = None
+
+    def head_size(self, features: int) -> int:
+        """Each head's width d_k over tokens of features features: key_size, else features / heads."""
+        return features // self.heads if self.key_size is None else self.key_size
+
+    def kv_heads(self) -> int:
+        """The key/value heads g: key_value_heads, else heads."""
+        return self.heads if self.key_value_heads is None else self.key_value_heads
+
+
+@dataclass(frozen=True)
+class CrossAttention:
+    """
+    Attention from the decoder's tokens to the encoder's output, its memory (the cross-attention
+    workplan, D3): queries from the tokens, keys and values projected from the memory's features
+    (which may be wider or narrower than the tokens'), in heads heads of key_size features each
+    (d / heads when None, d the tokens' width), biases on all four projections, ending in the affine
+    output projection back to d. Never causal and never rotary: the two sequences' positions are
+    unrelated. A token reads only its own segment's memory, and never a pad's (D3, D11). With
+    key_value_heads g, the heads share g key/value heads, as Attention's. In training, dropout is
+    the drop probability of each attention weight. It ends a decoder block's body, as Attention
+    does: Residual((LayerNorm(), CrossAttention())), and stands only in an EncoderDecoder's
+    decoder.
+    """
+
+    heads: int = 1
+    key_size: int | None = None
+    key_value_heads: int | None = None
+    dropout: float = 0.0
 
     def head_size(self, features: int) -> int:
         """Each head's width d_k over tokens of features features: key_size, else features / heads."""
@@ -320,6 +361,7 @@ LayerSpec = (
     | Position
     | LayerNorm
     | Attention
+    | CrossAttention
     | Dropout
     | StateInput
     | TokenMean
@@ -370,7 +412,18 @@ class Merge:
 
 # the specs that act on tokens only, from the token part's start to its TokenMean, both included
 TokenSpec = (
-    Patches | Embedding | Position | Attention | Dropout | StateInput | TokenMean | Split | Branch | Merge | GatedDense
+    Patches
+    | Embedding
+    | Position
+    | Attention
+    | CrossAttention
+    | Dropout
+    | StateInput
+    | TokenMean
+    | Split
+    | Branch
+    | Merge
+    | GatedDense
 )
 
 
@@ -391,10 +444,34 @@ ExpandedSpec = (
     | Position
     | LayerNorm
     | Attention
+    | CrossAttention
     | Dropout
     | StateInput
     | TokenMean
 )
+
+
+@dataclass(frozen=True)
+class EncoderDecoder:
+    """
+    An encoder-decoder network's specs (the cross-attention workplan, D2, D14): the encoder's layers
+    over the source's ids, from an Embedding with segments to a LayerNorm, with no output layer,
+    and the decoder's over the target's, a sequence model whose CrossAttention layers read the
+    encoder's output (validate_encoder_decoder). Its layers are layers(): the encoder's, then the
+    decoder's, the one index space of weights, optimizer state and snapshots once expanded.
+    """
+
+    encoder: tuple[LayerSpec, ...]
+    decoder: tuple[LayerSpec, ...]
+
+    def __post_init__(self) -> None:
+        # lists given are kept as tuples, so equal specs compare equal and stay hashable
+        object.__setattr__(self, "encoder", tuple(self.encoder))
+        object.__setattr__(self, "decoder", tuple(self.decoder))
+
+    def layers(self) -> list[LayerSpec]:
+        """The encoder's specs, then the decoder's: expand_specs of these is the network's layers."""
+        return [*self.encoder, *self.decoder]
 
 
 def expand_specs(specs: Sequence[LayerSpec | ExpandedSpec]) -> list[ExpandedSpec]:

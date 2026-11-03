@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.specs.layer_specs import (
@@ -15,9 +15,11 @@ from indrajala_ml.model.specs.layer_specs import (
     Attention,
     BatchNorm,
     Branch,
+    CrossAttention,
     Dense,
     Dropout,
     Embedding,
+    EncoderDecoder,
     ExpandedSpec,
     Fork,
     GatedDense,
@@ -61,12 +63,15 @@ class SpecShape:
     """
     One spec's place in its list's shape walk (spec_shapes): the shape it reads, the shape it gives,
     and for a BatchNorm its positions, 1 after a dense layer or a conv layer's out_height *
-    out_width (1 for every other spec).
+    out_width (1 for every other spec). A decoder's CrossAttention also has the memory's shape, the
+    encoder's output, from which its keys and values are projected (encoder_decoder_shapes; None
+    from spec_shapes alone).
     """
 
     input_shape: Shape
     output_shape: Shape
     positions: int = 1
+    memory_shape: TokenShape | None = None
 
 
 def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputShape) -> list[SpecShape]:
@@ -150,6 +155,13 @@ def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputSha
                 f"rotary-positions workplan, D6); got {spec!r} over tokens of {features} features"
             )
             shapes.append(SpecShape(shape, shape))
+        elif isinstance(spec, CrossAttention):
+            _, features = token_shape(shape)
+            assert spec.key_size is not None or features % spec.heads == 0, (
+                f"a CrossAttention without a key_size splits the token width among its heads, so its heads divide "
+                f"it; got {spec!r} over tokens of {features} features"
+            )
+            shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, Position | LayerNorm | Dropout):
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, StateInput):
@@ -168,3 +180,22 @@ def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputSha
             shapes.append(SpecShape(shape, output))
         shape = shapes[-1].output_shape
     return shapes
+
+
+def encoder_decoder_shapes(
+    spec: EncoderDecoder, source_tokens: int, target_tokens: int
+) -> tuple[list[SpecShape], list[SpecShape]]:
+    """
+    The encoder's shapes over source_tokens ids and the decoder's over target_tokens (the
+    cross-attention workplan, D14), each list's walk as spec_shapes', each decoder CrossAttention's
+    memory_shape the encoder's output, (source_tokens, its width): what its key and value
+    projections read.
+    """
+    encoder = spec_shapes(spec.encoder, (source_tokens,))
+    memory = encoder[-1].output_shape
+    assert len(memory) == 2, f"an encoder's output is tokens, the decoder's memory; got {memory}"
+    decoder = [
+        replace(shape, memory_shape=(memory[0], memory[1])) if isinstance(layer, CrossAttention) else shape
+        for layer, shape in zip(expand_specs(spec.decoder), spec_shapes(spec.decoder, (target_tokens,)), strict=True)
+    ]
+    return encoder, decoder

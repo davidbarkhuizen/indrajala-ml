@@ -21,9 +21,11 @@ from indrajala_ml.model.specs.layer_specs import (
     BatchNorm,
     Branch,
     Branches,
+    CrossAttention,
     Dense,
     Dropout,
     Embedding,
+    EncoderDecoder,
     ExpandedSpec,
     Fork,
     GatedDense,
@@ -48,7 +50,19 @@ _RULES: dict[str, type[UpdateRule]] = {"sgd": SGD, "momentum": Momentum, "adam":
 # workplan's StateInput (stage 2); a token-wise dense layer's entry, an output layer's included, is a
 # "dense" one
 _TOKEN_SPECS: dict[
-    str, type[Patches | Embedding | Position | LayerNorm | Attention | Dropout | StateInput | TokenMean | GatedDense]
+    str,
+    type[
+        Patches
+        | Embedding
+        | Position
+        | LayerNorm
+        | Attention
+        | CrossAttention
+        | Dropout
+        | StateInput
+        | TokenMean
+        | GatedDense
+    ],
 ] = {
     "patches": Patches,
     "embedding": Embedding,
@@ -60,6 +74,8 @@ _TOKEN_SPECS: dict[
     "token_mean": TokenMean,
     # the gated FFN (the FFN activations workplan, D3): its W (2 * size, d) and b
     "gated_dense": GatedDense,
+    # a decoder's attention to the encoder's output (the cross-attention workplan, D14)
+    "cross_attention": CrossAttention,
 }
 _TOKEN_KINDS = {cls: kind for kind, cls in _TOKEN_SPECS.items()}
 
@@ -117,6 +133,11 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         return {"kind": "dense", **fields}
     if isinstance(spec, PoolSpec):
         return {"kind": "pool", **asdict(spec)}
+    if isinstance(spec, CrossAttention):
+        # its fields only when not the default (the cross-attention workplan, D14), as an attention's
+        default_cross = CrossAttention()
+        fields = {key: value for key, value in asdict(spec).items() if value != getattr(default_cross, key)}
+        return {"kind": "cross_attention", **fields}
     if isinstance(spec, Attention):
         # heads, key_size, causal, dropout, positions and rotary_base only when not the default (the
         # multi-head attention workplan; the sequence task workplan, D7; the attention-dropout
@@ -131,6 +152,8 @@ def layer_to_json(spec: LayerSpec) -> dict[str, Any]:
         fields = asdict(spec)
         if not spec.segments:
             del fields["segments"]
+        if not spec.separator_opens:
+            del fields["separator_opens"]  # only a decoder's (the cross-attention workplan, D13), so files don't change
         return {"kind": _TOKEN_KINDS[type(spec)], **fields}
     if isinstance(spec, StateInput):
         # scale only when set (the audit-remedies workplan, D9), so an additive entry is as before
@@ -165,6 +188,35 @@ def layer_from_json(spec: dict[str, Any]) -> LayerSpec:
             return _TOKEN_SPECS[kind](**fields)
         case kind:
             raise ValueError(f"unknown layer kind {kind!r}")
+
+
+def encoder_decoder_to_json(spec: EncoderDecoder) -> dict[str, Any]:
+    """
+    An encoder-decoder's layer entries (the cross-attention workplan, D14): "encoder" the encoder's,
+    "layers" the decoder's, as a sequence network's "layers".
+    """
+    return {
+        "encoder": [layer_to_json(layer) for layer in spec.encoder],
+        "layers": [layer_to_json(layer) for layer in spec.decoder],
+    }
+
+
+def encoder_decoder_from_json(document: dict[str, Any]) -> EncoderDecoder:
+    """The encoder-decoder whose layer entries are document's "encoder" and "layers"."""
+    return EncoderDecoder(
+        tuple(layer_from_json(layer) for layer in document["encoder"]),
+        tuple(layer_from_json(layer) for layer in document["layers"]),
+    )
+
+
+def encoder_decoder_input_to_json(source_tokens: int, target_tokens: int) -> dict[str, Any]:
+    """An encoder-decoder's input: its source's and its target's ids (D14)."""
+    return {"source": {"dimension": source_tokens}, "target": {"dimension": target_tokens}}
+
+
+def encoder_decoder_input_from_json(shape: dict[str, Any]) -> tuple[int, int]:
+    """The source's and the target's ids of an encoder-decoder's input entry."""
+    return shape["source"]["dimension"], shape["target"]["dimension"]
 
 
 def rule_to_json(rule: UpdateRule) -> dict[str, Any]:
@@ -265,7 +317,7 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("P", "G")
         case StateInput():
             return ("P",)
-        case Attention():
+        case Attention() | CrossAttention():
             return ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
         case Fork() | Add() | Split() | Branch() | Merge() | PoolSpec() | Patches() | Dropout() | TokenMean():
             return ()

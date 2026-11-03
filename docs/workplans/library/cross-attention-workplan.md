@@ -8,7 +8,7 @@ registration. Stage 1 (this plan) done. Stage 2 (2026-11-03): the dataset reposi
 entry and the loader of packed pairs here (D13 new: a packed pair's layout). The same day, at the
 owner's direction, D4's second corpus became Plutarch's *Lives* in place of the New Testament, and
 Pausanias was dropped: the repository at `v2026-11-03.2` (13,122 pairs of the histories, 9,794 of
-the *Lives*; its `report.md` the alignment report).**
+the *Lives*; its `report.md` the alignment report). Stage 3 (2026-11-03): the specs (D14).**
 
 Roadmap step 15 ([primitives-roadmap.md](../../primitives-roadmap.md)): attention from one sequence to
 another, and the encoder-decoder transformer it builds (Vaswani et al. 2017, §3.1, §3.2.3), on a
@@ -235,6 +235,45 @@ Each lists the options considered, with pros and cons, and the choice.
     each pair's first English character is predicted from the previous pair's segment and source,
     and the window's first pair's first character not at all.
 
+- **D14. The encoder-decoder's specs. Settled: (a) (new 2026-11-03, at stage 3).**
+  - (a) *Chosen.* `EncoderDecoder(encoder, decoder)`, two lists of layer specs, beside the
+    Sequential list.
+    - **The encoder:** an `Embedding` with segments (step 11's rule: a separator ends its pair),
+      token layers whose attention is never causal, and a final `LayerNorm`, so the memory is
+      normalised as a pre-LN stack's output is. No output layer.
+    - **The decoder:** a sequence model.
+      - An `Embedding` with segments and `separator_opens=True` (D13).
+      - Causal self-attention only.
+      - At least one `CrossAttention`, which ends a residual block's body as `Attention` does,
+        `Residual((LayerNorm(), CrossAttention(...)))`.
+      - A token-wise softmax output layer.
+    - **`CrossAttention(heads, key_size, key_value_heads, dropout)`:** never causal, never rotary
+      (D3). Its keys and values are projected from the memory's width, which may differ from the
+      decoder's, and the shape walk records that width for the builders. Its parameters are named
+      as an `Attention`'s: Wq, bq, Wk, bk, Wv, bv, Wo, bo.
+    - **Anywhere else** (a Sequential network, a window), a `CrossAttention` is refused: there is
+      no memory to read.
+    - **Format 2:**
+      - Shape `"encoder_decoder"`: `"encoder"` holds the encoder's layer entries, `"layers"` the
+        decoder's.
+      - `"input"` is `{"source": {"dimension": S}, "target": {"dimension": T}}`.
+      - One index space for weights, optimizer state and snapshots: `expand_specs(encoder +
+        decoder)`, the encoder's layers first.
+      - An entry has `"kind": "cross_attention"`, with its fields only when not the default.
+        `"separator_opens": true` appears on an `Embedding` only when set, so earlier files don't
+        change.
+    Pros:
+    - Each stack is validated and shape-walked as today's lists are, so their rules carry over.
+    - One index space keeps the optimizers', checkpoints' and snapshots' code as it is.
+    - A decoder-only model is the decoder list alone, with no `CrossAttention`.
+    Cons:
+    - A second network spec beside the list.
+    - Validation and the shape walk need an encoder-decoder entry point.
+  - (b) One flat list with a marker spec between the stacks. Pros: one list. Cons: the decoder's
+    `Embedding` stands mid-list (today the first layer starts the token part), and the shape walk
+    would cross from the memory back to the decoder's ids.
+  - (c) A general graph of layers. Cons: D2's (b).
+
 ## Stages
 
 1. **This workplan.**
@@ -243,7 +282,10 @@ Each lists the options considered, with pros and cons, and the choice.
    near-duplicates) and tag; `scripts/data/fetch_datasets.py`'s entry; a loader of packed pairs
    (D11, D13). Done 2026-11-03.
 3. **Specs**: `CrossAttention`, `EncoderDecoderNetwork`, validation, format 2; the decoder's
-   segment rule (D13: a target separator opens its pair).
+   segment rule (D13: a target separator opens its pair). Done 2026-11-03 (D14):
+   `CrossAttention`, `Embedding(separator_opens)`, `EncoderDecoder`, `validate_encoder_decoder`,
+   `encoder_decoder_shapes` (each `CrossAttention`'s memory width), and format 2's
+   `"encoder_decoder"` codecs. Building the network, and its format-2 file, is stage 4.
 4. **numpy**: the network (D2), `CrossAttention` (D3); tests by hand (with one memory token, every
    weight is 1; padding in the memory changes nothing).
 5. **The crate**: the key/value input through the attention ops; "Bump rust/" with its A/B.
