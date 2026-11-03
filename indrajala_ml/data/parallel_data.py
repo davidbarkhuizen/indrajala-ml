@@ -1,9 +1,9 @@
 """
 Greek-English parallel pairs packed into windows (roadmap step 15, the cross-attention workplan,
-D4, D11, D13): the histories and the New Testament from indrajala-datasets-perseus-parallel,
+D4, D11, D13): the histories and Plutarch's Lives from indrajala-datasets-perseus-parallel,
 fetched and checksum-verified by scripts/data/fetch_datasets.py, one pair a line as JSON
 (`{work, ref, split, grc, eng}`), each split (train, validation, test) by the dataset's held-out
-books.
+books and Lives.
 
 Two character vocabularies, the source's (the Greek's characters, accents kept: D5) and the
 target's (the English's), each of every split's text, as a text corpus's vocabulary is of the
@@ -42,7 +42,7 @@ from indrajala_ml.data.text_data import Vocabulary, pad_id, separator_id
 
 PARALLEL_CORPORA = {
     "histories": "data/perseus-parallel/histories.jsonl",
-    "new-testament": "data/perseus-parallel/new-testament.jsonl",
+    "lives": "data/perseus-parallel/lives.jsonl",
 }
 # the window on both sides (D11): step 12's longest
 WINDOW = 1024
