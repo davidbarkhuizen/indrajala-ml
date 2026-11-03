@@ -1,5 +1,6 @@
 """
-A pure-Python batch's segments (the segments workplan, D4-D6): numpy's segment_context
+A pure-Python batch's segments (the segments workplan, D4-D6; the cross-attention workplan, D13's
+separator_opens): numpy's segment_context
 (layers/numpy/segments.py) in Python lists, a row per example, so the pure-Python networks import
 no numpy. The same rules: a separator ends its segment, a pad's segment is 0, positions count from
 each segment's first token, and a target counts unless its input is a pad (the end-of-paragraph
@@ -13,7 +14,12 @@ from collections.abc import Sequence
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
-def segment_rows(states: Sequence[Sequence[float]], separator: int, pad: int) -> ForwardContext:
+def segment_rows(
+    states: Sequence[Sequence[float]], separator: int, pad: int, separator_opens: bool = False
+) -> ForwardContext:
+    # with separator_opens (an encoder-decoder's target, the cross-attention workplan, D13), a
+    # separator opens the segment after it: a token's segment is the separators up to and including
+    # it, at least 1, numpy's rule
     rows = [[int(x) for x in state] for state in states]
     if not any(i in (separator, pad) for row in rows for i in row):
         return NO_CONTEXT
@@ -25,8 +31,12 @@ def segment_rows(states: Sequence[Sequence[float]], separator: int, pad: int) ->
         position_row: list[int] = []
         separators = 0
         for t, i in enumerate(row):
-            segment = 0 if i == pad else 1 + separators
-            separators += i == separator
+            if separator_opens:
+                separators += i == separator
+                segment = 0 if i == pad else max(separators, 1)
+            else:
+                segment = 0 if i == pad else 1 + separators
+                separators += i == separator
             starts = t == 0 or segment != segment_row[-1]
             position_row.append(0 if starts else position_row[-1] + 1)
             segment_row.append(segment)

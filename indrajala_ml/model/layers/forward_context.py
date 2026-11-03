@@ -44,13 +44,24 @@ class ForwardContext:
     def example(self, n: int) -> ForwardContext:
         """
         Example n's context in a batch's (the pure-Python layers' passes, one example at a time):
-        its rows of the batch's, the batch's count and examples kept, so the loss is the batch's
-        mean. NO_CONTEXT's is itself.
+        its rows of the batch's, its memory's among them (an encoder-decoder's decoder), the batch's
+        count and examples kept, so the loss is the batch's mean. NO_CONTEXT's is itself.
         """
-        if self.segments is None:
+        if self.segments is None and self.memory is None:
             return self
+
+        def row(field: Any) -> Any:
+            return None if field is None else [field[n]]
+
         return ForwardContext(
-            [self.segments[n]], [self.positions[n]], [self.counted[n]], self.count, self.examples, self.column
+            row(self.segments),
+            row(self.positions),
+            row(self.counted),
+            self.count,
+            self.examples,
+            self.column,
+            row(self.memory),
+            row(self.memory_segments),
         )
 
 

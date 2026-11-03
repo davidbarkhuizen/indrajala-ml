@@ -198,7 +198,7 @@ class TokenLayerClasses:
     state_input: LayerClass
     film_state_input: LayerClass
     # a decoder's attention to the encoder's output (the cross-attention workplan, D3): numpy's
-    # (stage 4) and the crate's (stage 6); pure Python's from stage 7
+    # (stage 4) and the crate's (stage 6); pure Python's is python_layer_builder.py's
     cross_attention: LayerClass | None = None
 
 
@@ -289,7 +289,7 @@ def _cross_attention_layer(
     classes: TokenLayerClasses, spec: CrossAttention, shape: SpecShape, backend_name: str
 ) -> ArrayNetworkLayer[Any]:
     assert classes.cross_attention is not None, (
-        f"the {backend_name} backend has no CrossAttention yet (the cross-attention workplan: pure Python's is stage 7)"
+        f"the {backend_name} backend has no CrossAttention (the cross-attention workplan, D3)"
     )
     assert shape.memory_shape is not None, "a CrossAttention's shape has the memory's (encoder_decoder_shapes)"
     tokens, features = token_shape(shape.input_shape)
