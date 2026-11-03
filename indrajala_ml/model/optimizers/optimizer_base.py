@@ -28,6 +28,10 @@ class OptimizerBase[S, T, R, L]:
         self.t = 0
         # per layer index: the rule's state, made on the layer's first step
         self._state: dict[int, S] = {}
+        # per layer index: a factor on the learning rate step() applies it at (the audit-remedies
+        # workplan, D5: a codebook's own rate, Łańcucki et al. 2020); empty, every layer at the
+        # step's rate. Training state, as the rate is: not in state(), so a resumed run sets it again
+        self.learning_rate_scales: dict[int, float] = {}
         # the factor every gradient is read times during a step that clips (step()), None otherwise:
         # each subclass's _apply_* methods read their gradients through it
         self._gradient_scale: float | None = None
@@ -53,13 +57,20 @@ class OptimizerBase[S, T, R, L]:
         ||g|| (every layer's accumulated gradients over batch_size, a left fold over the layers in
         order, their gradients in order; Pascanu et al. 2013) is above clip_norm, every gradient is
         read times clip_norm / ||g|| (D10), so the step's direction is kept and its gradient's norm
-        is clip_norm.
+        is clip_norm. A layer in learning_rate_scales steps at learning_rate times its scale (D5).
         """
         self.begin_step()
         self._gradient_scale = None if clip_norm is None else self._clip_scale(layers, batch_size, clip_norm)
+        scales = self.learning_rate_scales
         try:
-            for index, layer in enumerate(layers):
-                self.apply(index, layer, learning_rate, batch_size)
+            if scales:
+                # a layer with a scale at learning_rate * its scale (D5); the others at the rate
+                for index, layer in enumerate(layers):
+                    scale = scales.get(index)
+                    self.apply(index, layer, learning_rate if scale is None else learning_rate * scale, batch_size)
+            else:
+                for index, layer in enumerate(layers):
+                    self.apply(index, layer, learning_rate, batch_size)
         finally:
             self._gradient_scale = None
 

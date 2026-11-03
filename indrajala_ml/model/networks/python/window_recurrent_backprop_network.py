@@ -204,6 +204,27 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
         assert part is not None, f"factor {factor} is continuous: it has no codes"
         return [list(code.weights) for code in part.codes]
 
+    def set_code_learning_rate_scale(self, scales: Sequence[float]) -> None:
+        """
+        Each factor's codes stepped at the learning rate times its scale (the audit-remedies
+        workplan, D5; Łańcucki et al. 2020 raise a codebook's rate), a scale per factor, 1.0 for a
+        continuous one; 1.0 everywhere is the default, every bit unchanged. Training state, not
+        saved: a resumed run sets it again.
+        """
+        factors = self.recurrence_layer.factors
+        assert len(scales) == len(factors), f"a scale per factor, {len(factors)}; got {len(scales)}"
+        rates = self.optimizer.learning_rate_scales
+        for factor, scale in zip(factors, scales, strict=True):
+            assert scale > 0.0, f"a codebook's learning-rate scale is positive; got {scale}"
+            if factor.codes is None:
+                assert scale == 1.0, f"a continuous factor has no codes to scale; got {scale}"
+                continue
+            index = len(self.trainable_layers) + self.parts.index(factor.codes)
+            if scale == 1.0:
+                rates.pop(index, None)
+            else:
+                rates[index] = scale
+
     def reseed_codes(self, factor: int, rows: dict[int, list[float]]) -> None:
         """The array network's reseed_codes: the rows given set, their optimizer state zeroed (D4)."""
         part = self.recurrence_layer.factors[factor].codes

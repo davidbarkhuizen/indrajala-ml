@@ -13,6 +13,10 @@ Re-seeding (stage 4, D4): a code no sample state snaps to moves onto a sample st
 D^2 rule against the live codes, and its optimizer rows are zeroed, on every implementation and
 under momentum and Adam; a live code, its optimizer rows and every other parameter keep their bits.
 
+The codebook's learning-rate scale (stage 5, D5): a factor's codes at scale k step as at the rate
+k * lr, by bits, under SGD, momentum and Adam, and every other parameter as at lr; a scale of 1.0
+keeps every bit.
+
     .venv/bin/python -m tests.model.test_codes ../indrajala-studies   # re-records the fixture
 """
 
@@ -41,7 +45,7 @@ from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentRustArrayNetwork,
 )
 from indrajala_ml.model.persistence.format2 import network_to_json
-from indrajala_ml.model.specs.update_rules import Adam, Momentum, UpdateRule
+from indrajala_ml.model.specs.update_rules import SGD, Adam, Momentum, UpdateRule
 from indrajala_ml.model.specs.window_recurrence import WindowRecurrence
 from tests.helpers import bits
 from tests.model.networks.test_window_recurrent_array_network import RECURRENCES, WINDOW, K, _batch
@@ -354,10 +358,6 @@ def test_the_snap_indices_are_the_networks_own_snaps():
     assert snap_indices(h, np.array(network.factor_codes(0))).tolist() == by_window
 
 
-if __name__ == "__main__":
-    _record(Path(sys.argv[1]))
-
-
 # SimVQ's codes, E = Q W (stage 6, D6)
 
 LINEAR = {
@@ -507,3 +507,57 @@ def test_a_reseeded_linear_code_lands_on_its_state_and_w_is_kept(implementation:
         assert gaps.min() < 1e-20
     W_after = [list(row.weights) for row in part.basis] if implementation == "python" else part.W.tolist()
     assert W_after == W_before
+
+
+# the codebook's learning-rate scale (stage 5, D5)
+
+
+def _one_step(implementation: str, rule: UpdateRule, rate: float, scales: list[float] | None) -> Any:
+    network = _network(implementation, RECURRENCES["three factors, crossed"], rule=rule)
+    if scales is not None:
+        network.set_code_learning_rate_scale(scales)
+    X, labels = _batch(3, 4, 13)
+    network.learn_batch(rate, [(tuple(x), label) for x, label in zip(X.tolist(), labels, strict=True)])
+    return network
+
+
+def _code_entries(network: Any) -> set[int]:
+    # the snapshot's entries that are codes parts
+    offset = len(network.trainable_layers if isinstance(network, WindowRecurrentBackpropNetwork) else network.layers)
+    return {offset + network.parts.index(f.codes) for f in network.recurrence_layer.factors if f.codes is not None}
+
+
+@pytest.mark.parametrize("rule", [SGD(), Momentum(0.9), Adam()], ids=["sgd", "momentum", "adam"])
+@pytest.mark.parametrize("implementation", NETWORKS)
+def test_a_scaled_codebook_steps_as_at_the_scaled_rate_and_the_rest_at_the_rate(implementation: str, rule: UpdateRule):
+    scaled = bits(_one_step(implementation, rule, 0.01, [4.0, 1.0, 4.0]).snapshot())
+    plain = bits(_one_step(implementation, rule, 0.01, None).snapshot())
+    fast = bits(_one_step(implementation, rule, 0.01 * 4.0, None).snapshot())
+    codes = _code_entries(_network(implementation, RECURRENCES["three factors, crossed"]))
+    for i, entry in enumerate(scaled):
+        assert entry == (fast[i] if i in codes else plain[i]), i
+    assert any(scaled[i] != plain[i] for i in codes)
+
+
+@pytest.mark.parametrize("implementation", NETWORKS)
+def test_a_scale_of_one_keeps_every_bit(implementation: str):
+    ones = _one_step(implementation, Adam(), 0.01, [1.0, 1.0, 1.0])
+    assert ones.optimizer.learning_rate_scales == {}
+    assert bits(ones.snapshot()) == bits(_one_step(implementation, Adam(), 0.01, None).snapshot())
+
+
+def test_a_scale_is_refused_on_a_continuous_factor_or_unless_positive_one_per_factor():
+    network = _network("numpy", RECURRENCES["three factors, crossed"])
+    with pytest.raises(AssertionError, match="continuous"):
+        network.set_code_learning_rate_scale([1.0, 2.0, 1.0])
+    with pytest.raises(AssertionError, match="positive"):
+        network.set_code_learning_rate_scale([0.0, 1.0, 1.0])
+    with pytest.raises(AssertionError, match="a scale per factor"):
+        network.set_code_learning_rate_scale([2.0])
+    network.set_code_learning_rate_scale([2.0, 1.0, 1.0])
+    network.set_code_learning_rate_scale([1.0, 1.0, 1.0])  # back to the default
+    assert network.optimizer.learning_rate_scales == {}
+
+
+if __name__ == "__main__":
+    _record(Path(sys.argv[1]))

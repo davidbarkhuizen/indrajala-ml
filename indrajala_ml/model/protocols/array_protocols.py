@@ -166,6 +166,8 @@ class ArrayOptimizer[A: BackendArray](Protocol):
     """What ArrayNetworkBase drives to update its layers (optimizers/)."""
 
     rule: UpdateRule
+    # per layer index, a factor on the step's learning rate (optimizer_base.py; the audit-remedies workplan, D5)
+    learning_rate_scales: dict[int, float]
 
     def begin_step(self) -> None: ...
 
