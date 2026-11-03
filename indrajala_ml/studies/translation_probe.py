@@ -13,7 +13,8 @@ clipping at 1.0, the training windows packed anew every epoch from the shuffled 
 
 `time` runs a few steps and reports seconds a step and an epoch's estimate; `run` trains, and after
 each epoch evaluates the validation windows teacher-forced (bits per character, the counted
-targets) and a sample of training windows; at the end it translates a sample of validation pairs
+targets), the same windows with another window's source (the source ablation: the gap is what the
+Greek buys) and a sample of training windows; at the end it translates a sample of validation pairs
 greedily and scores them by chrF, keeping the translations. Results are JSON, gitignored, under
 data/studies/translation-probe/.
 """
@@ -177,6 +178,7 @@ def run(
     rate = schedule(epoch_steps, epochs)
     pad = len(data.target) + 1
     train_sample = data.train.epoch(random.Random(seed + 1))[:sample]
+    swapped = swapped_sources(data.validation)
     result: dict[str, Any] = {
         "corpus": corpus,
         "seed": seed,
@@ -186,6 +188,7 @@ def run(
         "parameters": parameters(net),
         "epoch_steps": epoch_steps,
         "validation_bits": [],
+        "other_source_bits": [],
         "train_bits": [],
         "epoch_seconds": [],
     }
@@ -198,6 +201,8 @@ def run(
         step += steps
         result["epoch_seconds"].append(seconds)
         result["validation_bits"].append(bits(teacher_forced(net, data.validation, pad)[0]))
+        # the source ablation: how much the Greek is read (swapped_sources)
+        result["other_source_bits"].append(bits(teacher_forced(net, swapped, pad)[0]))
         result["train_bits"].append(bits(teacher_forced(net, train_sample, pad)[0]))
         path.write_text(json.dumps(result, indent=1))
         # the network after every epoch, so a stopped or inspected run loses nothing
