@@ -26,6 +26,7 @@ from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.networks.array_network_base import ArrayNetworkBase
 from indrajala_ml.model.networks.numpy.encoder_decoder_array_network import EncoderDecoderArrayNetwork
 from indrajala_ml.model.networks.python.backprop_network_base import BackpropNetworkBase
+from indrajala_ml.model.networks.python.encoder_decoder_backprop_network import EncoderDecoderBackpropNetwork
 from indrajala_ml.model.networks.python.sequential_backprop_network import (
     SequentialBackpropClassifierNetwork,
     SequentialMultiClassBackpropClassifierNetwork,
@@ -91,7 +92,7 @@ SEQUENTIAL = {
     ("python", "window_recurrent"): WindowRecurrentBackpropNetwork,
     ("numpy", "window_recurrent"): WindowRecurrentArrayNetwork,
     ("rust", "window_recurrent"): WindowRecurrentRustArrayNetwork,
-    # numpy's and Rust's; pure Python's at the cross-attention workplan's stage 7
+    ("python", "encoder_decoder"): EncoderDecoderBackpropNetwork,
     ("numpy", "encoder_decoder"): EncoderDecoderArrayNetwork,
     ("rust", "encoder_decoder"): EncoderDecoderRustArrayNetwork,
 }
