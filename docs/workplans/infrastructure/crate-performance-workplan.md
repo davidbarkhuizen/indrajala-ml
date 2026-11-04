@@ -1,6 +1,6 @@
 # Workplan: the crate's performance, kernels and threads as one plan
 
-**Status: unified 2026-11-04 at the owner's direction; no crate code yet.** The owner: "1. review the
+**Status: unified 2026-11-04 at the owner's direction; in progress, and the owner's "work through the plan" (2026-11-04) stands.** The owner: "1. review the
 current situation as it stands 2. re-analyse the solution and approach 3. combine the threading plan
 with the i7 plan and create one unified workplan". This replaces the multithreading workplan
 (drafted 2026-11-02) and the i7 outline (`docs/i7-9700k-rust-optimization.md`, 2026-10-08); both are
@@ -9,10 +9,11 @@ references still read; what the re-analysis changed is marked. The owner delegat
 none is pending.
 
 **The short version.** Both plans ordered the work by the largest ratio to numpy, on shapes from
-October. Measured today, the largest ratio isn't where the time goes, the first kernel fix helps
-transformer training more than the conv tail it was planned for, and most of stage −1's prerequisites
-can wait. So: one fix first (K7), a shape census to choose what follows, the machine-derived
-parameters only where a measurement needs them, and threads after that, judged on epochs.
+October. Measured, the largest ratio isn't where the time goes, the first kernel fix helps
+transformer training more than the conv tail it was planned for (K7a: −47.9% on a `d` 512 epoch), and
+most of stage −1's prerequisites can wait. So: one fix first (K7), a shape census to choose what follows,
+the machine-derived parameters only where a measurement needs them, and threads after that, judged on
+epochs. **Stages 0-2 are done, but for the Ryzen's noise rules, which wait for klip.**
 
 ## The IDs, in time order
 
@@ -116,6 +117,45 @@ K7 is the transformers' fix as much as the conv tail's.
 So K7 gains on transformers, costs nothing elsewhere, and does nothing for the window program, whose
 products are short in `k`. It's the one thing here already known to clear the 5% bar.
 
+### Stage 2's results (K7a, crate #101)
+
+Tier 2 on jebel, crate `690bce8` against `5a19b18` (the merged tree), `ONNONO`:
+
+| benchmark | run (`2026-11-04-`) | result |
+|---|---|---|
+| sequence epoch, `d` 512, 8 heads | `k7a-sequence-d512` | **−47.9%** (18.54 to 9.66 s), numpy within noise |
+| attention backward, `d` 512, `T` 256 | `k7a-attention-d512` | **−39.7%** (0.300 to 0.181 s) |
+| sequence epoch, `d` 64 | `k7a-sequence` | **−12.4%** (2.048 to 1.793 s), numpy within 0.0% |
+| attention backward, `d` 64 | `k7a-attention` | −12.2% at `T` 64, −7% at 256, −4% to −5% at 1,024; 19 rows within noise |
+| accumulate at batch 512, one thread | `k7a-focused-1` | conv tail **−65.9%** (15.49 to 5.28 ms), attention −63.7%, dense 30 x 784 −39.1%; 32 rows within noise |
+| the same, default threads | `k7a-focused` | attention −24.6%, dense −18.1%, conv tail −14.5% |
+| conv and dense epochs | `k7a-epochs` | all 16 within noise, max 3.0% |
+| window program | `k7a-window` | 5 rows within noise, max 3.4%; **`learn family` +1.0%, consistent, small**; its control, a 256 cube, −46.9% |
+
+The golden run is bit-identical on jebel and pyramidon. **Guards, no slowdown:** stone (one thread: conv
+tail −64.5%, sequence −9.6%) and the Ryzen on pyramidon (one thread: conv tail −56.9%, attention −51.0%;
+`--skip-profile`, its noise rules still to refresh). `learn family`'s +1.0% is an atomic read and a branch
+added to millions of `(3, 8)` products, or a build's shift; stage 4 replaces that path, so it's left there.
+
+### What the census says (K25, on stone, with K7a in)
+
+Seconds by kernel, one worker. A site's time holds what it calls: the attends hold `exp`, `transpose` and
+their products, so they aren't additive with those. Per-call rows in the evidence directory's `census/`.
+
+| backdrop | largest shapes and kernels |
+|---|---|
+| sequence, `d` 64 | attend 0.86 s; `matmul_2d` 0.52, `matmul_nt` 0.32, exp 0.26, transpose 0.20 |
+| sequence, `d` 512 | **`matmul_2d` 3.05** (2048 x 2048 x 512, 2048 x 512 x 2048, 512 x 2048 x 2048); **`matmul_nt` 1.83** (2048 x 2048 x 512); attend 0.50 |
+| window family, learn | **attend 1.02** at `(192, 2 heads, d_k 8)`; `(3, 8)` tile products and transposes: 1.5M-2M calls each |
+| window family, long test's forward | **attend 3.0** of 5.4, 61,500 calls at 46 µs; 4.2M `(3, 8)` products and as many transposes |
+| window linear, learn | `matmul_nt` and tiny `matmul_2d`; the 0.044 s at 256 cube is the benchmark's own control |
+| conv, mini-batch 32 | `conv_forward` 0.17; **`dot_products` 32 x 5408** 0.13 (the accuracy passes, 16 µs a row); `matmul_2d` 32 x 32 x 5408 0.05 |
+| dense, B=512 | **`matmul_nt` 32 x 784 x 30, 0.21, half the time recorded** (the accuracy passes); 512 x 784 x 30 0.09; `matmul_2d` 0.08 |
+
+So the order changed again (D9): **the attend** comes before the copies, as most of the window program's time
+goes through its per-tile allocations, and **K8** clears the bar after all, on dense's accuracy passes and at
+`d` 512, where the probe's 0.65 applies.
+
 ### The candidates, on four kinds of core
 
 `scripts/measurement/blocking_probe.rs`: both kernels copied (AVX2 tiles, the same chains), every
@@ -166,8 +206,7 @@ reaches its L2, and stone's P-cores lose up to 10% slabbing a `W` that already f
 rule, to be tested in K8:** slab only when `W` is past half the L2, with a slab of `W` of `min(L2 / 4,
 128 KB)`. On each row it takes the best cell or one close to it, except the Ryzen's at 784, where it
 forgoes about 7% by not slabbing. Against numpy, K8 would turn the conv tail's 1.43x
-into about 0.9x on jebel. At present shapes it's only 5% of a sequence epoch, so it may not clear the
-bar until D13's larger backdrop.
+into about 0.9x on jebel. The census below puts it over the bar.
 
 **Threads, 8 on jebel, against numpy's own threads.**
 
@@ -245,17 +284,17 @@ oversubscribing each other.
 | K25 | a shape census: which kernel, at which `m x k x n`, how long, for a backdrop | new (D9) | **done** (crate #100): `shape_census.py`, its readings under stage 1 |
 | K26 | backdrops at production scale: `sequence_training_timing` and `attention_timing` at a larger `d` | new (D13) | **done**: `--features`, `--heads` |
 | K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **stone done** (`i7-1255u.json`); the Ryzen's on klip after its affine pass |
-| K7 | `matmul_2d` for long `k`: slabs that resume each chain | i7 item 1 | **stage 2** (K7a), **stage 3** (K7b, packing) |
-| K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **stage 4**, against K11 |
-| K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **stage 4**, only for what K23 leaves |
-| K24 | fewer copies and allocations in the crate's ops (memmove, memset, calloc: 5-10% of the window and attention backdrops) | new | **stage 4**, sites from the census |
-| K9 | conv on 28x28 inputs, `conv_forward_batch` first (64% of a conv-conv epoch) | i7 item 5 | **stage 5**: diagnosis, then a fix if there's a cause |
-| K12 | the attention kernels: tiled attend and backward, 33% at `T` 1024 | From the window program; From multi-head attention | **stage 5** |
-| K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **stage 5**, from the census |
-| K10 | narrow `k`: more independent outputs in flight per tile; 16-18% behind OpenBLAS on `litshe`, and short-`k` shapes dominate the window | From the crate kernels | **stage 5**, on x86 and on `litshe` when on |
-| K6 | `CpuInfo` | i7 outline, Kernels and parameters | **stage 6** (D5, D11), for K8 and the thread counts |
-| K8 | `matmul_nt` with `W` past the L2: slabs of `W` in bytes, the 4 lanes stored | i7 item 2 | **stage 7**, if the census and D13's backdrop put it over the bar |
-| K13 | a batched crate decode step: `attention_step` over an `(N, c)` cache with the keys' segments | From the sequence task (generation) | **stage 7** |
+| K7 | `matmul_2d` for long `k`: slabs that resume each chain | i7 item 1 | **K7a done** (crate #101, stage 2's results); **stage 3** (K7b, packing) |
+| K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **stage 6**, against K11 |
+| K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **stage 6**, only for what K23 leaves |
+| K24 | fewer copies and allocations in the crate's ops (memmove, memset, calloc: 5-10% of the window and attention backdrops) | new | **stage 6**, sites from the census |
+| K9 | conv on 28x28 inputs, `conv_forward_batch` first (64% of a conv-conv epoch) | i7 item 5 | **stage 7**: diagnosis, then a fix if there's a cause |
+| K12 | the attention kernels: tiled attend and backward, 33% at `T` 1024 | From the window program; From multi-head attention | **stage 4** |
+| K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **stage 4**, with K12 |
+| K10 | narrow `k`: more independent outputs in flight per tile; 16-18% behind OpenBLAS on `litshe`, and short-`k` shapes dominate the window | From the crate kernels | **stage 7**, on x86 and on `litshe` when on |
+| K6 | `CpuInfo` | i7 outline, Kernels and parameters | **stage 5** (D5, D11), for K8 and the thread counts |
+| K8 | `matmul_nt` with `W` past the L2: slabs of `W` in bytes, the 4 lanes stored | i7 item 2 | **stage 5**: half of a dense epoch's recorded time and a third of `d` 512's |
+| K13 | a batched crate decode step: `attention_step` over an `(N, c)` cache with the keys' segments | From the sequence task (generation) | **stage 7**, if over the bar |
 | K15 | threaded scaling against OpenBLAS, a pool, the threshold re-swept | i7 item 4; From the crate kernels | **stages 8-10** |
 | K14 | conv's forward spread over examples | i7 item 3 | **stage 11** |
 | K16 | threads in the window program, examples split inside one call | From the window program (D8 (b)) | **stage 11** |
@@ -406,20 +445,20 @@ it's on).
   - K27: stone's profile and noise rules, from six A/As at `8eeda72`, `ab.py` run there from a bundle's
     checkout (working-notes, Machines). *Done:* no row of 123 consistent by chance, passes shifted up to
     1.9%, a 5.9% median spread at one thread: a guard, as D12 has it. The Ryzen's rules wait for klip.
-- **Stage 2. K7a (D10).** Crate, then the bump. Expect the prototype's: −12.4% on a sequence epoch,
-  −6% to −15% on attention's backward. Guards on a Ryzen and on stone (K27).
-- **Stage 3. K7b (D10).** Packed panels past a page's stride. Target: 64 x 256 x 1024's 0.37, the conv tail
-  at numpy's time. Its threaded form (column split with packing) waits for stage 10.
-- **Stage 4. Copies (K23, K11, K24).** Accumulate without its transpose first; K11 only for what remains.
+- **Stage 2. K7a (D10).** *Done:* crate #101. Results below.
+- **Stage 3. K7b (D10).** Packed panels past a page's stride, for the `d` 512 shapes left after K7a
+  (`(2048, 512) @ (512, 2048)`, `(512, 2048) @ (2048, 2048)`) and 64 x 256 x 1024's 0.37. Its threaded form
+  (column split with packing) waits for stage 10.
+- **Stage 4. The attend (K12, K28).** Scratch buffers in place of the eight or more arrays each head allocates
+  per key block, and the tile's products without `matmul`'s dispatch: at the window's `(3, 8)` tiles those calls
+  are the cost. The largest item for the studies. It should also absorb K7a's +1.0% on `learn family`.
+- **Stage 5. `CpuInfo` and K8 (K6, D5, D11).** Read once (Linux sysfs and `cpuid` on x86, sysfs on aarch64), the
+  machine profiles' fields, per-core sizes, in a new bottom layer `sys` beside `num` (`core/tests/layers.rs`
+  needs it added). Then `matmul_nt`'s slabs: the candidate rule tested on jebel, a Ryzen and stone's P and E cores.
+- **Stage 6. Copies (K23, K11, K24).** Accumulate without its transpose first; K11 only for what remains.
   Allocation sites from the census.
-- **Stage 5. By share: conv forward (K9), attention (K12), the window's kernels (K28), narrow `k` (K10).**
-  Each profiled (`perf_region.py`) then fixed or closed, in the order the census gives. The window's come
-  first if the shares tie, since it's where the studies spend their time.
-- **Stage 6. `CpuInfo` (K6, D5, D11).** Read once (Linux sysfs and `cpuid` on x86, sysfs on aarch64), the
-  machine profiles' fields, per-core sizes. A new bottom layer `sys` beside `num` (`core/tests/layers.rs`
-  needs it added). Tier 1: no slower, as nothing reads it yet but the next stage.
-- **Stage 7. K8, K13, if over the bar.** K8 tests the candidate rule on jebel, a Ryzen and stone's P and E
-  cores, at D13's larger backdrop. K13: a batched decode step.
+- **Stage 7. By share: conv forward (K9), narrow `k` (K10), the batched decode step (K13).** Each profiled
+  (`perf_region.py`) then fixed or closed, in the order a fresh census gives.
 - **Stage 8. Thread tools.** `thread_cost_probe.py` extended to a pool (call cost at 1-8 threads, cold and
   warm), a scaling sweep per op (threads x shape), oversubscription (N processes x T threads on one host),
   and an epoch timer at a set thread count through `ab.py` (`--rust-threads` exists). On jebel, stone and klip.
