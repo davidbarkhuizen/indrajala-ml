@@ -8,6 +8,11 @@ run through ab.py as a probe:
     python scripts/measurement/ab.py run --bench cmd -- scripts/measurement/sequence_training_timing.py
 
     python scripts/measurement/sequence_training_timing.py [--windows 1024] [--repeats 3] [--epochs 1]
+        [--features 512 --heads 8]
+
+--features and --heads set a larger model than the study's (the crate performance workplan's D13),
+its FFN 4x the features as the study's is: the case's name gains `d=512`, and numpy's and Rust's rows
+compare as before.
 
 It prints one JSON row per (backend, metric): the epoch's seconds in learn_batch (the minimum over
 the repeats) and, as a check that both sides train alike, the held-out cross-entropy after the
@@ -28,7 +33,9 @@ CORPUS = "tinyshakespeare"
 RATE = 0.001
 
 
-def worker(backend: str, windows: int, epochs: int) -> dict[str, Any]:
+def worker(
+    backend: str, windows: int, epochs: int, features: int | None = None, heads: int | None = None
+) -> dict[str, Any]:
     from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
     from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
     from indrajala_ml.model.specs.update_rules import Adam
@@ -37,6 +44,10 @@ def worker(backend: str, windows: int, epochs: int) -> dict[str, Any]:
     from indrajala_ml.studies import sequence_study as ss
     from indrajala_ml.training.sequence_evaluate import sequence_evaluate
 
+    if features is not None:  # what arm_specs reads: the study's sizes, set before it builds the specs
+        ss.TOKEN_SIZE, ss.FFN_SIZE = features, 4 * features
+    if heads is not None:
+        ss.HEADS = heads
     train, held_out, vocabulary = ss.load(CORPUS, windows)
     array_backend = NUMPY if backend == "numpy" else RUST
     network: Any = SequentialArrayNetwork(
@@ -58,11 +69,13 @@ def main() -> None:
     parser.add_argument("--windows", type=int, default=1024)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--features", type=int)
+    parser.add_argument("--heads", type=int)
     parser.add_argument("--worker", metavar="BACKEND", choices=BACKENDS)
     args = parser.parse_args()
 
     if args.worker:
-        print(json.dumps(worker(args.worker, args.windows, args.epochs)))
+        print(json.dumps(worker(args.worker, args.windows, args.epochs, args.features, args.heads)))
         return
 
     environment = {**os.environ, "OPENBLAS_NUM_THREADS": "1"}
@@ -72,10 +85,13 @@ def main() -> None:
         for backend in order:
             command = [sys.executable, "-B", __file__, "--worker", backend]
             command += ["--windows", str(args.windows), "--epochs", str(args.epochs)]
+            command += ["--features", str(args.features)] if args.features else []
+            command += ["--heads", str(args.heads)] if args.heads else []
             output = subprocess.run(command, env=environment, capture_output=True, text=True, check=True).stdout
             runs[backend].append(json.loads(output.strip().splitlines()[-1]))
     for backend in BACKENDS:
-        case = f"2-layer rotary {backend} W={args.windows}"
+        size = f" d={args.features}" if args.features else ""
+        case = f"2-layer rotary{size} {backend} W={args.windows}"
         seconds = min(min(run["seconds"]) for run in runs[backend])
         print(json.dumps({"case": case, "metric": "epoch", "value": seconds, "unit": "s"}))
         held_out = runs[backend][0]["held_out"]
