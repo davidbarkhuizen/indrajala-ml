@@ -181,6 +181,39 @@ tree but for `CpuInfo` and its lint fix, which nothing reads yet), `ONNONO`:
 K7a's +1.0% on `learn family` is gone. The golden run is bit-identical on jebel and pyramidon. **Guard, stone:** no
 slower, the same four rows −8.6% to −19.3%. `CpuInfo` (K6) is in too (crate #104, #105), read by nothing yet.
 
+### Stage 5's results (K6, K8; crate #106)
+
+`matmul_nt` now takes `W` in slabs of `k`, resuming each output's four lanes, whose order is the bits'. The rule
+is the candidate's and one more line: none if `W` fits half the L2, else a slab of `min(L2 / 4, 128 KB) / (n * 8)`
+rows, and **none if that is under 64 rows**. Bits hold and the golden run is unchanged.
+
+The minimum is the run's finding. The first version made a `d` 512 epoch **5x slower** (7.56 -> 38.93 s, forward
++362%): the slabs came to 12 rows, and the lanes stored between them to 33.5 MB, which cost far more than the slab saves.
+The probe had never tried that shape, nor had the first run's targets; only the `d` 512 backdrop (D13) saw it. So
+**every A/B of a kernel carries the `d` 512 backdrop**, on the guards too.
+
+Passes ONNONO, old 4dba70e vs new ce5a267, the corrected rule:
+
+| Machine | Benchmark | Result |
+|---|---|---|
+| jebel | conv tail forward (32 x 5408), one thread | b32 -32.7%, b512 -29.1% |
+| | 30 x 784 forward, one thread | dense -21.6% / -23.1%, relu -24.4% / -24.3% |
+| | same, default threads | conv tail -32.8% / -33.1%; dense -23.0% / -11.0% |
+| | dense epoch | B=32 -7.8%, B=512 -6.0% (loader passes -8.5%, -8.6%) |
+| | `d` 512 epoch, `d` 512 attend, `d` 64 epoch, window | all within noise (max 0.6%, 0.7%, 0.2%, 4.4%) |
+| klip | conv tail forward | b32 -8.6%, b512 -5.1% |
+| | `d` 512, sequence, window | within noise |
+| stone | conv tail forward | b32 -16.8%, b512 -7.7%, both inside their spread (its smallest L2 share is 512 KB, so this `W` slabs and 30 x 784's doesn't) |
+| | `d` 512, epochs, window | within noise |
+
+jebel's `conv tail downstream_batch b512` at default threads read +6.6% in both runs, and within noise at one
+thread. It runs `matmul_2d`, whose instructions K8 left alone; klip reads -8.0% on it. So it is where the moved code
+landed, not a kernel, and it gets its next look when stage 10 replaces the threaded sites.
+
+What this leaves: at `d` 512, `matmul_nt` is a third of the epoch and K8 doesn't reach it, since a 12-row slab loses.
+Blocking its rows as well as `k` (the lanes held per output, rather than for all of them at once) is untried; a probe
+goes in stage 7's order by the fresh census.
+
 ### What the census says (K25, on stone, with K7a in)
 
 Seconds by kernel, one worker. A site's time holds what it calls: the attends hold `exp`, `transpose` and
@@ -250,7 +283,7 @@ reaches its L2, and stone's P-cores lose up to 10% slabbing a `W` that already f
 rule, to be tested in K8:** slab only when `W` is past half the L2, with a slab of `W` of `min(L2 / 4,
 128 KB)`. On each row it takes the best cell or one close to it, except the Ryzen's at 784, where it
 forgoes about 7% by not slabbing. Against numpy, K8 would turn the conv tail's 1.43x
-into about 0.9x on jebel. The census below puts it over the bar.
+into about 0.9x on jebel. The census below puts it over the bar. (K8 kept this rule and added a minimum slab: stage 5's results, above.)
 
 **Threads, 8 on jebel, against numpy's own threads.**
 
@@ -336,8 +369,8 @@ oversubscribing each other.
 | K12 | the attention kernels: tiled attend and backward, 33% at `T` 1024 | From the window program; From multi-head attention | **first step done** (crate #103); the rest from a fresh census, stage 7 |
 | K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **first step done** with K12; the rest from a fresh census, stage 7 |
 | K10 | narrow `k`: more independent outputs in flight per tile; 16-18% behind OpenBLAS on `litshe`, and short-`k` shapes dominate the window | From the crate kernels | **stage 7**, on x86 and on `litshe` when on |
-| K6 | `CpuInfo` | i7 outline, Kernels and parameters | **stage 5** (D5, D11), for K8 and the thread counts |
-| K8 | `matmul_nt` with `W` past the L2: slabs of `W` in bytes, the 4 lanes stored | i7 item 2 | **stage 5**: half of a dense epoch's recorded time and a third of `d` 512's (with K7a in) |
+| K6 | `CpuInfo` | i7 outline, Kernels and parameters | **done (crate #103, #105, #106)** (D5, D11), for K8 and the thread counts |
+| K8 | `matmul_nt` with `W` past the L2: slabs of `W` in bytes, the 4 lanes stored | i7 item 2 | **done (crate #106)**: conv tail forward -33%, 30 x 784 -23%, dense epochs -6% to -8%; `d` 512 not reached (stage 5's results) |
 | K13 | a batched crate decode step: `attention_step` over an `(N, c)` cache with the keys' segments | From the sequence task (generation) | **stage 7**, if over the bar |
 | K15 | threaded scaling against OpenBLAS, a pool, the threshold re-swept | i7 item 4; From the crate kernels | **stages 8-10** |
 | K14 | conv's forward spread over examples | i7 item 3 | **stage 11** |
@@ -497,7 +530,7 @@ it's on).
   their tiles' buffers. What's left in the attend comes from a fresh census, in stage 7.
 - **Stage 5. `CpuInfo` and K8 (K6, D5, D11).** Read once (Linux sysfs and `cpuid` on x86, sysfs on aarch64), the
   machine profiles' fields, per-core sizes, in a new bottom layer `sys` beside `num` (`core/tests/layers.rs`
-  needs it added). Then `matmul_nt`'s slabs: the candidate rule tested on jebel, a Ryzen and stone's P and E cores.
+  needs it added). Then `matmul_nt`'s slabs: the candidate rule tested on jebel, a Ryzen and stone's P and E cores. **Done**: the rule with a 64-row minimum (stage 5's results).
 - **Stage 6. Copies (K23, K11, K24).** Accumulate without its transpose first; K11 only for what remains.
   Allocation sites from the census.
 - **Stage 7. By share: conv forward (K9), the attend's remainder and the window's kernels (K12, K28), narrow
