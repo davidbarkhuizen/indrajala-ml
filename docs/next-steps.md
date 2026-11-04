@@ -144,10 +144,13 @@ Sources (indrajala-literature): `raffel-2020-exploring-limits-transfer-t5`,
 `zhang-2022-scaling-transfer-lm-architectures-mt`, `gao-2022-encoder-decoder-redundant-nmt`,
 `fu-2023-decoder-only-or-encoder-decoder`. Left:
 
-- **The encoder-decoder has never trained on the corpora:** only in the tests and the golden run.
-  A first real training run (one seed, one corpus, bits per character and chrF on the held-out
-  Lives or books) is the step before any translation claim. Its width and heads are D12's: `d` 128
-  to 256 from the corpora's 6M characters a side, `d_k` at least 32.
+- **The encoder-decoder's first training runs: abandoned** (the translation probe, #1242,
+  2026-11-04, the owner's call; `scripts/studies/translation_probe.py`'s docstring has the
+  findings): d 128, 2 + 2 blocks, the Lives, 23 epochs on stone. English bits per character fell
+  from 3.33 to 1.81, but the source ablation's gap (another window's Greek against the window's
+  own) reached only 0.027 bits, growing about 0.001 an epoch, and the greedy outputs ignore the
+  Greek (chrF 20.6). The encoder-decoder has not yet learned to read its source; no translation
+  claim rests on it.
 - **A decoder-only translation model (D18 (c)):** the Greek as a prefix, the loss on the English
   only (counted targets by position, not only "not a pad"), when a question needs the comparison.
 - **D10's out-of-scope items:** pretraining the encoder on Greek alone, a BPE tokenizer over both
