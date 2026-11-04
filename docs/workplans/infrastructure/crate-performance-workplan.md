@@ -243,7 +243,7 @@ oversubscribing each other.
 |---|---|---|---|
 | K1 | `ab.py run --old-crate X --new-crate X` installed neither wheel, timing the venv's crate on both sides | From the A/B harness | **done**: a named crate is built and timed |
 | K25 | a shape census: which kernel, at which `m x k x n`, how many flops, for a backdrop | new (D9) | **stage 1**: a cargo feature, off in releases |
-| K26 | backdrops at production scale: `sequence_training_timing` and `attention_timing` at a larger `d` | new (D13) | **stage 1** |
+| K26 | backdrops at production scale: `sequence_training_timing` and `attention_timing` at a larger `d` | new (D13) | **done**: `--features`, `--heads` |
 | K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **stage 1** |
 | K7 | `matmul_2d` for long `k`: slabs that resume each chain | i7 item 1 | **stage 2** (K7a), **stage 3** (K7b, packing) |
 | K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **stage 4**, against K11 |
@@ -374,8 +374,8 @@ Each settled, with its options.
   - (c) jebel alone. Pros: fastest. Cons: `CpuInfo` tested on one cache hierarchy designs for one; the owner
     has offered the others.
 - **D13. Backdrops at production scale. Settled: (a).**
-  - (a) *Chosen.* `sequence_training_timing` and `attention_timing` take `--d`, and a run at `d` 512 and
-    `T` 256 joins the backdrops; no study trains it, only the timing does. Pros: a production model's `W`
+  - (a) *Chosen.* `sequence_training_timing` and `attention_timing` take `--features` and `--heads`, and a
+    run at `d` 512 and 8 heads (`T` 256 in `attention_timing`, the corpus's windows in training) joins the backdrops; no study trains it, only the timing does. Pros: a production model's `W`
     is past every L2 here (an FFN `W` of 512 x 2048 is 8.4 MB), so K8 and threads get judged where they
     would matter. Cons: a slower benchmark; run sparingly.
   - (b) Stay with today's models. Pros: no new cells. Cons: toy sizes decide a design (the production
@@ -401,7 +401,7 @@ it's on).
   - K1: `ab.py` builds and installs a named crate on both sides. *Done.*
   - K25: a `census` cargo feature on the core records `(kernel, m, k, n, calls, flops)` and writes it at
     exit; a build for measuring only, never in a wheel we ship. Run over the backdrops; the shares go here.
-  - K26: `--d` on the two benchmarks (D13).
+  - K26: `--features` and `--heads` on the two benchmarks (D13). *Done.*
   - K27: stone's profile (`machine_profile.py profile --out`), an A/A for its noise rules and the Ryzen's;
     `ab.py` run on stone from a bundle's checkout, no GitHub.
 - **Stage 2. K7a (D10).** Crate, then the bump. Expect the prototype's: −12.4% on a sequence epoch,

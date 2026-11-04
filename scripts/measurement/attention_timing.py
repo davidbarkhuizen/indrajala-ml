@@ -4,6 +4,7 @@ passes, time and peak memory, at T in {64, 256, 1024} characters, on numpy and R
 
     python scripts/measurement/attention_timing.py [--tokens 64 256 1024] [--backends numpy rust]
         [--masks causal packed] [--repeats 5] [--memory | --no-memory] [--json out.json]
+        [--features 64] [--heads 4]
 
 The layer is the study model's (D6): d = 64 features, 4 heads, causal, rotary, attention dropout
 --dropout (0.1) in training mode, so the forward draws its mask. Each T runs at the token budget
@@ -11,6 +12,10 @@ The layer is the study model's (D6): d = 64 features, 4 heads, causal, rotary, a
 packed, the causal mask with step 11's segments (paragraphs of PARAGRAPHS' lengths in turn, each
 ended by the separator, cut into the batch's rows), the case tiled attention skips across. Weights
 and inputs are seeded uniforms: the cost doesn't depend on them.
+
+--features and --heads set a larger layer than the study model's (the crate performance workplan's
+D13: `--features 512 --heads 8 --tokens 256`, where the weights are past every L2 here); its rows are
+named `d=512 ...`, so the study model's keep their names.
 
 Time: per case, a warm-up pass, then --repeats passes, each the forward (forward_batch) and the
 backward (compute_hidden_delta_batch, then accumulate_gradient_batch), timed apart; the median seconds per call of
@@ -91,15 +96,17 @@ def _layer_class(backend: str) -> Any:
 class Case:
     """One case's layer, input, upstream delta and context, built and seeded."""
 
-    def __init__(self, backend: str, tokens: int, mask: str, dropout: float) -> None:
+    def __init__(
+        self, backend: str, tokens: int, mask: str, dropout: float, features: int = FEATURES, heads: int = HEADS
+    ) -> None:
         self.backend, self.tokens, self.mask = backend, tokens, mask
         examples = batch_size(tokens)
         rng = np.random.default_rng(0)
-        layer = _layer_class(backend)(tokens, FEATURES, HEADS, causal=True, dropout=dropout, positions="rotary")
+        layer = _layer_class(backend)(tokens, features, heads, causal=True, dropout=dropout, positions="rotary")
         shapes = [np.asarray(p.tolist() if backend == "rust" else p).shape for p in layer.parameters()]
         weights = [rng.uniform(-0.5, 0.5, shape) for shape in shapes]
-        inputs = rng.uniform(-1.0, 1.0, (examples, tokens * FEATURES))
-        upstream = rng.uniform(-1.0, 1.0, (examples, tokens * FEATURES))
+        inputs = rng.uniform(-1.0, 1.0, (examples, tokens * features))
+        upstream = rng.uniform(-1.0, 1.0, (examples, tokens * features))
         array_backend: Any = RUST if backend == "rust" else NUMPY
 
         def as_backend(values: np.ndarray) -> Any:
@@ -130,8 +137,9 @@ class Case:
         return self.delta
 
 
-def case_name(backend: str, tokens: int, mask: str) -> str:
-    return f"T={tokens} B={batch_size(tokens)} {mask} / {backend}"
+def case_name(backend: str, tokens: int, mask: str, features: int = FEATURES) -> str:
+    size = "" if features == FEATURES else f"d={features} "
+    return f"{size}T={tokens} B={batch_size(tokens)} {mask} / {backend}"
 
 
 def time_case(case: Case, repeats: int) -> dict[str, float]:
@@ -159,7 +167,7 @@ def _status_mb(field: str) -> float:
     raise ValueError(f"/proc/self/status has no {field}")
 
 
-def memory_case(backend: str, tokens: int, mask: str, dropout: float) -> dict[str, float]:
+def memory_case(backend: str, tokens: int, mask: str, dropout: float, features: int, heads: int) -> dict[str, float]:
     """
     In this (fresh) process: one forward and backward's peak resident set over the baseline, in MB.
     The peak is VmHWM, reset to the current resident set first (clear_refs' 5): getrusage's
@@ -170,7 +178,7 @@ def memory_case(backend: str, tokens: int, mask: str, dropout: float) -> dict[st
     before = _status_mb("VmRSS")
     if backend == "numpy":
         tracemalloc.start()
-    case = Case(backend, tokens, mask, dropout)
+    case = Case(backend, tokens, mask, dropout, features, heads)
     case.forward()
     case.backward()
     result = {"peak RSS": _status_mb("VmHWM") - before}
@@ -181,9 +189,11 @@ def memory_case(backend: str, tokens: int, mask: str, dropout: float) -> dict[st
     return result
 
 
-def memory_in_subprocess(backend: str, tokens: int, mask: str, dropout: float) -> dict[str, float]:
+def memory_in_subprocess(
+    backend: str, tokens: int, mask: str, dropout: float, features: int, heads: int
+) -> dict[str, float]:
     command = [sys.executable, os.path.abspath(__file__), "--memory-case", backend, str(tokens), mask]
-    command += ["--dropout", str(dropout)]
+    command += ["--dropout", str(dropout), "--features", str(features), "--heads", str(heads)]
     out = subprocess.run(command, check=True, capture_output=True, text=True).stdout
     return json.loads(out.strip().splitlines()[-1])
 
@@ -195,23 +205,25 @@ def main() -> None:
     parser.add_argument("--masks", nargs="+", choices=MASKS, default=list(MASKS))
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--dropout", type=float, default=DROPOUT)
+    parser.add_argument("--features", type=int, default=FEATURES)
+    parser.add_argument("--heads", type=int, default=HEADS)
     parser.add_argument("--memory", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--json", help="write the results here as {case: {metric: value}}")
     parser.add_argument("--memory-case", nargs=3, metavar=("BACKEND", "T", "MASK"), help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.memory_case:
         backend, tokens, mask = args.memory_case
-        print(json.dumps(memory_case(backend, int(tokens), mask, args.dropout)))
+        print(json.dumps(memory_case(backend, int(tokens), mask, args.dropout, args.features, args.heads)))
         return
     results: dict[str, dict[str, float]] = {}
     units = {"forward": "s", "backward": "s", "peak RSS": "MB", "tracemalloc peak": "MB"}
     for backend in args.backends:
         for tokens in args.tokens:
             for mask in args.masks:
-                name = case_name(backend, tokens, mask)
-                values = time_case(Case(backend, tokens, mask, args.dropout), args.repeats)
+                name = case_name(backend, tokens, mask, args.features)
+                values = time_case(Case(backend, tokens, mask, args.dropout, args.features, args.heads), args.repeats)
                 if args.memory:
-                    values |= memory_in_subprocess(backend, tokens, mask, args.dropout)
+                    values |= memory_in_subprocess(backend, tokens, mask, args.dropout, args.features, args.heads)
                 results[name] = values
                 for metric, value in values.items():
                     print(
