@@ -256,7 +256,8 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   naming it. The lock's record is cleared when the hold ends; a line left in `~/data/indrajala-ml/runs/ab/run.lock` by a killed job means nothing (it's an `flock`; `machine_lock.holder()` checks the pid).
 - **The permission classifier has blocked `pkill` and `kill` over ssh on `jebel`** at times; a kill
   of a named PID or process group the owner asked for went through. If blocked, ask the owner.
-- **`stone`, the third machine (since 2026-10-18): studies only, never timing.** `ssh stone`
+- **`stone`, the third machine (since 2026-10-18): studies, and a timing guard** (no claims; the crate
+  performance workplan's D12, below). `ssh stone`
   (192.168.1.101, user david); i7-1255U laptop (2 performance and 8 efficiency cores, 12 threads,
   15 W), 30 GB. **Available weekdays 18:00-07:00 and all weekend**: a study must fit the window or
   split by whole runs. Lid and idle sleep are off (logind drop-in, GNOME), and it should be on AC.
@@ -269,6 +270,12 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   `pyramidon` with `pip download --only-binary=:all:`, leaving out `requirements.txt`'s `-e .`,
   which zips the whole repo, data and all). `source ~/labour/env.sh` first: caches, config, pip and
   `AB_RUNS_ROOT` (the machine lock) all under `~/labour`. Checkout `~/labour/code/indrajala-ml`.
+- **`ab.py` on `stone`:** run on it, not by `remote` (which needs GitHub). Send both bundles (the crate's
+  with a branch named, `git bundle create X.bundle BRANCH`; its clone is `~/labour/code/indrajala-math-rust`),
+  then `source ~/labour/env.sh; export AB_CRATE_REPO=$HOME/labour/code/indrajala-math-rust`, in
+  `~/labour/code/indrajala-ml` on `main`, fast-forwarded from `origin`. Its profile is `i7-1255u.json`,
+  its runs in `~/labour/ab-runs`. Its one-thread guard: `focused_benchmark --rust-threads 1
+  --openblas-threads 1`; its A/As had no consistent row by chance, but a 5.9% median spread per pass.
 - **`stone`'s throughput:** at 8 workers it matches `jebel` at 6 (the ladder's `p` 13 cell, 30
   epochs, seeds bit-identical with `jebel`'s round 2, screens equal at every matched epoch). A run
   takes 0.89x `jebel`'s time at 4 workers, 1.34x at 8 and 1.93x at 12, so 12 adds about 4% over 8:

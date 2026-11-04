@@ -244,7 +244,7 @@ oversubscribing each other.
 | K1 | `ab.py run --old-crate X --new-crate X` installed neither wheel, timing the venv's crate on both sides | From the A/B harness | **done**: a named crate is built and timed |
 | K25 | a shape census: which kernel, at which `m x k x n`, how many flops, for a backdrop | new (D9) | **stage 1**: a cargo feature, off in releases |
 | K26 | backdrops at production scale: `sequence_training_timing` and `attention_timing` at a larger `d` | new (D13) | **done**: `--features`, `--heads` |
-| K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **stage 1** |
+| K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **stone done** (`i7-1255u.json`); the Ryzen's on klip after its affine pass |
 | K7 | `matmul_2d` for long `k`: slabs that resume each chain | i7 item 1 | **stage 2** (K7a), **stage 3** (K7b, packing) |
 | K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **stage 4**, against K11 |
 | K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **stage 4**, only for what K23 leaves |
@@ -402,8 +402,9 @@ it's on).
   - K25: a `census` cargo feature on the core records `(kernel, m, k, n, calls, flops)` and writes it at
     exit; a build for measuring only, never in a wheel we ship. Run over the backdrops; the shares go here.
   - K26: `--features` and `--heads` on the two benchmarks (D13). *Done.*
-  - K27: stone's profile (`machine_profile.py profile --out`), an A/A for its noise rules and the Ryzen's;
-    `ab.py` run on stone from a bundle's checkout, no GitHub.
+  - K27: stone's profile and noise rules, from six A/As at `8eeda72`, `ab.py` run there from a bundle's
+    checkout (working-notes, Machines). *Done:* no row of 123 consistent by chance, passes shifted up to
+    1.9%, a 5.9% median spread at one thread: a guard, as D12 has it. The Ryzen's rules wait for klip.
 - **Stage 2. K7a (D10).** Crate, then the bump. Expect the prototype's: −12.4% on a sequence epoch,
   −6% to −15% on attention's backward. Guards on a Ryzen and on stone (K27).
 - **Stage 3. K7b (D10).** Packed panels past a page's stride. Target: 64 x 256 x 1024's 0.37, the conv tail
