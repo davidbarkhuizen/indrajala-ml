@@ -1316,8 +1316,8 @@ test passing, and:
 - [docs/machine_profiles/i7-9700k.md](docs/machine_profiles/i7-9700k.md): the benchmark machine's
   noise and baseline (A/As of every benchmark, the per-op, conv demo and kernel tables), with the
   Ryzen laptop's numbers beside them.
-- [docs/i7-9700k-rust-optimization.md](docs/i7-9700k-rust-optimization.md): where the Rust crate
-  lags numpy on the benchmark machine, and what to investigate for each gap.
+- [docs/workplans/infrastructure/crate-performance-workplan.md](docs/workplans/infrastructure/crate-performance-workplan.md):
+  where the Rust crate's time goes and what lags numpy, its kernel and threading work in order.
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
   attention, multi-head attention and a transformer block, and a sequence task with causal

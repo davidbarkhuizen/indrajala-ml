@@ -21,6 +21,6 @@ None open: steps 1-15 are done (their workplans retired, next-steps.md).
 
 | workplan | scope |
 | --- | --- |
-| [multithreading-workplan.md](infrastructure/multithreading-workplan.md) | the crate's outstanding kernel work (stage −1), then a thread pool, one thread budget a process, and threaded attention, conv and the window program |
+| [crate-performance-workplan.md](infrastructure/crate-performance-workplan.md) | the crate's speed as one plan: measurement, long-`k` products first, copies, kernels by epoch share, `CpuInfo`, then a thread pool, one thread budget a process, and threaded attention, conv and the window program |
 
 Retired plans are listed in [next-steps.md](../next-steps.md).

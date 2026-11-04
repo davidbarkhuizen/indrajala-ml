@@ -281,7 +281,7 @@ mask stays the packed default. Left:
 - **numpy's backward at `T = 64` is 43-47% slower than the untiled one** (#1171: the recompute plus
   the dropout redraw); numpy is the reference, not the speed path.
 - **Two unexplained tier 1 rows:** #1174's loader +2.3%, #1175's numpy causal forward +2.5% (the
-  multithreading workplan's K4 rereads them after its placement pin).
+  crate performance workplan's K4 rereads them with its placement pin).
 - **A run file doesn't record `clip_norm`.**
 - **Out of scope (D10):** mixed precision, sequence parallelism, sparse or sliding-window
   attention: each its own step when a context past 1,024 or a larger model needs it.
@@ -418,7 +418,7 @@ threaded call costs, measured for the multithreading work (D3). Read it with `gi
   up to 52% where the output's rows lie a multiple of 4 KB apart (512 rows). One that gathers a
   block into a contiguous buffer before writing it out, never interleaving loads with stores to
   aliasing rows, is the candidate; the measured kernels are on the crate's `avx2-transpose` branch.
-- **The multithreading work** takes stage 3's findings: a thread costs about 10 µs on jebel and 19
+- **The crate performance workplan** takes stage 3's findings: a thread costs about 10 µs on jebel and 19
   on `litshe` per call; a pool would open the threading threshold (8M flops) to the b32 products.
 - **The one-thread kernel's 16-18% gap to OpenBLAS on `litshe`: backend stalls.** `perf stat`
   (2026-10-30; `perf` installed, `perf_event_paranoid` 1), `(32, 30) @ (30, 784)` 20,500 times on one
@@ -427,8 +427,8 @@ threaded call costs, measured for the multithreading work (D3). Read it with `gi
   whole gap (+0.79G cycles) is backend stalls (+0.82G), the kernel waiting on its own FMA chains
   (each output a serial chain over `k` = 30, the bit-identical order). Narrowing it keeps the order
   and puts more independent outputs in flight per tile (the old plan timed seven tile shapes at
-  b32, none faster; at narrow `k` a wider tile is the candidate). For the kernel work beside the
-  multithreading.
+  b32, none faster; at narrow `k` a wider tile is the candidate). The crate performance workplan's
+  K10.
 - **`litshe`'s placement isn't pinned** (D7): aligning loops and functions held its kernels still but
   cost short loops 7-16%, so its A/Bs are read with `scripts/measurement/kernel_code_diff.py` (a row
   whose function's instructions didn't change moved with placement). A cheaper pin (loops at 32
@@ -1167,8 +1167,8 @@ Not planned yet:
 
 - **Crate tuning for the gaps it found.** Where Rust lags numpy on the i7, or lost ground from
   the laptop, and what to investigate for each, ordered by payoff:
-  [i7-9700k-rust-optimization.md](i7-9700k-rust-optimization.md). Each item gets its own crate
-  workplan with an A/B on both machines (measurement.md §9).
+  [the crate performance workplan](workplans/infrastructure/crate-performance-workplan.md), one plan
+  (D7), a speedup claimed on `jebel` with the laptops as guards (D12).
 - **Code placement on the i7** (multi-head attention, stage 5, #609). The multi-head crate's
   attention ops ran up to 14% slower per call on `jebel` with the same instructions per call
   (within 0.3%): in the new build, forward's µops from the legacy decoder (`idq.mite_uops`) tripled
@@ -1200,8 +1200,8 @@ Not planned yet:
   allows it; reviewing untrusted submissions needs its own plan.
 - **A run queue on `jebel`** (several A/Bs queued from `pyramidon`, run back to back), if one run
   at a time under the run lock turns out to be the bottleneck.
-- **Crate tuning on CPU attributes** ([i7-9700k-rust-optimization.md](i7-9700k-rust-optimization.md))
-  uses the archive's profiles and runs from both machines.
+- **Crate tuning on CPU attributes** ([the crate performance workplan](workplans/infrastructure/crate-performance-workplan.md),
+  D5, D11) uses the archive's profiles and runs from each machine.
 
 Not planned yet:
 
