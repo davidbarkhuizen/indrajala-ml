@@ -144,7 +144,7 @@ Sources (indrajala-literature): `raffel-2020-exploring-limits-transfer-t5`,
 `zhang-2022-scaling-transfer-lm-architectures-mt`, `gao-2022-encoder-decoder-redundant-nmt`,
 `fu-2023-decoder-only-or-encoder-decoder`. Left:
 
-- **The encoder-decoder's first training runs: abandoned** (the translation probe, #PR,
+- **The encoder-decoder's first training runs: abandoned** (the translation probe, #1242,
   2026-11-04, the owner's call; `scripts/studies/translation_probe.py`'s docstring has the
   findings): d 128, 2 + 2 blocks, the Lives, 23 epochs on stone. English bits per character fell
   from 3.33 to 1.81, but the source ablation's gap (another window's Greek against the window's
