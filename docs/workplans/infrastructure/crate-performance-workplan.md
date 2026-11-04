@@ -254,6 +254,58 @@ rows don't show them. They stay on record, not chased.
 Jebel moved to kernel 7.0.0-42 during this stage (a reboot). Each A/B's two sides share a kernel, so this reading
 holds, but A/Bs from before it don't compare with those after, and K5's baseline records the new kernel.
 
+The rest of stage 6 closes under the bar, with K23 in. A flat profile on jebel (`perf record`, `perf_region.py`'s
+machine, with call stacks from its branch records):
+
+| Backdrop | transpose | memmove | memset | malloc family |
+|---|---|---|---|---|
+| attention | 3.9% | 3.7% | 3.0% | under 1% |
+| window | 1.5% | 4.3% | 1.8% | about 5% |
+| `d` 512 (both backends) | 0.55% | 6.0% | 0.8% | under 1% |
+
+**K11** closes: at most 3.9%, and only part of that could be won. **K24** closes: no one site passes 1.4%
+(`matmul_nt`'s zeroed output 1.38% of the window, `tiled_backward`'s tile copies 1.11% of attention, `scores_into`
+0.92%, `token_rows`' reshape 0.67% of the window). The largest are `calloc` zeroing, which only uninitialized memory
+would remove, and copies that need views `Array` hasn't got. The allocator's 5% of the window is spread over
+many sites. Neither is reopened unless a site grows.
+
+### Stage 7's first step (K28; crate #108)
+
+The same profile put two things in the window's top three that no earlier reading had named: `layer_norm::normalize`
+14.3% and `linear_preactivation_batch` 9.8%, ahead of the attend. Neither was a kernel's arithmetic:
+
+- `normalize` allocated a `Vec` a row and ran its elementwise steps scalar. Only its two folds are chains; the rest
+  takes four lanes (AVX2 with no FMA, since a fused `g * xh + b` would round once).
+- `linear_preactivation_batch` added `b` into a new array with a push per value. It now adds in place, and
+  `broadcast_row`, which others use, is an iterator that vectorizes.
+
+Bits hold, the golden run is unchanged. Passes ONNONO, old 238a017 vs new 18ce111:
+
+| Machine | Benchmark | Result |
+|---|---|---|
+| jebel | window forward | family -22.6%, linear -15.6% |
+| | window learn | family -8.7%, linear -7.2% |
+| | attention forward (16 x 32), one thread | b32 -16.6%, b512 -12.9% |
+| | sequence epoch, `d` 64 | -7.0% |
+| | `d` 512 epoch, `d` 512 attend forward | -2.9%, -4.8% |
+| | dense, conv epochs | within noise |
+| stone | window forward | family -26.0%, linear -16.3% |
+| | window learn | family -11.3%, linear -9.0% |
+| | `d` 512, epochs | within noise |
+| klip | window forward family | -17.6% |
+| | window learn | family -5.7%, linear -5.6% |
+| | sequence epoch | -5.1% |
+| | `d` 512 | within noise |
+
+The cheapest change of the plan, and among its largest for the window. The kernels' share had hidden it: **read a
+flat profile before a kernel**, as a census names only what it instruments.
+
+One row against: attention's accumulate at b32 and one thread reads +6.8% and +5.3% on jebel (twice), and not on
+stone, klip, or at default threads, with b512 -3.1%. K28 didn't touch that kernel, so it is taken as placement (K2).
+
+Jebel rebooted itself mid-run at 14:34 on 2026-11-04, an unclean shutdown about an hour into kernel 7.0.0-42, with
+nothing logged. One sequence A/B was lost and rerun; the run after it, on the new boot, passed the machine check.
+
 ### What the census says (K25, on stone, with K7a in)
 
 Seconds by kernel, one worker. A site's time holds what it calls: the attends hold `exp`, `transpose` and
@@ -403,11 +455,11 @@ oversubscribing each other.
 | K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **done**: `i7-1255u.json`, `ryzen7-3700u-klip.json` |
 | K7 | `matmul_2d` for long `k`: slabs that resume each chain | i7 item 1 | **done**: K7a (crate #101), K7b (crate #102), results below |
 | K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **done (crate #107)**, below a `b` 512 wide: attention accumulate -33% to -47%, sequence epoch -8.2% (stage 6's results) |
-| K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **stage 6**, only for what K23 leaves |
-| K24 | fewer copies and allocations in the crate's ops (memmove, memset, calloc: 5-10% of the window and attention backdrops) | new | **stage 6**, sites from the census |
+| K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **closed**: under the bar with K23 in, 3.9% of attention at most (stage 6's results) |
+| K24 | fewer copies and allocations in the crate's ops (memmove, memset, calloc: 5-10% of the window and attention backdrops) | new | **closed**: no site past 1.4% (stage 6's results) |
 | K9 | conv on 28x28 inputs, `conv_forward_batch` first (64% of a conv-conv epoch) | i7 item 5 | **stage 7**: diagnosis, then a fix if there's a cause |
 | K12 | the attention kernels: tiled attend and backward, 33% at `T` 1024 | From the window program; From multi-head attention | **first step done** (crate #103); the rest from a fresh census, stage 7 |
-| K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **first step done** with K12; the rest from a fresh census, stage 7 |
+| K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **second step done (crate #108)**: layer norm and the dense add, window forward -22.6%; the rest by profile, stage 7 |
 | K10 | narrow `k`: more independent outputs in flight per tile; 16-18% behind OpenBLAS on `litshe`, and short-`k` shapes dominate the window | From the crate kernels | **stage 7**, on x86 and on `litshe` when on |
 | K6 | `CpuInfo` | i7 outline, Kernels and parameters | **done (crate #103, #105, #106)** (D5, D11), for K8 and the thread counts |
 | K8 | `matmul_nt` with `W` past the L2: slabs of `W` in bytes, the 4 lanes stored | i7 item 2 | **done (crate #106)**: conv tail forward -33%, 30 x 784 -23%, dense epochs -6% to -8%; `d` 512 not reached (stage 5's results) |
@@ -571,7 +623,8 @@ it's on).
 - **Stage 5. `CpuInfo` and K8 (K6, D5, D11).** Read once (Linux sysfs and `cpuid` on x86, sysfs on aarch64), the
   machine profiles' fields, per-core sizes, in a new bottom layer `sys` beside `num` (`core/tests/layers.rs`
   needs it added). Then `matmul_nt`'s slabs: the candidate rule tested on jebel, a Ryzen and stone's P and E cores. **Done**: the rule with a 64-row minimum (stage 5's results).
-- **Stage 6. Copies (K23, K11, K24).** Accumulate without its transpose first; K11 only for what remains.
+- **Stage 6. Copies (K23, K11, K24). Done:** K23 merged, K11 and K24 closed under the bar.
+  Accumulate without its transpose first; K11 only for what remains.
   Allocation sites from the census.
 - **Stage 7. By share: conv forward (K9), the attend's remainder and the window's kernels (K12, K28), narrow
   `k` (K10), the batched decode step (K13).** Each profiled
