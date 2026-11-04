@@ -5,6 +5,7 @@ readings themselves aren't checked: this is a timing tool.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,13 @@ def test_the_table_s_gain_is_over_the_group_s_first_row_per_unit_of_work() -> No
     table.add("g", "4 x 1", 4.0, 4)
     gains = [line.split()[-1] for line in table.lines()[1:]]
     assert gains == ["1.00", "2.00", "2.00"]
+
+
+@pytest.mark.skipif(shutil.which("rustup") is None, reason="names a toolchain rustup lists")
+def test_a_worktree_s_empty_rust_directory_still_gets_a_toolchain(tmp_path: Path) -> None:
+    assert "RUSTUP_TOOLCHAIN" in probe.toolchain_environment(tmp_path)
+    (tmp_path / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "stable"\n')
+    assert probe.toolchain_environment(tmp_path).get("RUSTUP_TOOLCHAIN") == os.environ.get("RUSTUP_TOOLCHAIN")
 
 
 @pytest.mark.skipif(shutil.which("rustc") is None, reason="the call cost is built with rustc")
