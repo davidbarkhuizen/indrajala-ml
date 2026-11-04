@@ -111,12 +111,21 @@ def emit(case: str, metric: str, value: float, unit: str, control: bool = False)
 # ---- calls
 
 
+def toolchain_environment(crate: Path) -> dict[str, str]:
+    """rustup takes the crate's rust-toolchain.toml from the cwd. An ab.py worktree's rust/ is empty, and
+    a machine may have no default toolchain, so there the first one installed is named."""
+    if (crate / "rust-toolchain.toml").is_file():
+        return dict(os.environ)
+    listed = subprocess.run(["rustup", "toolchain", "list"], check=True, capture_output=True, text=True).stdout
+    return {**os.environ, "RUSTUP_TOOLCHAIN": listed.split()[0]}
+
+
 def build_call_cost(directory: str) -> Path:
     binary = Path(directory) / "thread_call_cost"
-    # from rust/, so rustup takes the crate's rust-toolchain.toml
     subprocess.run(
         ["rustc", "-C", "opt-level=3", "--edition", "2024", "-o", str(binary), str(HERE / "thread_call_cost.rs")],
         cwd=REPO / "rust",
+        env=toolchain_environment(REPO / "rust"),
         check=True,
     )
     return binary

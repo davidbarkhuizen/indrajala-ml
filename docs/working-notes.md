@@ -116,6 +116,10 @@ where you meet a new trap; delete one that no longer holds.
 - **A census doesn't replace a flat profile.** Its clock and lock inflate short calls, and it sees only what it
   instruments: `layer_norm` and the dense add, 24% of the window, were on no census. `perf record` runs at
   `perf_event_paranoid` 2, and `perf record --call-graph lbr` on `jebel` names a memmove's callers, with no frame pointers.
+- **An `ab.py` worktree's `rust/` is empty,** so a probe compiling from there gets no `rust-toolchain.toml`, and stone and klip have
+  no default toolchain. `thread_cost_probe.py` names one itself; a new probe that runs `rustc` has to as well.
+- **Stone and klip don't have a squash-merged crate commit** until told: `ab_all.sh` bundles the PR's branch, not the merge. Bundle `origin/main` to stone and
+  fetch on klip before naming it in `--old-crate` or `--new-crate`.
 - **A one-thread probe doesn't speak for an epoch.** `matmul_nt` by groups read 0.67-1.01 on the probe and nothing on a
   `d` 512 epoch, whose large products run on 8 threads.
 - **`golden_training_run.py archive` on jebel pushes its branch but can't open the PR:** jebel's
