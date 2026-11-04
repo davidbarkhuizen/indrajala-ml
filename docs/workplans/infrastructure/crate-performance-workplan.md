@@ -334,9 +334,8 @@ A flat `perf record`, each row a share of that run's samples:
 
 So the next steps, in order:
 
-1. **The attend's own code**, K28's kind of finding: 31% of attention in `tiled_forward` and `tiled_backward` outside any
-   kernel. Its elementwise loops (`score - shift`, the rescale of `h`, the scale's division in `scores_into`) are scalar or
-   SSE2; its folds must stay chains. Annotate first; a division gains nothing from four lanes on jebel.
+1. **The attend's own code (K29). Closed under the bar** (results below). The annotation found the mask draw, not the
+   elementwise loops this step expected.
 2. **`matmul_nt` at short `k` (K10)**, 19.3% of the window, mostly 96 x 16 x 16 and 96 x 16 x 32.
 3. **`codes_forward`**, 7% of the window: a chain per (row, code), but chains of different codes are independent, so
    they could run in lanes.
@@ -345,6 +344,28 @@ So the next steps, in order:
 
 K13 (the batched decode step) stays last, if it clears the bar. The `d` 512 kernels' gains now wait for threads
 (stages 8-10): `matmul_nt` by groups showed that one thread's reading doesn't carry to an epoch.
+
+### The attend's own code (K29; crate #110, closed unmerged)
+
+**The annotation** (`attention-7.data`, crate `cba601e`, about 200 samples per function, so a rough reading). 56-63% of
+`tiled_forward`'s and `tiled_backward`'s own samples are the inlined dropout mask draw, one PCG64 step and one float compare per
+example, head, query and key: about 18% of the attention backdrop. The backward draws the same masks again, which D12 of the
+context-length workplan chose over keeping them. In the window backdrop, which has no attention dropout, the same code is
+flat, with no line above 5.5%. So the elementwise loops expected here were never the cost, and nothing was changed for them.
+
+**The change tried:** `u >= p` with `u = n / 2^53` is exactly `n >= ceil(p * 2^53)`, so the mask compares on the draw's bits.
+A test kept the mask and the generator's state identical to the float compare's at 208 probabilities.
+
+| Form | Compiled to | Attention, `d` 64 (jebel, `T` 64, 256, 1024) |
+|---|---|---|
+| `if n >= t { 1.0 } else { 0.0 }` (`k29-mask`) | `ja`, on a nearly random bit | **slower**, forward +3.2 to +10.2%, backward +4.8 to +7.7% |
+| a mask from the compare's `bool` (`k29b-mask`) | the same `ja` | **slower**, forward +5.8 to +12.1%, backward up to +9.1% |
+| `select_unpredictable` of the entry's bits (`k29c-mask`) | `cmova` | forward **-3.7%** and backward **-2.6%** at `T` 1024; the rest within noise |
+
+**Closed:** at most 3.7% of an isolated layer, under the 5% of an epoch that the bar asks for. The timed sequence epoch doesn't
+turn on attention dropout, so no epoch shows the gain. The first form's guards on stone and klip were within the usual noise. Reopen
+it if a study's profile shows the draw: the commit is `1005ed5` in indrajala-math-rust, and its only cost is the select's odd form.
+Not tried: keeping the masks between forward and backward (D12's memory at long `T`, for the same absent epoch).
 
 ### What the census says (K25, on stone, with K7a in)
 
@@ -500,6 +521,7 @@ oversubscribing each other.
 | K9 | conv on 28x28 inputs, `conv_forward_batch` first (64% of a conv-conv epoch) | i7 item 5 | **stage 7**: diagnosis, then a fix if there's a cause |
 | K12 | the attention kernels: tiled attend and backward, 33% at `T` 1024 | From the window program; From multi-head attention | **first step done** (crate #103); the rest from a fresh census, stage 7 |
 | K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **second step done (crate #108)**: layer norm and the dense add, window forward -22.6%; the rest by profile, stage 7 |
+| K29 | the attend's own code: the dropout mask draw, compared on its bits | new, from the annotation | **closed**: under the bar, at most 3.7% of an isolated layer and no epoch (crate #110, unmerged; results above) |
 | K10 | narrow `k`: more independent outputs in flight per tile; 16-18% behind OpenBLAS on `litshe`, and short-`k` shapes dominate the window | From the crate kernels | **stage 7**, on x86 and on `litshe` when on |
 | K6 | `CpuInfo` | i7 outline, Kernels and parameters | **done (crate #103, #105, #106)** (D5, D11), for K8 and the thread counts |
 | K8 | `matmul_nt` with `W` past the L2: slabs of `W` in bytes, the 4 lanes stored | i7 item 2 | **done (crate #106)**: conv tail forward -33%, 30 x 784 -23%, dense epochs -6% to -8%; `d` 512 not reached (stage 5's results) |

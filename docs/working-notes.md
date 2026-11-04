@@ -208,6 +208,13 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   SITE in a temporary `pyrightconfig.json`'s `extraPaths` to see the new stub. Don't replace SITE
   while a suite runs: tests that start subprocesses import it again.
 
+- **A cheaper compare can run slower: read the compiled loop before timing a "branchless" form.** On a nearly random
+  condition, an `if`, a mask built from the compare's `bool`, a sign-bit subtraction and `select_unpredictable` of two floats all
+  compiled to the same `ja` (x86 has no float conditional move), and the two that were timed cost attention 3-12% (crate #110, closed). What compiles to `cmova` is
+  `f64::from_bits(std::hint::select_unpredictable(cond, one_bits, 0))`. Check with `objdump -d --no-show-raw-insn` on the built `.so`.
+- **Reading `perf annotate --stdio`:** each section's header gives the sample count but no symbol. The name is on the first `<...>:`
+  line after `Disassembly of section .text:`, and generic names hold `>` inside, so match it greedily.
+
 ## Machines
 
 - **`./cli build-rust` over ssh can't find rustup** (`rustup not found`): a non-interactive ssh
