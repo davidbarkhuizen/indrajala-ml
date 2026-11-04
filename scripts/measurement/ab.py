@@ -1347,14 +1347,16 @@ def check_for_archive(run_dir: Path, profile: str | None, reason: str | None) ->
         reports["pooled.md"] = pooled_report(data)
     checks = [manifest.get("preflight", {})] + [e.get("preflight", {}) for e in manifest["extends"]]
     if all(c.get("profile") == "identity matches" and "profile_identity" in c for c in checks):
-        if profile:
-            raise AbError(f"{run_dir.name} names its own profile: archive it without --profile")
         paths = {c["profile_path"] for c in checks}
         identities = {c["profile_identity"] for c in checks}
         if len(paths) != 1 or len(identities) != 1:
             raise AbError(f"{run_dir.name}: its machine checks name more than one profile")
-        path = recorded_profile(manifest, paths.pop())
-        if benchmark_archive.identity_sha256(json.loads(path.read_text())) != identities.pop():
+        identity = identities.pop()
+        # --profile, for a profile re-recorded since the run (a kernel update): its identity decides
+        path = Path(profile) if profile else recorded_profile(manifest, paths.pop())
+        if benchmark_archive.identity_sha256(json.loads(path.read_text())) != identity:
+            if profile:
+                raise AbError(f"{run_dir.name} ran under another identity than {path}")
             raise AbError(
                 f"{run_dir.name}: {path.name} was re-recorded with another identity since the run; "
                 "archive it with --profile naming the profile it ran under"

@@ -627,7 +627,9 @@ It refuses a run still going, a failed run without `--reason`, and a run directo
 file `ab.py` didn't write. It renders `brief.txt`, `report.md` and, for an A/A, `pooled.md`, and
 cites the machine profile the run's check recorded, if that profile's identity hash still
 matches. A run from before identity hashes, or run without the machine check, names its profile:
-`--profile docs/machine_profiles/<machine>.json`. A record is named after its run directory.
+`--profile docs/machine_profiles/<machine>.json`. A run whose profile was re-recorded since (a kernel
+update) names the file it ran under, `git show` of the old commit, and its identity must match the run's. A record is
+named after its run directory.
 
 **A golden run version** (it doesn't train; it archives the file as it is):
 
