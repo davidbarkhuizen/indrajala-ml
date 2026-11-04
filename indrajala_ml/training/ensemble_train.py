@@ -6,6 +6,7 @@ import random
 from collections.abc import Callable, Iterable
 from typing import Any, cast
 
+from indrajala_ml.measurement.worker_threads import worker_threads
 from indrajala_ml.model.ensembles.ensemble_backprop_classifier_network import EnsembleBackpropClassifierNetwork
 from indrajala_ml.model.networks.python.backprop_classifier_network import BackpropClassifierNetwork
 from indrajala_ml.model.protocols.classifier_protocols import BinaryClassifier, BinaryClassifierClass
@@ -227,7 +228,7 @@ def train_ensemble_parallel[ClassifierT: BinaryClassifier = BackpropClassifierNe
             job_seed = rng.randrange(2**31) if seed is not None else None
             yield _DecodedJob(label, job_seed, network_seeds[label], training, binary_dataset)
 
-    with multiprocessing.Pool(actual_worker_count) as pool:
+    with multiprocessing.Pool(actual_worker_count, **worker_threads(actual_worker_count)) as pool:
         return _collect_ensemble_results(pool, _train_one_classifier, jobs(), training)
 
 
@@ -278,7 +279,7 @@ def train_ensemble_parallel_from_indices[ClassifierT: BinaryClassifier = Backpro
                 label, job_seed, network_seeds[label], training, path, record_loader, index_category_pairs
             )
 
-    with multiprocessing.Pool(actual_worker_count) as pool:
+    with multiprocessing.Pool(actual_worker_count, **worker_threads(actual_worker_count)) as pool:
         return _collect_ensemble_results(pool, _train_one_indexed_classifier, jobs(), training)
 
 

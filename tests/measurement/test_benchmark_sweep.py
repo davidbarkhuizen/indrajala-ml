@@ -1,5 +1,8 @@
 import time
 
+import indrajala_math_rust
+import pytest
+
 from indrajala_ml.measurement.benchmark_sweep import (
     estimate_sweep_wallclock,
     run_parameter_sweep,
@@ -30,6 +33,16 @@ def test_run_parameter_sweep_dispatches_every_config_seed_pair_exactly_once():
     assert set(results.keys()) == {1, 2, 3}
     for config in (1, 2, 3):
         assert sorted(results[config]) == sorted(config * 10.0 + seed for seed in (0, 1))
+
+
+def _budget_worker(_context: None, config: int, _seed: int) -> int:
+    return indrajala_math_rust.threads() + config
+
+
+def test_a_sweep_s_workers_run_on_one_thread_each(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("INDRAJALA_THREADS", raising=False)
+    results = run_parameter_sweep([0], [0], _budget_worker, worker_count=1, report_progress=False)
+    assert results == {0: [1]}
 
 
 def test_run_parameter_sweep_result_count_matches_configs_times_seeds():
