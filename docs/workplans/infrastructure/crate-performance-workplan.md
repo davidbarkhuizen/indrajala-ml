@@ -450,6 +450,74 @@ jebel and `pyramidon`, 164 networks, `.so` `7a3f0df0ecd3`. Rust tests and clippy
 **CI gap:** crate #111 and #112 merged on the owner's instruction with their macOS jobs cancelled during a GitHub Actions incident, no steps run, and the wheel-dependent test and package-check jobs skipped. So
 neither crate PR ran those on any platform. The next crate PR's CI, or a run on `main`, covers them.
 
+### Stage 8's readings (crate `362e34c`)
+
+A/As through `ab.py` at crate `main`, order `ON` (`ONNO` for jebel's `calls`), so each row has its per-pass spread; on jebel at kernel -42, with no restart during them. The probe's numbers choose work and claim nothing (Checks). Pooled tables: pyramidon's `~/data/indrajala-ml/runs/thread-readings-2026-11-04/`; driver `crate-perf-tools/thread_readings.sh`. Sequence `d` 64 and the window weren't read: nothing there reaches the threshold or a threaded site, so nothing would vary until stages 10 and 11.
+
+**The `d` 512 epoch, seconds at 1 process (256 windows; spread at most 0.4% on jebel):**
+
+| threads | jebel | stone | klip |
+|---|---|---|---|
+| 1 | 18.16 | 17.84 | 52.43 |
+| 2 | 11.34 | 12.81 | 32.11 |
+| 4 | 8.21 | 11.09 | **21.73** |
+| 8 | **7.34** | **9.10** | 23.48 |
+| gain at the best | 2.48x | 1.96x | 2.41x |
+
+klip's 8 logical threads lose to its 4 physical cores, and all three large products do too, as D4 and D5 assumed. Today's default there is 8.
+
+**Throughput of N processes x T threads, `d` 512, over 1 x 1 (64 windows):**
+
+| N \\ T | jebel 1 | 2 | 4 | 8 | stone 1 | 2 | 4 | 8 | klip 1 | 2 | 4 | 8 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 1.00 | 1.54 | 2.14 | 2.39 | 1.00 | 1.43 | 1.65 | 2.01 | 1.00 | 1.56 | 2.22 | 2.04 |
+| 2 | 1.69 | 2.41 | **3.08** | 2.84 | 1.73 | 1.91 | 2.31 | 2.64 | 1.89 | **2.88** | 2.74 | 2.69 |
+| 3 | | | | | | | | | 2.33 | 2.22 | 2.09 | 1.94 |
+| 4 | 2.27 | 2.93 | 3.00 | 2.64 | 2.09 | 2.50 | 2.86 | **2.87** | | | | |
+| 8 | 2.38 | 2.44 | 2.50 | 2.51 | | | | | | | | |
+
+- **The frame above doesn't hold at `d` 512:** "sweeps are already parallel by process, so threads add little". 8 x 1 on jebel gives only 2.38x, and 2 x 4 gives 3.08x. Something other than core count limits eight one-thread processes (the 65 W limit or the memory bus; not separated here). It's one memory-heavy backdrop: the window program, the studies' workload, has no threaded site to read until stage 11.
+- **Oversubscription costs less than D4 feared, but it can cost.** jebel's 8 x 8 (64 threads) beats 8 x 1, and stone's 4 x 8 ties 4 x 4; klip's 3 x 8 loses 17% to 3 x 1, and 2 x 8 loses 7% to 2 x 2. The rule stays as a guard, not as a throughput claim. Processes start together but aren't held at a barrier, so overlap is close, not exact.
+
+**Other epochs, seconds at 1 thread and the best count:** B=32 doesn't move on any machine, as no product reaches the threshold (stone's conv B=32 reads up to 5%, within its noise). B=512: conv 0.369 to 0.344 on jebel (-7%, at 4 threads), 0.333 to 0.304 on stone (-9%), 0.932 to 0.861 on klip (-8%); dense 0.658 to 0.608 on jebel (-8%), 0.603 to 0.574 on stone (-5%), 1.899 to 1.769 on klip (-7%). The attention layer at `d` 512, `T` 256 on jebel: forward 2.04x, backward 1.86x at 8 threads.
+
+**One product, warm, Rust over OpenBLAS at the same thread count (ms on jebel; under 1 is Rust ahead):**
+
+| shape | 1 thread | 4 threads | 8 threads | Rust's own gain at 8 |
+|---|---|---|---|---|
+| 2048 x 2048 x 512 | 92.0/69.2 = 1.33 | 28.3/19.1 = 1.48 | 21.3/22.2 = 0.96 | 4.33x |
+| 2048 x 512 x 2048 | 106/70.4 = 1.51 | 40.2/20.9 = 1.93 | 34.4/24.9 = 1.38 | 3.08x |
+| 512 x 2048 x 2048 | 90.5/69.6 = 1.30 | 36.5/19.8 = 1.85 | **47.1/15.3 = 3.07** | 1.92x |
+| 64 x 256 x 1024 | 0.86/0.60 = 1.42 | 0.73/0.18 = 3.97 | 0.45/0.17 = 2.70 | 1.90x |
+| 32 x 128 x 1352 | 0.25/0.24 = 1.04 | 0.13/0.11 = 1.23 | 0.13/0.07 = 1.89 | 1.84x |
+| 32 x 30 x 784 | 0.03/0.04 = 0.78 | 0.06/0.02 = 2.53 | 0.09/0.02 = 3.85 | 0.37x |
+
+- **512 x 2048 x 2048 is the largest gap:** on jebel and klip 8 threads run slower than 4, while OpenBLAS reaches 4.5x on the same machine, so the memory bus isn't what stops it. Few rows and a long `k` are what stage 10's column split with packing is for; it now has a named target.
+- **Short products are the pool's target.** OpenBLAS gains there and we lose: at 8 threads 32 x 30 x 784 runs 2.6x to 3.3x slower than on one, on every machine, and 3.6x to 4.0x behind OpenBLAS. Whether a pool closes that is stage 10's reading.
+- **The threshold is machine-specific, as D5 says:** 32 x 128 x 1352 gains 1.9x on jebel, 1.3x on stone and 1.16x on klip.
+- OpenBLAS's own 8 threads lose to its 4 on several shapes on jebel and klip, so it isn't a monotonic bar either.
+
+**The call, with its work fixed: µs at 100k steps (about 270 µs on one jebel thread), scoped/pool at 50 µs of spin:**
+
+| threads | jebel warm | jebel cold | stone warm | stone cold | klip warm | klip cold |
+|---|---|---|---|---|---|---|
+| 1 | 1911/272 | 1918/1651 | 529/309 | 2181/1156 | 1022/660 | 1426/1133 |
+| 2 | 776/139 | 1147/900 | 266/177 | 1544/752 | 702/331 | 916/662 |
+| 4 | 122/71 | 794/505 | 182/110 | 1089/510 | 558/166 | 654/400 |
+| 8 | 224/36 | 692/324 | 225/75 | 1071/393 | 346/84 | 665/259 |
+
+- **The pool wins every row at 100k steps, warm or cold,** by about 2x to 6x at 8 threads, and it's near linear warm (jebel 7.5x at 8, klip 7.9x). At 1000k steps, cold and at 8 threads, its lead narrows to 18-53%, as the spawn cost shrinks against the work, and the one row it loses is klip's one thread there (10,880 against 10,470 µs). D3 stands.
+- **The pool is also steady:** its warm rows spread 0.2% or less on jebel, where scoped's reach 120% at 100k and 175% at 1000k. A spawned thread lands on a different core each call. So threaded A/Bs on scoped code are noisy, which the pool also fixes.
+- **Spin barely matters.** 50 µs against none: 36 against 39 µs warm (8%) at 8 threads and 100k, about 1% at 1000k, nothing cold, where the workers have parked anyway. Stage 9 starts at 50 µs.
+
+**How to read these, and what they don't say:**
+
+- **Cold overstates training.** `--idle-ms` sleeps the caller too, where training's caller stays busy and only the workers idle. One thread reads 5-6x slow on jebel (about the ratio of its top clock to its lowest, not checked), for bursts up to 16 ms; the 90 ms products don't. klip, with boost off, reads about 1.0-1.7x. A cold gain can look larger than a warm one because its one-thread base is so slow. Read cold rows across mechanisms, not as training's gain.
+- **The pool's empty-call rows (0k steps) price only the caller's publish:** it can claim every empty chunk before a worker wakes. Use the rows with work for the hand-off.
+- **The prototype's work has no memory traffic,** so these tables say nothing of the bus. That's what the scaling rows are for.
+- **The earlier "about 10 µs a thread" on jebel (2026-10-29) doesn't reproduce:** an empty scoped spawn reads 100 µs warm (min 21) at one thread, 402 µs at eight. This loop is shorter than the old probe's and the kernel has moved; which of them is responsible wasn't checked. Either way, it's a larger cost than the plan assumed.
+- `thermal_zone0` on jebel reads a constant 27.8 C, so the probe's peak means nothing there.
+
 ### What the census says (K25, on stone, with K7a in)
 
 Seconds by kernel, one worker. A site's time holds what it calls: the attends hold `exp`, `transpose` and
@@ -573,7 +641,7 @@ OpenBLAS's spinning workers slow a Rust call that follows a numpy product (1.56x
 batch 512). So threading's payoff is uncertain until it is read on epochs (D6).
 
 **Where it pays.** Sweeps and batches are already parallel by process (8 workers on jebel, the runner
-across klip and stone), so threads add little to their throughput. They pay where cores sit idle
+across klip and stone), so threads add little to their throughput (stage 8 read otherwise at `d` 512: 2 x 4 beat 8 x 1 by 29%; unread on the window program). They pay where cores sit idle
 beside a single job: one long run (a 1,024-character context run, an existence probe on a short
 wall-clock budget), a run whose memory lets fewer processes fit than cores (klip's 5.3 GB), decoding
 latency, and `litshe`'s 4 cores once it can hold all-core load. D4's budget keeps the two kinds from
@@ -779,7 +847,7 @@ it's on).
   warm), a scaling sweep per op (threads x shape), oversubscription (N processes x T threads on one host),
   and an epoch timer at a set thread count through `ab.py` (`--rust-threads` exists). On jebel, stone and klip.
   **Tools done:** `thread_cost_probe.py calls`, `scaling` and `epochs`; `focused_benchmark --idle-ms`, for cold cores; `--rust-threads` on
-  every backdrop. The pool it prices is a prototype inside `thread_call_cost.rs`, with no crate code. Readings to follow.
+  every backdrop. The pool it prices is a prototype inside `thread_call_cost.rs`, with no crate code. **Done:** readings above (stage 8's readings).
 - **Stage 9. The budget and the pool (D3, D4).** `CpuInfo`'s physical cores, `INDRAJALA_THREADS`,
   `set_threads`; the runner and sweep helpers set 1 a worker and refuse oversubscription. The pool in the
   core, with its tests (every chunk run once, panic carried, fork recreates, nesting inline, `miri`, a stress
