@@ -241,7 +241,7 @@ oversubscribing each other.
 
 | # | item | source | now |
 |---|---|---|---|
-| K1 | `ab.py run --old-crate X --new-crate X` installs neither wheel, timing the venv's crate on both sides | From the A/B harness | **stage 1**: a measurement fault |
+| K1 | `ab.py run --old-crate X --new-crate X` installed neither wheel, timing the venv's crate on both sides | From the A/B harness | **done**: a named crate is built and timed |
 | K25 | a shape census: which kernel, at which `m x k x n`, how many flops, for a backdrop | new (D9) | **stage 1**: a cargo feature, off in releases |
 | K26 | backdrops at production scale: `sequence_training_timing` and `attention_timing` at a larger `d` | new (D13) | **stage 1** |
 | K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **stage 1** |
@@ -398,7 +398,7 @@ it's on).
 
 - **Stage 0. This workplan,** with `scripts/measurement/blocking_probe.rs`.
 - **Stage 1. Measurement.**
-  - K1: `ab.py` builds and installs a named crate on both sides, or refuses.
+  - K1: `ab.py` builds and installs a named crate on both sides. *Done.*
   - K25: a `census` cargo feature on the core records `(kernel, m, k, n, calls, flops)` and writes it at
     exit; a build for measuring only, never in a wheel we ship. Run over the backdrops; the shares go here.
   - K26: `--d` on the two benchmarks (D13).

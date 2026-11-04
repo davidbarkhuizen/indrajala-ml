@@ -780,6 +780,17 @@ def test_a_prebuilt_wheel_is_a_sides_crate(
     assert f"vs new {ab.crate_label(key)} (.so" in capsys.readouterr().out.splitlines()[0]
 
 
+def test_one_named_crate_times_that_crate_on_both_sides(toy_repo: Path, toy_crates: list[str]) -> None:
+    crate = toy_crates[0]
+    args = ["run", "--bench", "cmd", "--old", "HEAD", "--order", "ON", "--skip-profile"]
+    assert _run(toy_repo, *args, "--old-crate", crate, "--new-crate", crate, "--", "scripts/probe.py") == 0
+    manifest = json.loads((ab.find_run(None) / "manifest.json").read_text())
+    site, sha = ab.ensure_site(crate)
+    for record in manifest["passes"]:
+        assert Path(record["provenance"]["extension"]).is_relative_to(site)
+        assert record["provenance"]["sha256"] == sha
+
+
 def test_clean_removes_unreferenced_wheels(
     toy_repo: Path, toy_crates: list[str], capsys: pytest.CaptureFixture[str]
 ) -> None:
