@@ -13,7 +13,7 @@ October. Measured, the largest ratio isn't where the time goes, the first kernel
 transformer training more than the conv tail it was planned for (K7a: −47.9% on a `d` 512 epoch), and
 most of stage −1's prerequisites can wait. So: one fix first (K7), a shape census to choose what follows,
 the machine-derived parameters only where a measurement needs them, and threads after that, judged on
-epochs. **Stages 0-3 are done, but for the Ryzen's noise rules (K27), which can now run on klip.**
+epochs. **Stages 0-3 are done.**
 
 ## The IDs, in time order
 
@@ -296,8 +296,8 @@ oversubscribing each other.
 | machine | CPU | cores / threads | L2 per core, L3 | role here |
 |---|---|---|---|---|
 | jebel | i7-9700K (Coffee Lake) | 8 / 8, no SMT | 256 KB, 12 MB | **speedup claims:** every tier 2 A/B, PL1 65 W |
-| klip, after the affine pass | Ryzen 7 3700U | 4 / 8, SMT | 512 KB, 4 MB | **guard:** a change costs the Ryzen nothing; physical against logical cores. 5.3 GB, <= 85 C, under the thermal guard |
-| pyramidon | Ryzen 7 3700U | 4 / 8, SMT | 512 KB, 4 MB | **guard** until klip is free, one job at a time under an address-space cap, none beside heavy development: its A/As are noisier |
+| klip | Ryzen 7 3700U, CPU boost off | 4 / 8, SMT | 512 KB, 4 MB | **guard:** a change costs the Ryzen nothing; physical against logical cores. Its own profile. 5.3 GB, <= 85 C, under the thermal guard (`~/code/thermal-guard.sh`) |
+| pyramidon | Ryzen 7 3700U | 4 / 8, SMT | 512 KB, 4 MB | development; a guard only when klip is taken, under an address-space cap, beside no heavy job: its A/As are noisier |
 | stone | i7-1255U (Alder Lake, hybrid) | 2 P + 8 E, 12 threads | P 1.28 MB, E 2 MB across 4 (512 KB each); 12 MB | **guard:** hybrid scheduling, static splits leave the fast cores idle. The sandbox stands (no GitHub, bundles, `~/labour`); it needs a profile and noise rules (K27). Available weekdays 18:00-07:00 and weekends unless the owner says otherwise |
 | `litshe` | Pi 5, Cortex-A76 | 4 / 4 | 512 KB, 2 MB | aarch64 parity and timings, when on; all-core once the active cooler is fitted (stage 12) |
 
@@ -308,7 +308,7 @@ oversubscribing each other.
 | K1 | `ab.py run --old-crate X --new-crate X` installed neither wheel, timing the venv's crate on both sides | From the A/B harness | **done**: a named crate is built and timed |
 | K25 | a shape census: which kernel, at which `m x k x n`, how long, for a backdrop | new (D9) | **done** (crate #100): `shape_census.py`, its readings under stage 1 |
 | K26 | backdrops at production scale: `sequence_training_timing` and `attention_timing` at a larger `d` | new (D13) | **done**: `--features`, `--heads` |
-| K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **stone done** (`i7-1255u.json`); the Ryzen's on klip, free since its affine pass ended on 2026-11-04 |
+| K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **done**: `i7-1255u.json`, `ryzen7-3700u-klip.json` |
 | K7 | `matmul_2d` for long `k`: slabs that resume each chain | i7 item 1 | **done**: K7a (crate #101), K7b (crate #102), results below |
 | K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **stage 6**, against K11 |
 | K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **stage 6**, only for what K23 leaves |
@@ -469,7 +469,9 @@ it's on).
   - K26: `--features` and `--heads` on the two benchmarks (D13). *Done.*
   - K27: stone's profile and noise rules, from six A/As at `8eeda72`, `ab.py` run there from a bundle's
     checkout (working-notes, Machines). *Done:* no row of 123 consistent by chance, passes shifted up to
-    1.9%, a 5.9% median spread at one thread: a guard, as D12 has it. The Ryzen's rules wait for klip.
+    1.9%, a 5.9% median spread at one thread: a guard, as D12 has it. klip (the Ryzen, CPU boost off): three A/As,
+    no row of 54 consistent by chance, shifts up to 0.7%, a 1.1% median spread at one thread, far quieter than
+    pyramidon, so it's the Ryzen's guard from here.
 - **Stage 2. K7a (D10).** *Done:* crate #101. Results below.
 - **Stage 3. K7b (D10, refined).** *Done:* crate #102. Results below.
 - **Stage 4. The attend (K12, K28).** Scratch buffers in place of the eight or more arrays each head allocates
