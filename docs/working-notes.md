@@ -105,6 +105,19 @@ where you meet a new trap; delete one that no longer holds.
   live in `tests/data/` as well as `tests/model/`: before a PR adding a class, run both, or the PR
   fails in CI (#1224, 2026-11-03). Give a class a real entry where it can have one; where it can't
   yet (a numpy-only class before its Rust stage), a named exception set with its reason and stage.
+- **A kernel update arrives with a reboot, and `ab.py` then refuses every run on `jebel`.** The profile's
+  `kernel_release` needs a PR first. It is a tier 3 change: the full baseline is due, an A/A of the focused and epoch
+  benchmarks at the least until then. Runs from before it archive with `--profile`, the file at the commit before the
+  re-record (`git show <commit>:docs/machine_profiles/i7-9700k.json`), since the current one has another identity.
+- **Several `ab.py archive --no-pr` branches conflict in `INDEX.md`** once the first merges. Merge them one at a time:
+  merge main into the next, keep both sides' lines, push, and gate.
+- **`jebel`'s `rust/` submodule fetches over https** (`submodule.rust.url` in its `.git/config`, 2026-11-04): over ssh,
+  from a shell with no key loaded, `git submodule update` failed and `ab.py` called the checkout dirty.
+- **A census doesn't replace a flat profile.** Its clock and lock inflate short calls, and it sees only what it
+  instruments: `layer_norm` and the dense add, 24% of the window, were on no census. `perf record` runs at
+  `perf_event_paranoid` 2, and `perf record --call-graph lbr` on `jebel` names a memmove's callers, with no frame pointers.
+- **A one-thread probe doesn't speak for an epoch.** `matmul_nt` by groups read 0.67-1.01 on the probe and nothing on a
+  `d` 512 epoch, whose large products run on 8 threads.
 - **`golden_training_run.py archive` on jebel pushes its branch but can't open the PR:** jebel's
   `gh` isn't logged in (HTTP 401). Open and merge the indrajala-benchmarks PR from pyramidon (`gh
   pr create --repo davidbarkhuizen/indrajala-benchmarks --head archive-...`), then pull on jebel

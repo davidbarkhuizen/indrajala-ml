@@ -321,6 +321,31 @@ for stage 8's thread tools; a probe of this kind now needs its threaded reading 
 Jebel's A/A on kernel 7.0.0-42, focused and epochs, is clean (max 3.8%, 1.5%, controls unmoved), so its noise rules
 hold. K5's closing baseline is the kernel's full one.
 
+### Stage 7's order, from the latest profile (crate cba601e, on jebel)
+
+A flat `perf record`, each row a share of that run's samples:
+
+| Backdrop | Largest |
+|---|---|
+| attention (`d` 64) | `exp_lanes_avx2` 16.9%; `tiled_forward` 15.5% and `tiled_backward` 15.4% in their own code; `tiled_row_range::<0>` 7.5%; `scores_into` 7.2%; `tiled_row_range::<2>` 4.3%; `transpose_into` 4.1% |
+| window | `matmul_nt` blocks 19.3%; `exp_lanes_avx2` 8.1%; `normalize_rows` 7.1%; `codes_forward` 7.0%; `tiled_forward` 5.6%; `blas_thread_server` 5.3%; `tiled_row_range::<0>` 4.8% |
+| attend, `d` 512 | `tiled_row_range::<2>` 34.8%; `matmul_nt` blocks 18.5%; memmove 6.8% |
+| conv B=32 | `blas_thread_server` 72.7% of samples (numpy's idle threads, counted per thread, not wall time); no crate kernel past 2% |
+
+So the next steps, in order:
+
+1. **The attend's own code**, K28's kind of finding: 31% of attention in `tiled_forward` and `tiled_backward` outside any
+   kernel. Its elementwise loops (`score - shift`, the rescale of `h`, the scale's division in `scores_into`) are scalar or
+   SSE2; its folds must stay chains. Annotate first; a division gains nothing from four lanes on jebel.
+2. **`matmul_nt` at short `k` (K10)**, 19.3% of the window, mostly 96 x 16 x 16 and 96 x 16 x 32.
+3. **`codes_forward`**, 7% of the window: a chain per (row, code), but chains of different codes are independent, so
+   they could run in lanes.
+4. **`exp_lanes_avx2`**, 8-17%: read before deciding; K17's wider kernels are out of the plan.
+5. **Conv (K9)**: time its Rust side alone first, since the profile above is mostly numpy's threads.
+
+K13 (the batched decode step) stays last, if it clears the bar. The `d` 512 kernels' gains now wait for threads
+(stages 8-10): `matmul_nt` by groups showed that one thread's reading doesn't carry to an epoch.
+
 ### What the census says (K25, on stone, with K7a in)
 
 Seconds by kernel, one worker. A site's time holds what it calls: the attends hold `exp`, `transpose` and
@@ -641,7 +666,7 @@ it's on).
 - **Stage 6. Copies (K23, K11, K24). Done:** K23 merged, K11 and K24 closed under the bar.
   Accumulate without its transpose first; K11 only for what remains.
   Allocation sites from the census.
-- **Stage 7. By share: conv forward (K9), the attend's remainder and the window's kernels (K12, K28), narrow
+- **Stage 7. In progress; its order is under "Stage 7's order" above.** By share: conv forward (K9), the attend's remainder and the window's kernels (K12, K28), narrow
   `k` (K10), the batched decode step (K13).** Each profiled
   (`perf_region.py`) then fixed or closed, in the order a fresh census gives.
 - **Stage 8. Thread tools.** `thread_cost_probe.py` extended to a pool (call cost at 1-8 threads, cold and
