@@ -380,6 +380,11 @@ What to do next:
   32-byte boundaries, the JCC erratum; aarch64 loops and functions aligned); with both, an A/B moves
   only the rows whose code changed.
 
+- **No benchmark times batch norm.** No timing script or `ab.py` benchmark calls the
+  `batch_norm_*` ops (`focused_benchmark` has no batch-norm shape), so a change to them has no
+  relevant tier 1 A/B. Crate #99 (2026-11-04: batch norm's activation through the shared enum,
+  the same loops) was checked by `kernel_code_diff.py` on the batch-norm functions and an
+  `epoch_op_profile` A/B for the rest.
 - **No benchmark times a batch's segments.** `segment_context` (a packed batch's segments,
   positions and counted targets, once per training batch of a network with segments) runs outside
   every timed region: `attention_timing` builds its packed context before timing, and

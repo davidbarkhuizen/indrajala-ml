@@ -114,12 +114,10 @@ fails on an upward import (crate #97). Names lost their module's stutter (D2: `l
 `pypi-pre-release-notes.md`, and the core's next crates.io release is 0.2.0 with no aliases (D4).
 The bindings' source mirrors the tree, one `register` per module (crate #98); Python's names are
 unchanged (D3). Moves only (D5): both golden runs bit-identical on pyramidon and jebel, and the
-tier 1 `epoch_op_profile` A/B on jebel held (three conv forward rows +1.0% to +1.9%, placement: the same instructions in both builds). Left:
-- **`batch_norm`'s private activation enum** (ReLU and sigmoid by name) duplicates part of
-  `num::activation`'s; merging them is a change, not a move, so it waited.
-- **A stale crate comment** ([nn-implementation-analysis.md](nn-implementation-analysis.md)'s
-  open finding): `nn/recurrent/mod.rs`'s module comment says the sigmoid and tanh use Rust's
-  `f64::exp`, but the module uses `num::exp`'s correctly rounded one.
+tier 1 `epoch_op_profile` A/B on jebel held (three conv forward rows +1.0% to +1.9%, placement: the same instructions in both builds). Its two leftovers were done after (crate #99): batch norm's private activation enum gave way to
+`num::activation`'s, which gained `Sigmoid` (`from_name` doesn't name it, so the hidden layers'
+ops and Python are unchanged), and `nn/recurrent/mod.rs`'s comment now says its `exp` is the
+correctly rounded one.
 
 ## From cross-attention (retired 2026-11-03)
 
