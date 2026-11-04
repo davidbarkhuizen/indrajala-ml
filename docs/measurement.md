@@ -402,7 +402,10 @@ What to do next:
   rows, but moved others up to 2.0% (backward T=1024 causal +1.3%). A lone consistent Rust row near
   2%, in a crate change that leaves its path's arithmetic alone, is a build's shift unless a probe
   of the touched function shows otherwise. The next bump (#1232, only a new op added) moved the same
-  forward T=256 causal row back, -2.4%, and forward T=64 causal -3.1%.
+  forward T=256 causal row back, -2.4%, and forward T=64 causal -3.1%. The crate's module restructure
+  (#1240, moves and renames only) moved `epoch_op_profile`'s conv `conv_forward_batch` rows +1.0% to
+  +1.9%, consistent after an extend, with every function on the path the same instructions in
+  both builds (`kernel_code_diff.py`, names mapped): placement.
 
 - **`ab.py run` checks the machine profile before the load** (fixed 2026-10-14; it was the other
   way round): a host with no profile, or a changed identity, is refused at once, not after waiting
