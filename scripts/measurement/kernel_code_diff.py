@@ -28,7 +28,7 @@ HASH = re.compile(r"\[[0-9a-f]{16}\]|::h[0-9a-f]{16}\b")
 # where the linker put data, not what the code does: x86's RIP-relative displacements and the
 # targets objdump names after `#` (a GOT slot, a constant), aarch64's page offsets after an adrp
 RIP = re.compile(r"-?0x[0-9a-f]+\(%rip\)")
-COMMENT = re.compile(r"#\s*(?:(?:0x)?[0-9a-f]+\s*)?<[^>]*>|#\s*(?:0x)?[0-9a-f]+$")
+COMMENT = re.compile(r"#\s*(?:(?:0x)?[0-9a-f]+\s*)?<.*>$|#\s*(?:0x)?[0-9a-f]+$")
 ADRP = re.compile(r"^adrp\s+(\w+),")
 PAGE_OFFSET = re.compile(r"#(?:0x[0-9a-f]+|\d+)")
 DESTINATION = re.compile(r"^(?!st)\w+\s+(\w+),")
