@@ -2,8 +2,8 @@
 
 A recommendation for the next development and benchmark machine (CPU, motherboard, RAM and GPU),
 written 2026-10-08. It's a buying guide, not a plan: nothing in the code changes for this
-machine before it arrives (see [i7-9700k-rust-optimization.md](i7-9700k-rust-optimization.md),
-"Kernels and parameters from the machine").
+machine before it arrives (see [the crate performance workplan](workplans/infrastructure/crate-performance-workplan.md),
+D5 and D11).
 
 ## The brief
 
