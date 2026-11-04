@@ -5,17 +5,20 @@ import time
 from collections.abc import Callable, Hashable, Mapping, Sequence
 from typing import Any
 
+from indrajala_ml.measurement.worker_threads import checked_threads, set_worker_threads
+
 # set once per worker process by _init_worker; typed loosely, since one process runs one sweep
 _worker_fn: Callable[..., Any] | None = None
 _shared_context: Any = None
 
 
-def _init_worker(worker_fn: Callable[..., Any], shared_context: Any) -> None:
+def _init_worker(worker_fn: Callable[..., Any], shared_context: Any, threads: int) -> None:
     # once per worker process: worker_fn and shared_context are pickled once per worker through
     # initargs, not once per job
     global _worker_fn, _shared_context
     _worker_fn = worker_fn
     _shared_context = shared_context
+    set_worker_threads(threads)
 
 
 def _run_one_job(job: tuple[Hashable, int]) -> Any:
@@ -55,7 +58,9 @@ def run_parameter_sweep[ConfigT: Hashable, ResultT](
     results: dict[ConfigT, list[ResultT]] = {config: [] for config in configs}
 
     with multiprocessing.Pool(
-        resolved_worker_count, initializer=_init_worker, initargs=(worker_fn, shared_context)
+        resolved_worker_count,
+        initializer=_init_worker,
+        initargs=(worker_fn, shared_context, checked_threads(resolved_worker_count)),
     ) as pool:
         # imap yields in job order, so each result pairs with its job
         for completed, ((config, _seed), result) in enumerate(zip(jobs, pool.imap(_run_one_job, jobs)), start=1):
