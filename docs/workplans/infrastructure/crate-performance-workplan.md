@@ -13,7 +13,7 @@ October. Measured, the largest ratio isn't where the time goes, the first kernel
 transformer training more than the conv tail it was planned for (K7a: −47.9% on a `d` 512 epoch), and
 most of stage −1's prerequisites can wait. So: one fix first (K7), a shape census to choose what follows,
 the machine-derived parameters only where a measurement needs them, and threads after that, judged on
-epochs. **Stages 0-3 are done.**
+epochs. **Stages 0-3 are done, and stage 4's first step.**
 
 ## The IDs, in time order
 
@@ -161,6 +161,25 @@ The golden run is bit-identical on jebel and pyramidon. **Guards, against the cr
 Rust row slower. The Ryzen: 2048 x 512 x 512 −55.5%, 2048 x 512 x 2048 −71.3%, 2048 x 2048 x 512 −92.5%, sequence
 within noise (max 6.2%). Stone: 2048 x 512 x 512 −41.2%, 512 x 2048 x 2048 −94.1%, sequence −10.6%; one pass
 shifted −4.0%, so that run's small rows are unbalanced, and it wasn't extended, the rows read being far past it.
+
+### Stage 4's results (K12, K28; crate #103)
+
+**The first gain to reach the window program.** Tier 2 on jebel, crate `7fffc49` against `a4c4379` (the merged
+tree but for `CpuInfo` and its lint fix, which nothing reads yet), `ONNONO`:
+
+| benchmark | run (`2026-11-04-`) | result |
+|---|---|---|
+| window, `k1 s4 m16 B32 W12`, learn | `k12-window` | **−20.7%** |
+| window, `k4 s4 m16 B32 W5`, learn | | **−11.1%** |
+| window, family, learn | | **−9.7%** (0.023 to 0.020 s) |
+| window, family, a long test's forward | | **−8.1%** (3.407 to 3.131 s) |
+| window, linear, learn and forward | | within noise, max 1.0% |
+| attention, `d` 64 | `k12-attention` | backward −5.5% (`T` 64), −3.1% (`T` 256); forward −4.1%, −2.0%; 20 rows within noise |
+| sequence epoch, `d` 64 and `d` 512 | `k12-sequence`, `-d512` | −2.8% (1.797 to 1.746 s); `d` 512 within noise |
+| per-op rows, one thread | `k12-focused` | attention forward −3.0% and −1.8%; 34 rows within noise |
+
+K7a's +1.0% on `learn family` is gone. The golden run is bit-identical on jebel and pyramidon. **Guard, stone:** no
+slower, the same four rows −8.6% to −19.3%. `CpuInfo` (K6) is in too (crate #104, #105), read by nothing yet.
 
 ### What the census says (K25, on stone, with K7a in)
 
@@ -314,8 +333,8 @@ oversubscribing each other.
 | K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **stage 6**, only for what K23 leaves |
 | K24 | fewer copies and allocations in the crate's ops (memmove, memset, calloc: 5-10% of the window and attention backdrops) | new | **stage 6**, sites from the census |
 | K9 | conv on 28x28 inputs, `conv_forward_batch` first (64% of a conv-conv epoch) | i7 item 5 | **stage 7**: diagnosis, then a fix if there's a cause |
-| K12 | the attention kernels: tiled attend and backward, 33% at `T` 1024 | From the window program; From multi-head attention | **stage 4** |
-| K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **stage 4**, with K12 |
+| K12 | the attention kernels: tiled attend and backward, 33% at `T` 1024 | From the window program; From multi-head attention | **first step done** (crate #103); the rest from a fresh census, stage 7 |
+| K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **first step done** with K12; the rest from a fresh census, stage 7 |
 | K10 | narrow `k`: more independent outputs in flight per tile; 16-18% behind OpenBLAS on `litshe`, and short-`k` shapes dominate the window | From the crate kernels | **stage 7**, on x86 and on `litshe` when on |
 | K6 | `CpuInfo` | i7 outline, Kernels and parameters | **stage 5** (D5, D11), for K8 and the thread counts |
 | K8 | `matmul_nt` with `W` past the L2: slabs of `W` in bytes, the 4 lanes stored | i7 item 2 | **stage 5**: half of a dense epoch's recorded time and a third of `d` 512's (with K7a in) |
@@ -474,15 +493,15 @@ it's on).
     pyramidon, so it's the Ryzen's guard from here.
 - **Stage 2. K7a (D10).** *Done:* crate #101. Results below.
 - **Stage 3. K7b (D10, refined).** *Done:* crate #102. Results below.
-- **Stage 4. The attend (K12, K28).** Scratch buffers in place of the eight or more arrays each head allocates
-  per key block, and the tile's products without `matmul`'s dispatch: at the window's `(3, 8)` tiles those calls
-  are the cost. The largest item for the studies. It should also absorb K7a's +1.0% on `learn family`.
+- **Stage 4. The attend (K12, K28).** *First step done* (crate #103, results below): the tiled passes reuse
+  their tiles' buffers. What's left in the attend comes from a fresh census, in stage 7.
 - **Stage 5. `CpuInfo` and K8 (K6, D5, D11).** Read once (Linux sysfs and `cpuid` on x86, sysfs on aarch64), the
   machine profiles' fields, per-core sizes, in a new bottom layer `sys` beside `num` (`core/tests/layers.rs`
   needs it added). Then `matmul_nt`'s slabs: the candidate rule tested on jebel, a Ryzen and stone's P and E cores.
 - **Stage 6. Copies (K23, K11, K24).** Accumulate without its transpose first; K11 only for what remains.
   Allocation sites from the census.
-- **Stage 7. By share: conv forward (K9), narrow `k` (K10), the batched decode step (K13).** Each profiled
+- **Stage 7. By share: conv forward (K9), the attend's remainder and the window's kernels (K12, K28), narrow
+  `k` (K10), the batched decode step (K13).** Each profiled
   (`perf_region.py`) then fixed or closed, in the order a fresh census gives.
 - **Stage 8. Thread tools.** `thread_cost_probe.py` extended to a pool (call cost at 1-8 threads, cold and
   warm), a scaling sweep per op (threads x shape), oversubscription (N processes x T threads on one host),
