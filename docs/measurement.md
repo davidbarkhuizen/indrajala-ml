@@ -145,7 +145,7 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
   profile, the thread env vars. `profile --out FILE` records a new machine.
 - **Each machine has its own profile and noise rules.** `ab.py` picks the profile in
   `docs/machine_profiles/` recorded on the host it runs on (`jebel`: `i7-9700k.json`,
-  `pyramidon`: `ryzen7-3700u.json`), and refuses a host with none unless
+  `pyramidon`: `ryzen7-3700u.json`, `stone`: `i7-1255u.json`), and refuses a host with none unless
   `--allow-profile-change`. A profile's `noise_rules`, set by hand from that machine's A/As, are
   the thresholds its reports use ([§5](#5-reading-the-report)): `shifted_pass`, `high_load` and
   `small_consistent`. `profile --out` onto an existing profile keeps them.
