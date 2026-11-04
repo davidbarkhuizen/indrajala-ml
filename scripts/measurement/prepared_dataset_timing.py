@@ -175,10 +175,10 @@ def _run_worker(config: str, backend: str) -> dict[str, Any]:
     return run_json_worker(command)
 
 
-def time_all(configs: list[str], repeats: int) -> dict[str, list[dict[str, Any]]]:
+def time_all(configs: list[str], repeats: int, backends: list[str] = BACKENDS) -> dict[str, list[dict[str, Any]]]:
     threading = f"; Rust threading {RUST_THREADING}" if RUST_THREADING is not None else ""
     print(f"trainers: {train.__file__}; prepared path: {AFTER}; epochs per run: {EPOCHS}{threading}\n")
-    cells = [(config, backend) for config in configs for backend in BACKENDS]
+    cells = [(config, backend) for config in configs for backend in backends]
     runs = interleaved_runs(cells, repeats, lambda cell: _run_worker(*cell))
 
     print(f"median of {repeats}, seconds (one process per measurement)\n")
@@ -201,6 +201,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--epochs", type=int, default=1, help="epochs per training run (default 1)")
     parser.add_argument("--out", help="write every run's raw measurements here as JSON")
     parser.add_argument("--rust-threading", help="N:T, set_matmul_threading(N, T) in the Rust workers")
+    parser.add_argument("--backends", nargs="+", choices=BACKENDS, default=BACKENDS)
     args = parser.parse_args(argv)
     global EPOCHS, RUST_THREADING
     EPOCHS = args.epochs  # pyright: ignore[reportConstantRedefinition]  (--epochs sets it, once)
@@ -212,7 +213,7 @@ def main(argv: list[str] | None = None) -> None:
             pa.set_matmul_threading(int(threads), int(threshold or 0))
         print(json.dumps(measure(args.args[0], args.args[1])))
     else:
-        runs = time_all(args.configs or CONFIGS, args.repeats)
+        runs = time_all(args.configs or CONFIGS, args.repeats, args.backends)
         if args.out:
             with open(args.out, "w") as f:
                 json.dump(runs, f, indent=1)

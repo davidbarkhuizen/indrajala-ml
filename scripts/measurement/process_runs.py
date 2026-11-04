@@ -13,6 +13,15 @@ from collections.abc import Callable, Hashable, Mapping, Sequence
 from typing import Any
 
 
+def set_rust_threads(setting: str | None) -> None:
+    """`--rust-threads N[:T]`: set_matmul_threading(N, T) in this process (0 keeps a default)."""
+    if setting is not None:
+        import indrajala_math_rust as pa
+
+        threads, _, threshold = setting.partition(":")
+        pa.set_matmul_threading(int(threads), int(threshold or 0))
+
+
 def run_json_worker(command: Sequence[str], env: Mapping[str, str] | None = None) -> dict[str, Any]:
     """Run command in its own process and return the JSON its last stdout line prints."""
     output = subprocess.run(command, env=env, check=True, capture_output=True, text=True).stdout

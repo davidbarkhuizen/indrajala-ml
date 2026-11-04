@@ -31,6 +31,10 @@ for them; one that doesn't is compute or cache traffic.
 `--rust-threads N:T` also sets the threading threshold to T flops (`--rust-threads 8:1` threads
 every product), so one build sweeps where threading starts to pay.
 
+`--idle-ms M` sleeps M ms before each timed call and times only the calls, so a threaded call meets
+what it meets in training: cores idled and clocked down, not a back-to-back loop's (measurement.md,
+Gotchas). A loop's calls are capped to fit `--target-ms` of sleeping, at least 5.
+
 `--kernel-overrides R:K` calls `set_kernel_overrides(R, K)` in the Rust processes: `matmul_narrow`'s
 rows per block and `matmul_long_k`'s slab rows (0 keeps a default; a slab past `K` is unblocked),
 so one build times every setting.
@@ -188,8 +192,9 @@ def case_key(case: Case) -> str:
     return f"{case.shape}|{case.op}|{case.batch}"
 
 
-def measure(fn: Callable[[], object], loops: int, target_s: float) -> dict[str, float]:
-    """Median and range of µs per call over `loops` loops of about `target_s` each, faults per call."""
+def measure(fn: Callable[[], object], loops: int, target_s: float, idle_s: float = 0.0) -> dict[str, float]:
+    """Median and range of µs per call over `loops` loops of about `target_s` each, faults per call;
+    with `idle_s`, a sleep before each call, outside the time."""
     fn()
     count, elapsed = 1, 0.0
     while True:
@@ -201,14 +206,25 @@ def measure(fn: Callable[[], object], loops: int, target_s: float) -> dict[str, 
             break
         count *= 2
     count = max(1, round(count * target_s / elapsed))
+    if idle_s:
+        count = min(count, max(5, round(target_s / idle_s)))
     per_call: list[float] = []
     faults = 0
     for _ in range(loops):
         faults_before = resource.getrusage(resource.RUSAGE_SELF).ru_minflt
-        start = time.perf_counter()
-        for _ in range(count):
-            fn()
-        per_call.append((time.perf_counter() - start) / count * 1e6)
+        if idle_s:
+            total = 0.0
+            for _ in range(count):
+                time.sleep(idle_s)
+                start = time.perf_counter()
+                fn()
+                total += time.perf_counter() - start
+            per_call.append(total / count * 1e6)
+        else:
+            start = time.perf_counter()
+            for _ in range(count):
+                fn()
+            per_call.append((time.perf_counter() - start) / count * 1e6)
         faults += resource.getrusage(resource.RUSAGE_SELF).ru_minflt - faults_before
     return {
         "calls": count,
@@ -230,7 +246,7 @@ def worker(args: argparse.Namespace) -> None:
 
         pa.set_kernel_overrides(*(int(v) for v in args.kernel_overrides.split(":")))
     case = next(c for c in every_case(args.batch_sizes, args.matmul) if case_key(c) == args.worker)
-    result = measure(case.build(args.backend_to_run), args.loops, args.target_ms / 1000)
+    result = measure(case.build(args.backend_to_run), args.loops, args.target_ms / 1000, args.idle_ms / 1000)
     print(json.dumps(result))
 
 
@@ -245,7 +261,7 @@ def run_in_process(case: Case, backend: str, args: argparse.Namespace, malloc: s
     if backend == "numpy" and args.openblas_threads is not None:
         env["OPENBLAS_NUM_THREADS"] = str(args.openblas_threads)
     command = [sys.executable, "-B", os.path.abspath(__file__), "--worker", case_key(case), "--backend-to-run", backend]
-    command += ["--loops", str(args.loops), "--target-ms", str(args.target_ms)]
+    command += ["--loops", str(args.loops), "--target-ms", str(args.target_ms), "--idle-ms", str(args.idle_ms)]
     command += ["--batch-sizes", *(str(b) for b in args.batch_sizes)]
     for spec in args.matmul:
         command += ["--matmul", spec]
@@ -280,6 +296,7 @@ def main() -> None:
     parser.add_argument("--passes", type=int, default=2)
     parser.add_argument("--loops", type=int, default=9)
     parser.add_argument("--target-ms", type=float, default=20.0)
+    parser.add_argument("--idle-ms", type=float, default=0.0, help="sleep before each timed call (cold cores)")
     parser.add_argument(
         "--rust-threads",
         help="N or N:T, set_matmul_threading(N, T) before timing Rust (T, the threshold in flops, 0 = default)",

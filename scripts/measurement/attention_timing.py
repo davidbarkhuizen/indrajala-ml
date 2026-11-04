@@ -50,6 +50,7 @@ from typing import Any
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
+from process_runs import set_rust_threads
 
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
@@ -209,12 +210,14 @@ def main() -> None:
     parser.add_argument("--heads", type=int, default=HEADS)
     parser.add_argument("--memory", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--json", help="write the results here as {case: {metric: value}}")
+    parser.add_argument("--rust-threads", help="N:T, set_matmul_threading(N, T) before timing Rust")
     parser.add_argument("--memory-case", nargs=3, metavar=("BACKEND", "T", "MASK"), help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.memory_case:
         backend, tokens, mask = args.memory_case
         print(json.dumps(memory_case(backend, int(tokens), mask, args.dropout, args.features, args.heads)))
         return
+    set_rust_threads(args.rust_threads)
     results: dict[str, dict[str, float]] = {}
     units = {"forward": "s", "backward": "s", "peak RSS": "MB", "tracemalloc peak": "MB"}
     for backend in args.backends:

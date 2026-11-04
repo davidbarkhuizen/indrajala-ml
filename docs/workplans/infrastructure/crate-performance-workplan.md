@@ -778,6 +778,8 @@ it's on).
 - **Stage 8. Thread tools.** `thread_cost_probe.py` extended to a pool (call cost at 1-8 threads, cold and
   warm), a scaling sweep per op (threads x shape), oversubscription (N processes x T threads on one host),
   and an epoch timer at a set thread count through `ab.py` (`--rust-threads` exists). On jebel, stone and klip.
+  **Tools done:** `thread_cost_probe.py calls`, `scaling` and `epochs`; `focused_benchmark --idle-ms`, for cold cores; `--rust-threads` on
+  every backdrop. The pool it prices is a prototype inside `thread_call_cost.rs`, with no crate code. Readings to follow.
 - **Stage 9. The budget and the pool (D3, D4).** `CpuInfo`'s physical cores, `INDRAJALA_THREADS`,
   `set_threads`; the runner and sweep helpers set 1 a worker and refuse oversubscription. The pool in the
   core, with its tests (every chunk run once, panic carried, fork recreates, nesting inline, `miri`, a stress
