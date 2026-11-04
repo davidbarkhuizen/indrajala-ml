@@ -199,6 +199,8 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
 
 - **`./cli build-rust` over ssh can't find rustup** (`rustup not found`): a non-interactive ssh
   shell lacks `~/.cargo/bin` on `PATH`. Run `. ~/.cargo/env` first (jebel, 2026-11-03).
+  It exits 0 all the same, so `./cli build-rust && golden_training_run.py check ...` checks the
+  old crate and passes (2026-11-04, #1240): confirm the installed `.so`'s hash is the build's.
 
 - **`sudo` needs a password on `jebel`, `stone` and `klip`; `litshe` alone has passwordless sudo.**
   An agent can't sudo on the first three, and the owner's `! ssh -t host sudo ...` fails too (a `!`

@@ -85,6 +85,7 @@ docs cite them by section:
 | Grouped- and multi-query attention (roadmap step 14, D1-D13; its study abandoned for the literature) | #645 | #1189-#1197, crate #93, this PR | `git show 3a09724:docs/workplans/library/grouped-query-attention-workplan.md` |
 | Paper 1: learning finite-state transducers through their approximations, with proof (D1-D39; retired 2026-11-03 after the preprint, doi:10.5281/zenodo.23826655) | indrajala-research's | T1-T12, R1-R9; datapack doi:10.5281/zenodo.23733575; tags `paper1-v1` to `paper1-v1.2` | `git show 0d1aaef:docs/workplans/paper-workplan.md` in indrajala-research |
 | The implementation audit's remedies (§16; D1-D11) | #1202, #1203 | #1204-#1212, crate #94, studies #15, research #139, this PR | `git show 85d1705:docs/workplans/library/audit-remedies-workplan.md` |
+| The crate's module structure (D1-D6) | #1238 | crate #97, #98, #1240 | `git show d79074a:docs/workplans/infrastructure/crate-structure-workplan.md` |
 | Cross-attention: the encoder-decoder on Greek-English translation (roadmap step 15, D1-D18; its study decided from the literature) | #646 | #1219-#1236, crate #95, #96, this PR | `git show 2a512fb:docs/workplans/library/cross-attention-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 
@@ -102,6 +103,23 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From the crate structure (retired 2026-11-04)
+
+Done: the core's flat modules became a layered tree (D1): `Array`, `Shape` and `Error` at the
+bottom, then `num` (scalar kernels, the correctly rounded `exp`, `erf`, the `Activation` enum),
+then `ops`, `linalg` and `random`, then `nn`, then `program` and `data`; `core/tests/layers.rs`
+fails on an upward import (crate #97). Names lost their module's stutter (D2: `layer_forward` is
+`nn::dense::forward`, `ConvGeometry` is `nn::conv::Geometry`); the full map is in the crate's
+`pypi-pre-release-notes.md`, and the core's next crates.io release is 0.2.0 with no aliases (D4).
+The bindings' source mirrors the tree, one `register` per module (crate #98); Python's names are
+unchanged (D3). Moves only (D5): both golden runs bit-identical on pyramidon and jebel, and the
+tier 1 `epoch_op_profile` A/B on jebel held (three conv forward rows +1.0% to +1.9%, placement: the same instructions in both builds). Left:
+- **`batch_norm`'s private activation enum** (ReLU and sigmoid by name) duplicates part of
+  `num::activation`'s; merging them is a change, not a move, so it waited.
+- **A stale crate comment** ([nn-implementation-analysis.md](nn-implementation-analysis.md)'s
+  open finding): `nn/recurrent/mod.rs`'s module comment says the sigmoid and tanh use Rust's
+  `f64::exp`, but the module uses `num::exp`'s correctly rounded one.
 
 ## From cross-attention (retired 2026-11-03)
 

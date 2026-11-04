@@ -1,8 +1,8 @@
 # RNG audit
 
 The random number generators this project uses: how the Rust crate's generator
-(`rust/src/random.rs`) reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and
-what is still open. The crate also has a PCG64 `Generator` (`rust/src/generator.rs`) that
+(`rust/core/src/random/legacy.rs`) reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and
+what is still open. The crate also has a PCG64 `Generator` (`rust/core/src/random/generator.rs`) that
 reproduces numpy's `default_rng` bit for bit, which the Rust networks draw from (the RNG generators
 workplan, retired: [next-steps.md](next-steps.md)). The measurements and checks come from these
 harnesses:
