@@ -87,7 +87,8 @@ Crate A/Bs: when the sides' crate commits differ (each tree's rust/ submodule, o
 wheel under ROOT/wheels/<sha>/ (from a `git archive` of ~/code/indrajala-math-rust, with
 the toolchain it pins) and installed with `pip install --target` into a site directory there,
 which goes on PYTHONPATH after the tree; each pass checks the extension's hash. The venv is never
-touched. When they are equal, both sides use the venv's extension. A path to a `.whl` file in place of
+touched. When they are equal and neither flag named one, both sides use the venv's extension; with
+either flag, the named crate is built and timed, on both sides if need be. A path to a `.whl` file in place of
 a crate commit times that prebuilt wheel (a CI build against a local one, say): it is cached under
 ROOT/wheels/wheel-<its sha256>/ and used as a built wheel is; on a remote host, the path is the host's.
 """
@@ -1130,7 +1131,9 @@ def cmd_run(args: argparse.Namespace, extra: list[str]) -> None:
         if adapter.name != "cmd":  # the report names it without the tree, which may be gone by then
             script_side = "new" if manifest["script_from"] == EACH else manifest["script_from"]
             manifest["command"] = _pass_command(adapter, Path(manifest[script_side]["tree"]), bench_args)
-        if crates["old"] != crates["new"]:  # switch the crate per pass; the venv is never touched
+        # switch the crate per pass; the venv is never touched. A named crate is timed even on both
+        # sides: an A/A of crate X must be X's, not the venv's
+        if crates["old"] != crates["new"] or args.old_crate or args.new_crate:
             for side in ("old", "new"):
                 crate = crates[side]
                 if crate is None:
