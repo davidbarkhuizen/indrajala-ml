@@ -242,7 +242,7 @@ oversubscribing each other.
 | # | item | source | now |
 |---|---|---|---|
 | K1 | `ab.py run --old-crate X --new-crate X` installed neither wheel, timing the venv's crate on both sides | From the A/B harness | **done**: a named crate is built and timed |
-| K25 | a shape census: which kernel, at which `m x k x n`, how many flops, for a backdrop | new (D9) | **stage 1**: a cargo feature, off in releases |
+| K25 | a shape census: which kernel, at which `m x k x n`, how long, for a backdrop | new (D9) | **done** (crate #100): `shape_census.py`, its readings under stage 1 |
 | K26 | backdrops at production scale: `sequence_training_timing` and `attention_timing` at a larger `d` | new (D13) | **done**: `--features`, `--heads` |
 | K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **stone done** (`i7-1255u.json`); the Ryzen's on klip after its affine pass |
 | K7 | `matmul_2d` for long `k`: slabs that resume each chain | i7 item 1 | **stage 2** (K7a), **stage 3** (K7b, packing) |
@@ -399,8 +399,9 @@ it's on).
 - **Stage 0. This workplan,** with `scripts/measurement/blocking_probe.rs`.
 - **Stage 1. Measurement.**
   - K1: `ab.py` builds and installs a named crate on both sides. *Done.*
-  - K25: a `census` cargo feature on the core records `(kernel, m, k, n, calls, flops)` and writes it at
-    exit; a build for measuring only, never in a wheel we ship. Run over the backdrops; the shares go here.
+  - K25: a `census` cargo feature records `(kernel, m, k, n, calls, nanoseconds)`, each process's written
+    at exit; never in a wheel we ship, and without it all 794 of the crate's functions are unchanged. *Done:*
+    `scripts/measurement/shape_census.py`.
   - K26: `--features` and `--heads` on the two benchmarks (D13). *Done.*
   - K27: stone's profile and noise rules, from six A/As at `8eeda72`, `ab.py` run there from a bundle's
     checkout (working-notes, Machines). *Done:* no row of 123 consistent by chance, passes shifted up to
