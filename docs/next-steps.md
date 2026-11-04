@@ -1121,7 +1121,8 @@ within rounding on numpy (D7).
 - **A batched crate step.** Rust's batched decode runs `attention_step` once a row, each row's
   cache its current paragraph's keys (the segments workplan, D8 (b)); a crate step over an
   `(N, c)` cache with the keys' segments, numpy's form (D8 (a)), would batch it and give the two
-  one cache form.
+  one cache form. On jebel (2026-11-04) Rust reads 20,173 characters a second at batch 8 and 20,806 at
+  32, flat, against numpy's 7,770 and 13,652. The crate performance workplan left it out (K13): no epoch reaches it.
 - **A paragraph's first token is drawn from an untrained row.** Training counts no target whose
   input is a separator (the segments workplan, D6), so after a separator a decode samples from a
   distribution no loss shaped. The owner chose an end-of-paragraph token (2026-11-01): the
