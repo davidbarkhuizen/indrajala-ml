@@ -336,13 +336,13 @@ So the next steps, in order:
 
 1. **The attend's own code (K29). Closed under the bar** (results below). The annotation found the mask draw, not the
    elementwise loops this step expected.
-2. **`matmul_nt` at short `k` (K10)**, 19.3% of the window, mostly 96 x 16 x 16 and 96 x 16 x 32.
-3. **`codes_forward`**, 7% of the window: a chain per (row, code), but chains of different codes are independent, so
-   they could run in lanes.
-4. **`exp_lanes_avx2`**, 8-17%: read before deciding; K17's wider kernels are out of the plan.
-5. **Conv (K9)**: time its Rust side alone first, since the profile above is mostly numpy's threads.
+2. **`matmul_nt` at short `k` (K10). Closed under the bar** (results below): a 3 x 4 tile gained 2.1% of one row on jebel and
+   cost 7.2% of it on `litshe`.
+3. **`codes_forward` (K30). Done (crate #111)**: forward linear -7.3%, results below.
+4. **`exp_lanes_avx2` (K31). Done (crate #112)**: the gathers replaced; on klip the sequence epoch -5.3%, within noise on jebel.
+5. **Conv (K9). Closed**: a split of its transpose and activation cost conv-conv's forward 2.4%.
 
-K13 (the batched decode step) stays last, if it clears the bar. The `d` 512 kernels' gains now wait for threads
+**K13 (the batched decode step). Closed for this plan**, back in `docs/next-steps.md` (results below). The `d` 512 kernels' gains now wait for threads
 (stages 8-10): `matmul_nt` by groups showed that one thread's reading doesn't carry to an epoch.
 
 ### The attend's own code (K29; crate #110, closed unmerged)
@@ -366,6 +366,89 @@ A test kept the mask and the generator's state identical to the float compare's 
 turn on attention dropout, so no epoch shows the gain. The first form's guards on stone and klip were within the usual noise. Reopen
 it if a study's profile shows the draw: the commit is `1005ed5` in indrajala-math-rust, and its only cost is the select's odd form.
 Not tried: keeping the masks between forward and backward (D12's memory at long `T`, for the same absent epoch).
+
+### `matmul_nt` at short `k` (K10; closed, no PR)
+
+**The annotation** (`window-7.data`, crate `cba601e`): the tile's FMA loop is about 42% of the 19.3% kernel, and the rest is thin, with
+the combines already paired by the compiler (`vhaddpd`). 5% of the window would take 26% off the kernel. A 3 x 4 tile, never tried
+(4 x 2's comment records wins only at long `k`), holds `a` and loads `b` per column to fit 16 registers on AVX2 and 32 on NEON, and
+leaves no remainder at 96 x 16 x 16 or 96 x 16 x 32. It spreads the tile's overhead over 12 outputs, not 8: about 2% of the window by that arithmetic.
+
+| Machine | Window, 3 x 4 against 4 x 2 (`k10a-*`, `ONNONO`, crate `57ca09a`) |
+|---|---|
+| jebel | forward family -2.1%; 4 other rows within noise, max 1.7%; dense and conv epochs within noise, max 2.9% |
+| `litshe` | forward family **+7.2%**; 4 other rows within noise, max 5.1% (fan pinned, passes peaked at 49.0-51.8 C, no throttling) |
+
+**Closed:** under the bar on x86 and a loss on NEON, whose cause wasn't looked into. `litshe`'s run went against a profile from before the
+crate's `codegen-units = 1`, allowed by flag for this probe, as both sides build with it. The 16-18% behind OpenBLAS on `litshe` isn't
+answered by this; if it is ever wanted, it's a NEON reading of its own.
+
+### `codes_forward` in lanes (K30; crate #111)
+
+Nearly all of its 7% of the window was one scalar loop: a squared-distance chain per code, then the argmin's compare. Chains of different
+codes are independent, so four run in lanes, AVX2 without FMA, from a copy of the codebook packed per call, and the distances are read
+in code order for the tie's and first NaN's rule. Eight entries in `bits.rs` were recorded on the old kernel first.
+
+| Window row (crate `cba601e` against `dc571a0`, `k30f-*`, `ONNONO`) | jebel | stone | klip |
+|---|---|---|---|
+| forward linear k1 s16 m16 n1024 | **-7.3%** | -6.1% | -4.7% |
+| learn linear k1 s16 m16 B64 W19 | -3.3% | within noise | -3.2% |
+| forward family p7 f32 n1024 | -3.1% | -4.2% | within noise |
+
+- **The first run, balanced to `ONNONONO`** (`k30-window`), read -8.2%, -4.9% and -4.4% on jebel. It still reports a shifted pass after its extension.
+- **Guards:** sequence epoch within noise on jebel (max 0.1%, `k30g-sequence`, the rerun after a restart lost `k30f-sequence`) and klip;
+  `d` 512 within noise on all three, with attend backward -1.6% on jebel; conv and dense epochs within noise on jebel, max 2.7%, and on stone, where noise is wide, max 17.8%.
+- **Golden:** bit-identical on jebel and `pyramidon`, 164 networks, with the A/B's `.so`, `1cebe6ff7934`, confirmed loaded on jebel.
+- **One real side effect:** `prepare / rust` +5-7% on jebel in every pass (dense 0.200 to 0.210 s), numpy unchanged; stone's conv B=32 prepare +6.5%. This
+  change doesn't touch it, so it's probably placement (K2), which wasn't checked. It costs about 10 ms once per run and no epoch moves (D6).
+
+### `exp_lanes_avx2`: its gathers (K31; crate #112)
+
+Four `vgatherqpd` were about 30% of the kernel's samples on jebel, and the rest is flat. Each lane's `[low, high]` table pair is now one 16-byte load, with
+the lows and highs from two inserts and an unpack; the tables and the arithmetic don't change. NEON already loaded per lane.
+
+| Crate `cba601e` against `480cebc` (`ONNONO`) | jebel | stone | klip |
+|---|---|---|---|
+| attention, `d` 64 (`k31-*`, on `db91879`, the same code) | within noise, max 1.6% | not run | **-3.6% to -7.8%**, 5 rows of 12 |
+| sequence epoch | within noise, max 0.5% (`k31g-sequence`, the rerun after a restart cut `k31f-sequence` short) | not run | **-5.3%** |
+| window | within noise, max 5.8%; forward linear +0.4%, small | within noise, max 4.1% | forward linear -4.4% |
+| focused | within noise, max 2.0% | within noise, max 7.3% | attention 16 x 32 b32 -3.5%, dense b32 -1.8% |
+| conv and dense epochs | within noise, max 3.7% | within noise (stone's spread here reached 29.5%) | not run |
+| `d` 512 | within noise, max 0.7% | within noise, max 4.1% | within noise, max 0.2% |
+
+So it costs Intel nothing and gains on AMD, whose gathers are slower by the instruction tables; the split between machines fits that, though it wasn't
+measured apart. klip's forward linear also moved -4.7% for K30, so that row may be placement-sensitive there; don't lean on it alone. Golden: bit-identical on jebel and `pyramidon`, 164 networks.
+
+### Conv's forward (K9; closed, no PR)
+
+**Rust alone** (`prepared_dataset_timing worker`, three epochs, `conv-rust.data`): `dot_product_blocks` 15.0% (the accuracy passes), conv's forward 11.7%, inlined in
+its Python wrapper, `tiled_row_range` about 24% across its modes, and `blas_thread_server` 19.9%, numpy's idle threads, per thread and not wall time. About 55% of the forward's own samples
+are `A`'s loop, which transposes by a stride and adds the bias and the ReLU, one value at a time: at most about 6.5% of a Rust conv epoch.
+
+**Tried:** the crate's `transpose_into`, then the bias and ReLU in lanes over whole rows (crate `d0c0a42`; the add compiled to `vaddpd`). `k9a-*`, `ONNONO` on jebel:
+conv-conv's forward **+2.4%**, its profiled total +1.8%, conv B=512's epoch with the loader +2.9%, the rest within noise. A second pass over the values costs more than
+the lanes save on this one thread. Closed: this diagnoses K9's share, with no single-thread cause left to fix. Threads over examples are K14, stage 11.
+
+### The batched decode step (K13; closed for this plan)
+
+It reaches generation only, so no epoch can clear the bar. `generation_timing --batch` on jebel, crate `cba601e`, characters a second:
+
+| Batch | Rust | numpy |
+|---|---|---|
+| 1 | 10,203 | not read here |
+| 8 | 20,173 | 7,770 |
+| 32 | 20,806 | 13,652 |
+
+Rust stops scaling at batch 8, one `attention_step` a row, while numpy keeps climbing, so a gain is there for generation. But it's a new crate op and a change of cache form, with
+no study waiting on it: feature work, in `docs/next-steps.md` with these readings. Stage 11's batched decode site goes with it.
+
+### Stage 7's merged crate (K30 and K31 together, `362e34c`)
+
+`k3031-window`, `ONNONO` on jebel, against `cba601e`: forward linear **-8.0%**, learn linear **-5.0%**, forward family **-3.9%**, learn family -1.7%; 2 rows within noise, max 1.1%. Golden: bit-identical on
+jebel and `pyramidon`, 164 networks, `.so` `7a3f0df0ecd3`. Rust tests and clippy pass, and the crate's 3,651 Python tests on x86-64.
+
+**CI gap:** crate #111 and #112 merged on the owner's instruction with their macOS jobs cancelled during a GitHub Actions incident, no steps run, and the wheel-dependent test and package-check jobs skipped. So
+neither crate PR ran those on any platform. The next crate PR's CI, or a run on `main`, covers them.
 
 ### What the census says (K25, on stone, with K7a in)
 
@@ -518,14 +601,16 @@ oversubscribing each other.
 | K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **done (crate #107)**, below a `b` 512 wide: attention accumulate -33% to -47%, sequence epoch -8.2% (stage 6's results) |
 | K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **closed**: under the bar with K23 in, 3.9% of attention at most (stage 6's results) |
 | K24 | fewer copies and allocations in the crate's ops (memmove, memset, calloc: 5-10% of the window and attention backdrops) | new | **closed**: no site past 1.4% (stage 6's results) |
-| K9 | conv on 28x28 inputs, `conv_forward_batch` first (64% of a conv-conv epoch) | i7 item 5 | **stage 7**: diagnosis, then a fix if there's a cause |
+| K9 | conv on 28x28 inputs, `conv_forward_batch` first (64% of a conv-conv epoch) | i7 item 5 | **closed**: diagnosed, and the one fix tried cost conv-conv's forward 2.4% (results above) |
 | K12 | the attention kernels: tiled attend and backward, 33% at `T` 1024 | From the window program; From multi-head attention | **first step done** (crate #103); the rest from a fresh census, stage 7 |
 | K28 | the window program's own kernels: short-`k` products, layer norm, the linear product | new, from the profile | **second step done (crate #108)**: layer norm and the dense add, window forward -22.6%; the rest by profile, stage 7 |
 | K29 | the attend's own code: the dropout mask draw, compared on its bits | new, from the annotation | **closed**: under the bar, at most 3.7% of an isolated layer and no epoch (crate #110, unmerged; results above) |
-| K10 | narrow `k`: more independent outputs in flight per tile; 16-18% behind OpenBLAS on `litshe`, and short-`k` shapes dominate the window | From the crate kernels | **stage 7**, on x86 and on `litshe` when on |
+| K30 | `codes_forward`'s distances in lanes across codes | new, from the profile | **done (crate #111)**: forward linear -7.3% on jebel (results above) |
+| K31 | `exp_lanes_avx2`'s table pairs loaded whole, not gathered | new, from the annotation | **done (crate #112)**: within noise on jebel, klip's sequence epoch -5.3% (results above) |
+| K10 | narrow `k`: more independent outputs in flight per tile; 16-18% behind OpenBLAS on `litshe`, and short-`k` shapes dominate the window | From the crate kernels | **closed**: a 3 x 4 tile under the bar on jebel and a loss on `litshe` (results above) |
 | K6 | `CpuInfo` | i7 outline, Kernels and parameters | **done (crate #103, #105, #106)** (D5, D11), for K8 and the thread counts |
 | K8 | `matmul_nt` with `W` past the L2: slabs of `W` in bytes, the 4 lanes stored | i7 item 2 | **done (crate #106)**: conv tail forward -33%, 30 x 784 -23%, dense epochs -6% to -8%; `d` 512 not reached (stage 5's results) |
-| K13 | a batched crate decode step: `attention_step` over an `(N, c)` cache with the keys' segments | From the sequence task (generation) | **stage 7**, if over the bar |
+| K13 | a batched crate decode step: `attention_step` over an `(N, c)` cache with the keys' segments | From the sequence task (generation) | **closed for this plan**: no epoch reaches it; in `docs/next-steps.md` (results above) |
 | K15 | threaded scaling against OpenBLAS, a pool, the threshold re-swept | i7 item 4; From the crate kernels | **stages 8-10** |
 | K14 | conv's forward spread over examples | i7 item 3 | **stage 11** |
 | K16 | threads in the window program, examples split inside one call | From the window program (D8 (b)) | **stage 11** |
@@ -656,7 +741,8 @@ Each settled, with its options.
     run beside it, since a crate PR needs jebel, not the owner.
   - **O2. `litshe`'s limits with the active cooler. Settled:** "we base the profile on the measured
     temperature response, when the cooler is available". Until then the rule stands (65 C ideal, 70 C
-    hard, single-threaded passes), and stage 12 sets the profile from the measured curve.
+    hard, single-threaded passes), and stage 12 sets the profile from the measured curve. **Cooler fitted 2026-11-04.** A first reading: 4 cores of
+    `sha256sum /dev/zero` pass 68 C in 84 s on the stock fan curve, whose fan stays at pwm 125 until 67.5 C, and level at 61-62 C, peak 63.35 C over 240 s, with the fan pinned at full, no throttling.
 
 ## Stages
 
@@ -688,9 +774,7 @@ it's on).
 - **Stage 6. Copies (K23, K11, K24). Done:** K23 merged, K11 and K24 closed under the bar.
   Accumulate without its transpose first; K11 only for what remains.
   Allocation sites from the census.
-- **Stage 7. In progress; its order is under "Stage 7's order" above.** By share: conv forward (K9), the attend's remainder and the window's kernels (K12, K28), narrow
-  `k` (K10), the batched decode step (K13).** Each profiled
-  (`perf_region.py`) then fixed or closed, in the order a fresh census gives.
+- **Stage 7. Done.** Merged: K28 (the window's kernels), K30 (`codes_forward`), K31 (`exp`). Closed under the bar, each with its reason above: K29 (the attend's mask draw), K10 (narrow `k`), K9 (conv's forward), K13 (the batched decode step).
 - **Stage 8. Thread tools.** `thread_cost_probe.py` extended to a pool (call cost at 1-8 threads, cold and
   warm), a scaling sweep per op (threads x shape), oversubscription (N processes x T threads on one host),
   and an epoch timer at a set thread count through `ab.py` (`--rust-threads` exists). On jebel, stone and klip.
@@ -702,8 +786,7 @@ it's on).
   downstream; bits at 1, 2, 3 and the default threads; long products split by column, with stage 3's packing;
   the threshold re-swept per machine on epochs (D6). Tier 2 on jebel, guards on the laptops.
 - **Stage 11. New threaded sites, by measured share.** Conv's forward over examples (K14); the tiled attend
-  over (example, head) and query blocks; the window program over examples (K16); the batched decode over rows
-  (after K13); row-wise ops only where a profile shows them worth a call's cost.
+  over (example, head) and query blocks; the window program over examples (K16); row-wise ops only where a profile shows them worth a call's cost.
 - **Stage 12. numpy beside the crate, and `litshe`.** Whether `OPENBLAS_NUM_THREADS` should follow the crate's
   budget in mixed runs (the spin gotcha, and the 6-11% above), documented either way. `litshe` all-core with
   the cooler (O2): its temperature response measured at 1, 2 and 4 busy cores, each to its plateau or to the
