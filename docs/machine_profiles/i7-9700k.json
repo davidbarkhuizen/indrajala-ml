@@ -76,7 +76,7 @@
     ],
     "os": {
       "system": "Linux",
-      "kernel_release": "7.0.0-38-generic",
+      "kernel_release": "7.0.0-42-generic",
       "distribution": "Ubuntu 26.04.1 LTS",
       "perf_event_paranoid": 2
     },
