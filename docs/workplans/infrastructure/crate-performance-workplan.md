@@ -214,6 +214,46 @@ What this leaves: at `d` 512, `matmul_nt` is a third of the epoch and K8 doesn't
 Blocking its rows as well as `k` (the lanes held per output, rather than for all of them at once) is untried; a probe
 goes in stage 7's order by the fresh census.
 
+### Stage 6's results so far (K23; crate #107)
+
+`matmul_transposed_add(c, d, b)` is `c + d.T @ b` with no copy of `d`, read through a row and a `k` step, for a `b`
+under 512 wide. From 512 it keeps the copy. Bits hold (a new test against `matmul_add` of the transpose, on each side
+of the slab, packing and threading thresholds), and the golden run is unchanged.
+
+The guards decided both limits on the way:
+
+1. The first version sent every shape through a zeroed product buffer. Conv tail b32 lost 30-35% on klip and stone,
+   a 1.38 MB allocation and its page faults. ADD now writes in place up to the slab, as `matmul_add` did.
+2. Then a `d` 512 epoch lost 3.1% and its backward 6.7% on jebel, and gained 3% on stone and klip. At `m` 512 `d`'s
+   stride is 4096 bytes, so a slab's multipliers fall in one L1 set and a few L2 sets, more than jebel's 4-way 256 KB
+   L2 holds (the mechanism is inferred from the stride and the caches; only the timings were measured). The conv tail
+   at b512 also lost 10% on klip. Both have a wide `b`, where the copy is about `1 / n` of the work, so there's little
+   to win.
+
+Passes ONNONO, old 10aa3e5 vs new 3bb2a40:
+
+| Machine | Benchmark | Result |
+|---|---|---|
+| jebel | attention accumulate (16 x 32), one thread | b32 -34.8%, b512 -33.2% |
+| | same, default threads | b32 -34.3%, b512 -46.6% |
+| | sequence epoch, `d` 64 | -8.2% |
+| | window learn | linear -6.0%, family -5.2% |
+| | `d` 512 epoch, `d` 512 attend | within noise (max 0.8%, 0.7%) |
+| | dense and conv epochs | within noise; `epoch, loader` at B=512 +3.4% (dense), +2.5% (conv) |
+| stone | attention accumulate | -32.2%, -30.8% |
+| | `d` 512, epochs, window | within noise |
+| klip | attention accumulate | -21.8%, -24.6% |
+| | sequence epoch | -5.9% |
+| | window learn | -3.2% to -4.6%; forward family +1.4% |
+| | `d` 512 epoch | +1.0% |
+| | conv tail accumulate b512 | +1.8% |
+
+The `epoch, loader` rows repeated across two builds, on a smaller share than the epochs' gains, and the plain epoch
+rows don't show them. They stay on record, not chased.
+
+Jebel moved to kernel 7.0.0-42 during this stage (a reboot). Each A/B's two sides share a kernel, so this reading
+holds, but A/Bs from before it don't compare with those after, and K5's baseline records the new kernel.
+
 ### What the census says (K25, on stone, with K7a in)
 
 Seconds by kernel, one worker. A site's time holds what it calls: the attends hold `exp`, `transpose` and
@@ -362,7 +402,7 @@ oversubscribing each other.
 | K26 | backdrops at production scale: `sequence_training_timing` and `attention_timing` at a larger `d` | new (D13) | **done**: `--features`, `--heads` |
 | K27 | stone's profile and noise rules, and the Ryzen's refreshed; `ab.py` from a bundle's checkout on stone | new (D12) | **done**: `i7-1255u.json`, `ryzen7-3700u-klip.json` |
 | K7 | `matmul_2d` for long `k`: slabs that resume each chain | i7 item 1 | **done**: K7a (crate #101), K7b (crate #102), results below |
-| K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **stage 6**, against K11 |
+| K23 | accumulate without its transpose: `delta.T @ X` read through `delta` directly (`nn/dense.rs:192`, 3-6% of the backdrops) | new | **done (crate #107)**, below a `b` 512 wide: attention accumulate -33% to -47%, sequence epoch -8.2% (stage 6's results) |
 | K11 | an AVX2 transpose that doesn't lose to 4K aliasing (the measured kernels on the crate's `avx2-transpose` branch) | From the crate kernels | **stage 6**, only for what K23 leaves |
 | K24 | fewer copies and allocations in the crate's ops (memmove, memset, calloc: 5-10% of the window and attention backdrops) | new | **stage 6**, sites from the census |
 | K9 | conv on 28x28 inputs, `conv_forward_batch` first (64% of a conv-conv epoch) | i7 item 5 | **stage 7**: diagnosis, then a fix if there's a cause |
