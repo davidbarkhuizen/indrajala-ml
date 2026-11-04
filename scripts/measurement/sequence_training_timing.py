@@ -8,11 +8,13 @@ run through ab.py as a probe:
     python scripts/measurement/ab.py run --bench cmd -- scripts/measurement/sequence_training_timing.py
 
     python scripts/measurement/sequence_training_timing.py [--windows 1024] [--repeats 3] [--epochs 1]
-        [--features 512 --heads 8]
+        [--features 512 --heads 8] [--backends rust] [--rust-threads N:T]
 
 --features and --heads set a larger model than the study's (the crate performance workplan's D13),
 its FFN 4x the features as the study's is: the case's name gains `d=512`, and numpy's and Rust's rows
-compare as before.
+compare as before. --rust-threads N:T is set_matmul_threading(N, T) in the Rust workers (0 keeps a
+default), for an epoch at a set thread count; --backends rust skips numpy's epochs, whose cost at
+`d` 512 a threads sweep doesn't need.
 
 It prints one JSON row per (backend, metric): the epoch's seconds in learn_batch (the minimum over
 the repeats) and, as a check that both sides train alike, the held-out cross-entropy after the
@@ -27,6 +29,8 @@ import random
 import subprocess
 import sys
 from typing import Any
+
+from process_runs import set_rust_threads
 
 BACKENDS = ["numpy", "rust"]
 CORPUS = "tinyshakespeare"
@@ -71,25 +75,30 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--features", type=int)
     parser.add_argument("--heads", type=int)
+    parser.add_argument("--backends", nargs="+", choices=BACKENDS, default=BACKENDS)
+    parser.add_argument("--rust-threads", help="N:T, set_matmul_threading(N, T) in the Rust workers")
     parser.add_argument("--worker", metavar="BACKEND", choices=BACKENDS)
     args = parser.parse_args()
 
     if args.worker:
+        if args.worker == "rust":
+            set_rust_threads(args.rust_threads)
         print(json.dumps(worker(args.worker, args.windows, args.epochs, args.features, args.heads)))
         return
 
     environment = {**os.environ, "OPENBLAS_NUM_THREADS": "1"}
-    runs: dict[str, list[dict[str, Any]]] = {backend: [] for backend in BACKENDS}
+    runs: dict[str, list[dict[str, Any]]] = {backend: [] for backend in args.backends}
     for repeat in range(args.repeats):
-        order = BACKENDS if repeat % 2 == 0 else BACKENDS[::-1]
+        order = args.backends if repeat % 2 == 0 else args.backends[::-1]
         for backend in order:
             command = [sys.executable, "-B", __file__, "--worker", backend]
             command += ["--windows", str(args.windows), "--epochs", str(args.epochs)]
             command += ["--features", str(args.features)] if args.features else []
             command += ["--heads", str(args.heads)] if args.heads else []
+            command += ["--rust-threads", args.rust_threads] if args.rust_threads else []
             output = subprocess.run(command, env=environment, capture_output=True, text=True, check=True).stdout
             runs[backend].append(json.loads(output.strip().splitlines()[-1]))
-    for backend in BACKENDS:
+    for backend in args.backends:
         size = f" d={args.features}" if args.features else ""
         case = f"2-layer rotary{size} {backend} W={args.windows}"
         seconds = min(min(run["seconds"]) for run in runs[backend])

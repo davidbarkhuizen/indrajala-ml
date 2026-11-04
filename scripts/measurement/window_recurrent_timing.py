@@ -63,6 +63,7 @@ from typing import Any, cast
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import numpy as np
+from process_runs import set_rust_threads
 
 from indrajala_ml.model.networks.window_recurrent_array_network import WindowRecurrentRustArrayNetwork
 from indrajala_ml.model.specs import window_presets as wp
@@ -241,7 +242,9 @@ def main(
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--loops", type=int, default=20, help="a learn case's steps a repeat")
     parser.add_argument("--breakdown", nargs="+", metavar="CASE", help="profile these cases; no rows")
+    parser.add_argument("--rust-threads", help="N:T, set_matmul_threading(N, T) before timing")
     arguments = parser.parse_args()
+    set_rust_threads(arguments.rust_threads)
     if arguments.breakdown:
         for case in arguments.breakdown:
             print("\n".join(breakdown(case, steps)), flush=True)
