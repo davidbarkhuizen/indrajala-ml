@@ -120,6 +120,9 @@ where you meet a new trap; delete one that no longer holds.
   no default toolchain. `thread_cost_probe.py` names one itself; a new probe that runs `rustc` has to as well.
 - **Stone and klip don't have a squash-merged crate commit** until told: `ab_all.sh` bundles the PR's branch, not the merge. Bundle `origin/main` to stone and
   fetch on klip before naming it in `--old-crate` or `--new-crate`.
+- **`jebel` resets itself on `sequence_training_timing --windows 1024` on kernel -42 (2026-11-04):** five unclean restarts, with no message. The last two came seconds into that benchmark's smoke run, on the old crate; two earlier ones cut short `k30f-sequence` and `k31f-sequence`. Three hours of all-core threaded timings without it ran no restart. A correlation: the cause isn't known. Don't re-run it to see: each is an unclean reset of the owner's machine.
+- **After a restart `jebel` is at PL1 95 W until the next `ab.py` run applies the setup,** so don't load it by hand before one.
+- **A threading change moves `window_recurrent_timing`'s `matmul 256` control,** which is threaded: its "CONTROL MOVED" means nothing there.
 - **A one-thread probe doesn't speak for an epoch.** `matmul_nt` by groups read 0.67-1.01 on the probe and nothing on a
   `d` 512 epoch, whose large products run on 8 threads.
 - **`golden_training_run.py archive` on jebel pushes its branch but can't open the PR:** jebel's

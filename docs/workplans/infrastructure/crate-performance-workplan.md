@@ -518,6 +518,24 @@ klip's 8 logical threads lose to its 4 physical cores, and all three large produ
 - **The earlier "about 10 µs a thread" on jebel (2026-10-29) doesn't reproduce:** an empty scoped spawn reads 100 µs warm (min 21) at one thread, 402 µs at eight. This loop is shorter than the old probe's and the kernel has moved; which of them is responsible wasn't checked. Either way, it's a larger cost than the plan assumed.
 - `thermal_zone0` on jebel reads a constant 27.8 C, so the probe's peak means nothing there.
 
+### Stage 10's first step: the existing sites on the pool (K15; crate #115)
+
+The same pieces as before, so the same bits, and the A/B times the mechanism alone: crate `edce2de` against `51a2baf`, 6 passes.
+
+| reading | jebel | klip (guard) | stone (guard) |
+|---|---|---|---|
+| `d` 512 epoch | within noise | **-5.4%** | within noise |
+| sequence epoch, `d` 64, 1,024 windows | **unread: jebel restarted twice** | **-12.7%** | not run |
+| dense B=512 epoch, loader | **-4.9%** | not run | not run |
+| window | within noise | within noise, one row +1.1% | within noise |
+
+Per call on jebel at b512, threaded: relu forward -38.2%, dense forward -30.0%, downstream -26.4%, accumulate -23.1%, attention accumulate -12.8%, conv tail downstream -12.6%, forward -9.6%, attention forward -6.3%. On one thread, nothing moved, as it shouldn't.
+
+**So the per-call gains are real and mostly don't reach an epoch yet at today's threshold:** few products cross 8M flops. The threshold re-sweep is the next step. Golden bit-identical on pyramidon and jebel. No guard row got consistently slower but that +1.1%, on a path with no threads.
+
+- **`matmul 256`, the window benchmark's control, is threaded:** it read -40.4% on jebel and -60.3% on klip, which is this change and not noise, so that benchmark's "CONTROL MOVED" means nothing for a threading change.
+- `prepare` rows moved on jebel (conv B=32 +5.1%) and stone: no epoch moved with them. This is the K30 note's row, which K2's work should explain.
+
 ### What the census says (K25, on stone, with K7a in)
 
 Seconds by kernel, one worker. A site's time holds what it calls: the attends hold `exp`, `transpose` and
@@ -848,11 +866,11 @@ it's on).
   and an epoch timer at a set thread count through `ab.py` (`--rust-threads` exists). On jebel, stone and klip.
   **Tools done:** `thread_cost_probe.py calls`, `scaling` and `epochs`; `focused_benchmark --idle-ms`, for cold cores; `--rust-threads` on
   every backdrop. The pool it prices is a prototype inside `thread_call_cost.rs`, with no crate code. **Done:** readings above (stage 8's readings).
-- **Stage 9. The budget and the pool (D3, D4).** **Budget done (crate #113):** on jebel no Rust row moved, its default staying 8; on klip, 8 threads to 4, a `d` 512 epoch -8.5% (a guard's reading, not a claim). **Pool done (crate #114),** no caller yet: `core/src/sys/pool.rs`, `core/tests/pool.rs` under `miri` in CI; stress-run natively on x86 and `litshe`, and under `miri` over 32 scheduler seeds. `loom` not used: a first dependency, and atomics swapped behind a cfg. `CpuInfo`'s physical cores, `INDRAJALA_THREADS`,
+- **Stage 9. The budget and the pool (D3, D4).** **Budget done (crate #113):** on jebel no Rust row moved, its default staying 8; on klip, 8 threads to 4, a `d` 512 epoch -8.5% (a guard's reading, not a claim). **Launchers done (#1266, indrajala-studies #16).** **Pool done (crate #114),** no caller yet: `core/src/sys/pool.rs`, `core/tests/pool.rs` under `miri` in CI; stress-run natively on x86 and `litshe`, and under `miri` over 32 scheduler seeds. `loom` not used: a first dependency, and atomics swapped behind a cfg. `CpuInfo`'s physical cores, `INDRAJALA_THREADS`,
   `set_threads`; the runner and sweep helpers set 1 a worker and refuse oversubscription. The pool in the
   core, with its tests (every chunk run once, panic carried, fork recreates, nesting inline, `miri`, a stress
   test at random chunk counts); no caller yet. Tier 0.
-- **Stage 10. The existing sites on the pool (K15).** `for_each_row_range`, the column split, conv's
+- **Stage 10. The existing sites on the pool (K15).** **First step done (crate #115),** above; the threshold re-sweep and the column split remain. `for_each_row_range`, the column split, conv's
   downstream; bits at 1, 2, 3 and the default threads; long products split by column, with stage 3's packing;
   the threshold re-swept per machine on epochs (D6). Tier 2 on jebel, guards on the laptops.
 - **Stage 11. New threaded sites, by measured share.** Conv's forward over examples (K14); the tiled attend
