@@ -1247,6 +1247,10 @@ def test_the_check_re_applies_the_setup_once(tmp_path: Path, monkeypatch: pytest
     results[:] = [["governor: x -> y"]]
     with pytest.raises(ab.AbError, match=r"differs from i7.json$"):
         ab.check_machine(tmp_path, apply=False)
+    # --allow-profile-change reaches the check --apply-setup runs before a detached run starts
+    results[:] = [["governor: x -> y"], ["governor: x -> y"]]
+    allowed = ab.check_machine(tmp_path, apply=True, allow_change=True)
+    assert allowed == "machine check: differs from i7.json after re-applying the setup (allowed)\ngovernor: x -> y"
 
 
 def test_apply_setup_runs_only_an_installed_copy_of_the_checkouts_script(
@@ -1317,6 +1321,14 @@ def test_remote_run_starts_detached_on_the_host_and_waits_there(
     ]  # fmt: skip
     assert wait == ["wait", "2026-10-09-x-cmd"]
     assert "started 2026-10-09-x-cmd" in capsys.readouterr().out
+
+
+def test_remote_run_passes_the_machine_options_to_the_host(toy_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh = FakeSsh([(0, "started 2026-10-09-x-cmd detached (pid 7, log l)\n"), (0, "")])
+    monkeypatch.setattr(ab, "_ssh", ssh)
+    command = ["remote", "--host", "litshe", "run", "--allow-profile-change", "--bench", "cmd", "--old", "HEAD~1"]
+    assert _run(toy_repo, *command, "--", "p.py") == 0
+    assert "--allow-profile-change" in ssh.calls[0]
 
 
 def test_remote_run_resolves_a_script_commit_here(toy_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:

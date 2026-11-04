@@ -1944,6 +1944,15 @@ def markdown_report(data: ReportData) -> str:
 # ---- detached and remote runs
 
 
+def _machine_options(command: argparse.ArgumentParser) -> None:
+    """What a run or extend may be told about the machine it's on, locally or through remote."""
+    command.add_argument("--allow-profile-change", action="store_true")
+    command.add_argument(
+        "--allow-load", action="store_true", help="run at once whatever the load (recorded in the manifest)"
+    )
+    command.add_argument("--skip-profile", action="store_true", help="skip the machine check (tests, toy probes)")
+
+
 def _run_parser(run: argparse.ArgumentParser) -> argparse.ArgumentParser:
     run.add_argument("--bench", required=True, choices=sorted(ADAPTERS))
     run.add_argument("--old", default="main")
@@ -2009,14 +2018,17 @@ def apply_setup(repo: Path) -> None:
         raise AbError(f"sudo -n {SETUP_COPY} failed", (result.stdout + result.stderr).splitlines())
 
 
-def check_machine(repo: Path, apply: bool) -> str:
-    """The machine check alone; with apply, a failed check re-applies the setup and checks once more."""
+def check_machine(repo: Path, apply: bool, allow_change: bool = False) -> str:
+    """The machine check alone; with apply, a failed check re-applies the setup and checks once more.
+    With allow_change, what still differs is reported, as a run records it, and doesn't refuse."""
     profile, differences = machine_check(repo)
     note = ""
     if differences and apply:
         apply_setup(repo)
         profile, differences = machine_check(repo)
         note = " after re-applying the setup"
+    if differences and allow_change:
+        return "\n".join([f"machine check: differs from {profile.name}{note} (allowed)", *differences])
     if differences:
         raise AbError(f"machine check: this host differs from {profile.name}{note}", differences)
     return f"machine check: matches {profile.name}{note}"
@@ -2111,7 +2123,9 @@ def cmd_remote(args: argparse.Namespace, extra: list[str]) -> None:
     rest = list(args.rest)
     prefix = f"ab.py remote --host {host}" + (f" --remote-repo {remote_repo}" if remote_repo != REMOTE_REPO else "")
     if args.action == "run":
-        options = _run_parser(argparse.ArgumentParser(prog=f"{prefix} run")).parse_args(rest)
+        remote_run = _run_parser(argparse.ArgumentParser(prog=f"{prefix} run"))
+        _machine_options(remote_run)
+        options = remote_run.parse_args(rest)
         repo = Path(args.repo).resolve()
         if options.new == "HEAD" and _git(repo, "status", "--porcelain", "--untracked-files=no", "--", *DIRTY_PATHS):
             raise AbError(f"uncommitted changes under {', '.join(DIRTY_PATHS)}: commit and push them first")
@@ -2205,11 +2219,7 @@ def main(argv: list[str] | None = None) -> int:
     extend.add_argument("--order", required=True)
     extend.add_argument("--note", help="why the passes were added (default: the shifted passes they balance)")
     for command in (run, extend):
-        command.add_argument("--allow-profile-change", action="store_true")
-        command.add_argument(
-            "--allow-load", action="store_true", help="run at once whatever the load (recorded in the manifest)"
-        )
-        command.add_argument("--skip-profile", action="store_true", help="skip the machine check (tests, toy probes)")
+        _machine_options(command)
         command.add_argument("--detach", action="store_true", help="start in its own session and return (ab.py wait)")
         command.add_argument("--apply-setup", action="store_true", help="with --detach: as check --apply-setup, first")
 
@@ -2256,7 +2266,7 @@ def main(argv: list[str] | None = None) -> int:
                     script = [] if args.script_from in ("old", "new", EACH) else [args.script_from]
                     print("\n".join(sync_checkout(repo, [args.old, args.new, *script])))
                 if args.apply_setup and not args.skip_profile:
-                    print(check_machine(repo, apply=True), flush=True)
+                    print(check_machine(repo, apply=True, allow_change=args.allow_profile_change), flush=True)
             detach(_detached_argv(full), what)
         elif args.command == "run":
             with run_lock(f"run --bench {args.bench}"):
