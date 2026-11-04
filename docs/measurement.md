@@ -380,6 +380,10 @@ What to do next:
   32-byte boundaries, the JCC erratum; aarch64 loops and functions aligned); with both, an A/B moves
   only the rows whose code changed.
 
+- **A profile names a function, not its shapes.** `scripts/measurement/shape_census.py` runs a benchmark
+  on a `--features census` build of the crate and prints each kernel's time by `m x k x n`. Its clock and
+  lock slow short sites, so read the shapes and shares from it, and time nothing on that build.
+
 - **No benchmark times batch norm.** No timing script or `ab.py` benchmark calls the
   `batch_norm_*` ops (`focused_benchmark` has no batch-norm shape), so a change to them has no
   relevant tier 1 A/B. Crate #99 (2026-11-04: batch norm's activation through the shared enum,
