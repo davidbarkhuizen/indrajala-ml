@@ -983,13 +983,27 @@ def test_archive_cites_the_profile_a_run_checked_and_refuses_one_re_recorded_sin
     identity = benchmark_archive.identity_sha256(json.loads(I7.read_text()))
     run = _checked_run(tmp_path / "a", identity)
     assert _archive(archive_clone, str(run), "--profile", str(RYZEN)) == 1
-    assert "names its own profile: archive it without --profile" in capsys.readouterr().err
+    assert f"ran under another identity than {RYZEN}" in capsys.readouterr().err
     assert _archive(archive_clone, str(run)) == 0
     record = json.loads((archive_clone / "runs/jebel/2026-09-29-pr480/record.json").read_text())
     assert (record["profile"], record["profile_source"]) == (f"machines/jebel/{I7_STAMP}-profile.json", "checked")
 
     assert _archive(archive_clone, str(_checked_run(tmp_path / "b", "0" * 64))) == 1
     assert "i7-9700k.json was re-recorded with another identity since the run" in capsys.readouterr().err
+
+
+def test_archive_takes_the_profile_a_re_recorded_run_ran_under(archive_clone: Path, tmp_path: Path) -> None:
+    old_identity = benchmark_archive.identity_sha256(json.loads(RYZEN.read_text()))
+    run = _checked_run(tmp_path / "a", old_identity)
+    assert _archive(archive_clone, str(run)) == 1
+    profile = json.loads(RYZEN.read_text())
+    profile["state"]["hostname"] = "jebel"
+    named = tmp_path / "profile.json"
+    named.write_text(json.dumps(profile))
+    assert benchmark_archive.identity_sha256(profile) == old_identity
+    assert _archive(archive_clone, str(run), "--profile", str(named)) == 0
+    record = json.loads((archive_clone / "runs/jebel/2026-09-29-pr480/record.json").read_text())
+    assert record["profile_source"] == "checked"
 
 
 class _Clock:
