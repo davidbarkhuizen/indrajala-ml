@@ -32,7 +32,7 @@ next-steps.md's "From the crate kernels" (the pool, the threshold) and "From the
 
 ## Where things stand (read 2026-11-02 from the code, next-steps.md and the retired plans)
 
-**Threading today.** `rust/core/src/linalg.rs` threads three products, and `conv.rs` one op, each by
+**Threading today.** `rust/core/src/linalg.rs` threads three products, and `nn/conv.rs` one op, each by
 `std::thread::scope`, spawning OS threads on every call:
 
 - `matmul_2d` and `matmul_nt` split output rows (`for_each_row_range`); `matmul_long_k` splits output

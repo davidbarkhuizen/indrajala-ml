@@ -245,7 +245,7 @@ Per token (a flat layer is one token): `μ`, biased variance, `ε = 1e−5`, `y 
 - **TokenDropout**: inverted dropout over every feature of every token; masks drawn row-major.
 - **TokenSoftmax**: the token-wise output layer (§5).
 
-### 4.6 Attention (`attention_array_layer.py`, `rust/core/src/attention.rs`, `python/attention_layer.py`)
+### 4.6 Attention (`attention_array_layer.py`, `rust/core/src/nn/attention/`, `python/attention_layer.py`)
 
 The most elaborate layer. Per example over `T` tokens of width `d`, `h` query heads of `d_k`
 (default `d/h`), `g` key/value heads (default `h`):
@@ -289,7 +289,7 @@ Design points:
 - Single-example methods are the batch ones on one example; there is no `(T, T)` matrix anywhere
   except the inspection helpers `weights()` and `dropout_mask()`.
 
-### 4.7 Activations (`numpy/activations.py`, `python/activations.py`, `core/src/activation.rs`)
+### 4.7 Activations (`numpy/activations.py`, `python/activations.py`, `core/src/num/activation.rs`)
 
 `tanh(z) = 1 − 2/(exp(2z) + 1)`, GELU exact `(0.5z)(1 + erf(z/√2))` with erf a port of fdlibm's
 `s_erf.c`, GELU-tanh (GPT-2's), SiLU `z·σ(z)`. Each is written once as an expression with a fixed
@@ -550,16 +550,16 @@ Determinism is a first-class requirement, and it shapes the arithmetic everywher
   row equals the single-example forward exactly. `codegen-units = 1` keeps inlining stable.
 - **numpy products are BLAS's**, so numpy and Rust agree only to within rounding (the code says so
   and tests to a tolerance), while pure Python and numpy share expressions and grouping.
-- **Correctly rounded `exp` in Rust** (`core/src/cr_exp.rs`, a port of CORE-MATH's `cr_exp`): its
+- **Correctly rounded `exp` in Rust** (`core/src/num/exp.rs`, a port of CORE-MATH's `cr_exp`): its
   bits are defined by mathematics, so every machine agrees. numpy uses `np.exp`, which isn't
   correctly rounded; tests swap the module-level `exp` to compare implementations bit for bit.
 - **erf** is a port of fdlibm's in all three; the **rotary table** is computed once in Python;
   `powi` replaces `pow`; ReLU normalises `−0.0`.
-- **Random numbers**: `pcg64.py` (pure Python) and `core/src/generator.rs` port numpy's
+- **Random numbers**: `pcg64.py` (pure Python) and `core/src/random/generator.rs` port numpy's
   `default_rng` (SeedSequence → PCG64 → doubles) bit for bit and share numpy's state layout. A
   network owns one generator for its initial weights and every dropout mask, so a seed fixes the
   run. The crate also ports the legacy MT19937 global stream.
-- **Fused Rust ops** (`core/src/fused.rs`): one call per layer method. The code's own reason: the
+- **Fused Rust ops** (`core/src/nn/`: `dense`, `dropout`, `softmax`, `gated`, `optim`; `fused.rs` before the crate structure workplan): one call per layer method. The code's own reason: the
   Python/Rust call count, not per-call cost, dominates at these sizes.
 
 ## 13. Persistence
@@ -634,7 +634,7 @@ load.
    (`optimizers/rust_optimizer.py:50`) groups parameters two at a time, so `(W, U)` becomes one
    fused-op pair with `U` in the bias slot, and `b` is paired with an empty array. The fused ops
    never decay their second member: `layer_l2_apply_accumulated_gradient` steps it with plain SGD
-   (`rust/core/src/fused.rs:425`), and the Adam op applies `weight_decay` "on the pair's weight" only
+   (then `rust/core/src/fused.rs:425`, now `nn/optim.rs`'s `l2_apply_accumulated_gradient`), and the Adam op applies `weight_decay` "on the pair's weight" only
    (`rust_optimizer.py:186`). `NumpyOptimizer` decays each parameter by its own flag, so it decays
    `U`. Under `Adam(weight_decay > 0)` or `WeightDecay`, a window-recurrent network trains
    differently on Rust and numpy. It's latent: no study in this repo pairs weight decay with a
@@ -642,7 +642,7 @@ load.
    takes the next as its pair's second only when the next isn't decayed, so the GRU steps `W`
    alone, then `(U, b)`; `tests/model/optimizers/test_weight_decay_pairs.py` holds both backends to
    it.
-2. **A stale crate comment**: `rust/core/src/recurrent.rs:26-27` says the sigmoid and tanh use
+2. **A stale crate comment**: `rust/core/src/recurrent.rs:26-27` (now `nn/recurrent/mod.rs`'s module comment, still unfixed) says the sigmoid and tanh use
    "Rust's `f64::exp`, as `exp` (`ufuncs.rs`) is", but the module imports
    `cr_exp::{exp_in_place, sigmoid_in_place}` and `ufuncs::exp` is the correctly rounded one.
 3. **The parity claims are scoped**: numpy against Rust is "within rounding" (BLAS products,
