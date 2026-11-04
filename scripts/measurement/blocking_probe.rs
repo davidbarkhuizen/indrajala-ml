@@ -24,6 +24,10 @@
 //!     nt:slab=S       k in slabs of S (a multiple of 4), the 4 lanes of every output stored between
 //!     nt:threads=T    today's row split over T threads (spawned per call)
 //!     nt:threadslab=S the row split over 8 threads, k in slabs of S
+//!     nt:group=G      `b` by groups of G rows, every row of `a` past each group, and no stored lanes
+//!                     (0: one group of all of `b`, which is today's loop order)
+//!
+//!     blocking_probe --groups [TARGET_MS] runs only nt:group, on the shapes it was added for.
 
 use std::arch::x86_64::*;
 use std::time::Instant;
@@ -125,7 +129,9 @@ unsafe fn product_part(
     let b_ptr = b.as_ptr();
     let out_ptr = out.as_mut_ptr();
     let out_at = |col: usize| {
-        move |row: usize, offset: usize| unsafe { out_ptr.add((row - rows.0) * stride + col - cols.0 + offset) }
+        move |row: usize, offset: usize| unsafe {
+            out_ptr.add((row - rows.0) * stride + col - cols.0 + offset)
+        }
     };
     match blocking {
         Blocking::Rows(rows_per_block) => {
@@ -231,7 +237,9 @@ fn mm(a: &[f64], b: &[f64], (m, k, n): (usize, usize, usize), out: &mut [f64], v
     let (name, value) = variant
         .split_once('=')
         .map_or((variant, 0), |(l, r)| (l, r.parse().unwrap()));
-    let serial = |out: &mut [f64], blocking| unsafe { product_part(a, b, (k, n), (0, m), (0, n), out, n, blocking) };
+    let serial = |out: &mut [f64], blocking| unsafe {
+        product_part(a, b, (k, n), (0, m), (0, n), out, n, blocking)
+    };
     match name {
         "current" => serial(out, Blocking::Rows(current_rows_per_block(k))),
         "rows" => serial(out, Blocking::Rows(value)),
@@ -278,7 +286,18 @@ fn mm(a: &[f64], b: &[f64], (m, k, n): (usize, usize, usize), out: &mut [f64], v
                         scope.spawn(move || {
                             let width = range.1 - range.0;
                             let mut part = vec![0.0; m * width];
-                            unsafe { product_part(a, b, (k, n), (0, m), range, &mut part, width, blocking) };
+                            unsafe {
+                                product_part(
+                                    a,
+                                    b,
+                                    (k, n),
+                                    (0, m),
+                                    range,
+                                    &mut part,
+                                    width,
+                                    blocking,
+                                )
+                            };
                             part
                         })
                     })
@@ -288,7 +307,8 @@ fn mm(a: &[f64], b: &[f64], (m, k, n): (usize, usize, usize), out: &mut [f64], v
             for (&(start, end), part) in ranges.iter().zip(&parts) {
                 let width = end - start;
                 for row in 0..m {
-                    out[row * n + start..row * n + end].copy_from_slice(&part[row * width..(row + 1) * width]);
+                    out[row * n + start..row * n + end]
+                        .copy_from_slice(&part[row * width..(row + 1) * width]);
                 }
             }
         }
@@ -378,7 +398,8 @@ unsafe fn nt_part(
                 let mut i = i0;
                 while i < i1 {
                     for lane in 0..4 {
-                        lanes[at + lane] = b[col * k + i + lane].mul_add(a[r * k + i + lane], lanes[at + lane]);
+                        lanes[at + lane] =
+                            b[col * k + i + lane].mul_add(a[r * k + i + lane], lanes[at + lane]);
                     }
                     i += 4;
                 }
@@ -398,23 +419,135 @@ unsafe fn nt_part(
     }
 }
 
-fn nt(a: &[f64], b: &[f64], (m, k, n): (usize, usize, usize), out: &mut [f64], lanes: &mut [f64], variant: &str) {
+/// `b` rows `col..col + 2` against `a` rows `row..row + 4`, written straight to `out`, as the crate's
+/// `dot_product_tile_avx2_fma` does.
+#[target_feature(enable = "avx2,fma")]
+unsafe fn nt_direct_tile(
+    a: *const f64,
+    b: *const f64,
+    (k, n): (usize, usize),
+    (row, col): (usize, usize),
+    out: *mut f64,
+) {
+    unsafe {
+        let groups = k / 4 * 4;
+        let mut acc = [[_mm256_setzero_pd(); 2]; 4];
+        let mut i = 0;
+        while i < groups {
+            let b_vecs = [
+                _mm256_loadu_pd(b.add(col * k + i)),
+                _mm256_loadu_pd(b.add((col + 1) * k + i)),
+            ];
+            for (r, acc_row) in acc.iter_mut().enumerate() {
+                let a_vec = _mm256_loadu_pd(a.add((row + r) * k + i));
+                for (lane, b_vec) in acc_row.iter_mut().zip(&b_vecs) {
+                    *lane = _mm256_fmadd_pd(*b_vec, a_vec, *lane);
+                }
+            }
+            i += 4;
+        }
+        for (r, acc_row) in acc.iter().enumerate() {
+            for (c, lane) in acc_row.iter().enumerate() {
+                let mut l = [0.0; 4];
+                _mm256_storeu_pd(l.as_mut_ptr(), *lane);
+                let mut sum = combine(l);
+                for t in groups..k {
+                    sum = (*b.add((col + c) * k + t)).mul_add(*a.add((row + r) * k + t), sum);
+                }
+                *out.add((row + r) * n + col + c) = sum;
+            }
+        }
+    }
+}
+
+/// One output of `a @ b.T` with no tile.
+fn nt_one(a: &[f64], b: &[f64], (k, n): (usize, usize), (r, col): (usize, usize), out: &mut [f64]) {
+    let groups = k / 4 * 4;
+    let mut l = [0.0; 4];
+    let mut i = 0;
+    while i < groups {
+        for (lane, value) in l.iter_mut().enumerate() {
+            *value = b[col * k + i + lane].mul_add(a[r * k + i + lane], *value);
+        }
+        i += 4;
+    }
+    let mut sum = combine(l);
+    for t in groups..k {
+        sum = b[col * k + t].mul_add(a[r * k + t], sum);
+    }
+    out[r * n + col] = sum;
+}
+
+/// `a @ b.T` with `b` by groups of `group` rows (even; 0 for all of them) and every row of `a` past each.
+#[target_feature(enable = "avx2,fma")]
+unsafe fn nt_grouped(
+    a: &[f64],
+    b: &[f64],
+    (m, k, n): (usize, usize, usize),
+    out: &mut [f64],
+    group: usize,
+) {
+    let group = if group == 0 { n.max(1) } else { group };
+    let tiled_rows = m / 4 * 4;
+    let tiled_cols = n / 2 * 2;
+    let mut g0 = 0;
+    while g0 < tiled_cols {
+        let g1 = (g0 + group).min(tiled_cols);
+        let mut row = 0;
+        while row < tiled_rows {
+            let mut col = g0;
+            while col < g1 {
+                unsafe {
+                    nt_direct_tile(a.as_ptr(), b.as_ptr(), (k, n), (row, col), out.as_mut_ptr())
+                };
+                col += 2;
+            }
+            row += 4;
+        }
+        g0 = g1;
+    }
+    for r in 0..m {
+        let from = if r < tiled_rows { tiled_cols } else { 0 };
+        for col in from..n {
+            nt_one(a, b, (k, n), (r, col), out);
+        }
+    }
+}
+
+fn nt(
+    a: &[f64],
+    b: &[f64],
+    (m, k, n): (usize, usize, usize),
+    out: &mut [f64],
+    lanes: &mut [f64],
+    variant: &str,
+) {
     lanes.fill(0.0);
     let (name, value) = variant
         .split_once('=')
         .map_or((variant, 0), |(l, r)| (l, r.parse().unwrap()));
     match name {
         "current" => unsafe { nt_part(a, b, (k, n), (0, m), lanes, out, 0) },
+        "group" => unsafe { nt_grouped(a, b, (m, k, n), out, value) },
         "slab" => unsafe { nt_part(a, b, (k, n), (0, m), lanes, out, value) },
         "threads" | "threadslab" => {
-            let (threads, slab) = if name == "threads" { (value, 0) } else { (8, value) };
+            let (threads, slab) = if name == "threads" {
+                (value, 0)
+            } else {
+                (8, value)
+            };
             let per = m.div_ceil(threads);
             std::thread::scope(|scope| {
-                for (chunk, (part, lane_part)) in out.chunks_mut(per * n).zip(lanes.chunks_mut(per * n * 4)).enumerate()
+                for (chunk, (part, lane_part)) in out
+                    .chunks_mut(per * n)
+                    .zip(lanes.chunks_mut(per * n * 4))
+                    .enumerate()
                 {
                     let row_start = chunk * per;
                     let row_end = (row_start + per).min(m);
-                    scope.spawn(move || unsafe { nt_part(a, b, (k, n), (row_start, row_end), lane_part, part, slab) });
+                    scope.spawn(move || unsafe {
+                        nt_part(a, b, (k, n), (row_start, row_end), lane_part, part, slab)
+                    });
                 }
             });
         }
@@ -480,6 +613,48 @@ fn main() {
         println!("{}", c.out[0]);
         return;
     }
+    if args.first().map(String::as_str) == Some("--groups") {
+        let target_ms: f64 = args.get(1).map_or(300.0, |t| t.parse().unwrap());
+        for shape in [
+            "2048x2048x512",
+            "2048x512x2048",
+            "2048x512x512",
+            "2048x64x256",
+            "2048x64x64",
+            "512x784x30",
+            "32x784x30",
+            "32x5408x32",
+            "96x16x16",
+        ] {
+            let mut c = case("nt", parse_shape(shape));
+            call("nt", &mut c, "current");
+            let reference: Vec<u64> = c.out.iter().map(|v| v.to_bits()).collect();
+            for round in 0..2 {
+                for variant in [
+                    "group=0",
+                    "group=2",
+                    "group=4",
+                    "group=8",
+                    "group=16",
+                    "group=32",
+                    "group=64",
+                    "group=128",
+                    "group=256",
+                ] {
+                    let (median, best, calls) = timed("nt", &mut c, variant, target_ms);
+                    let same = c
+                        .out
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .eq(reference.iter().copied());
+                    println!(
+                        "{{\"kind\":\"nt\",\"shape\":\"{shape}\",\"variant\":\"{variant}\",\"round\":{round},\"median_us\":{median:.1},\"best_us\":{best:.1},\"calls\":{calls},\"same_bits\":{same}}}"
+                    );
+                }
+            }
+        }
+        return;
+    }
     let target_ms: f64 = args.first().map_or(300.0, |t| t.parse().unwrap());
     let plans: &[(&str, &[&str], &[&str])] = &[
         (
@@ -540,7 +715,11 @@ fn main() {
             for round in 0..2 {
                 for variant in *variants {
                     let (median, best, calls) = timed(kind, &mut c, variant, target_ms);
-                    let same = c.out.iter().map(|v| v.to_bits()).eq(reference.iter().copied());
+                    let same = c
+                        .out
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .eq(reference.iter().copied());
                     println!(
                         "{{\"kind\":\"{kind}\",\"shape\":\"{shape}\",\"variant\":\"{variant}\",\"round\":{round},\"median_us\":{median:.1},\"best_us\":{best:.1},\"calls\":{calls},\"same_bits\":{same}}}"
                     );
