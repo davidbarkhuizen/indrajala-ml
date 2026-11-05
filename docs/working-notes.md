@@ -100,8 +100,10 @@ where you meet a new trap; delete one that no longer holds.
   `test_seeded_init_parity.py` (every array network has a Rust twin and parity),
   `test_prepared_dataset.py` (every array network has a constructor there),
   `test_legacy_saved_models.py` (every saveable class has a fixture), `test_format2.py`'s
-  `SEQUENTIAL` table (the class `load_network` builds per implementation and shape), and
-  `test_window_program_network.py` (every Rust token layer class a window holds has an op). They
+  `SEQUENTIAL` table (the class `load_network` builds per implementation and shape),
+  `test_window_program_network.py` (every Rust token layer class a window holds has an op), and
+  `test_rust_array_layer_forward_batch.py` (every Rust dense layer class in its parity table; #1276
+  failed CI on it, 2026-11-05). They
   live in `tests/data/` as well as `tests/model/`: before a PR adding a class, run both, or the PR
   fails in CI (#1224, 2026-11-03). Give a class a real entry where it can have one; where it can't
   yet (a numpy-only class before its Rust stage), a named exception set with its reason and stage.
@@ -223,6 +225,15 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   line after `Disassembly of section .text:`, and generic names hold `>` inside, so match it greedily.
 
 ## Machines
+
+- **`klip` has no GitHub ssh key; it fetches public repositories over https.** A clone whose
+  `.gitmodules` says `git@github.com:` fails its submodule update there: run
+  `git -c url."https://github.com/".insteadOf=git@github.com: submodule update --init --recursive`,
+  and the same `-c` on a `fetch` inside the submodule (2026-11-05). A private repository
+  (indrajala-rl) can't be fetched by `klip` or `stone` at all: send it as a bundle.
+- **The crate's stubtest is pinned to mypy 2.3.1 in CI:** a newer mypy (2.4.1) reports `__radd__`,
+  `__rmatmul__` and `__rtruediv__` missing from the stub, which isn't this change's. Run stubtest
+  at the pin.
 
 - **`./cli build-rust` over ssh can't find rustup** (`rustup not found`): a non-interactive ssh
   shell lacks `~/.cargo/bin` on `PATH`. Run `. ~/.cargo/env` first (jebel, 2026-11-03).
