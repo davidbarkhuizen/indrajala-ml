@@ -73,7 +73,7 @@
     ],
     "os": {
       "system": "Linux",
-      "kernel_release": "7.0.0-38-generic",
+      "kernel_release": "7.0.0-42-generic",
       "distribution": "Ubuntu 26.04.1 LTS",
       "perf_event_paranoid": 4
     },
@@ -103,14 +103,14 @@
     }
   },
   "state": {
-    "captured_at": "2026-11-04T07:34:46Z",
+    "captured_at": "2026-11-05T04:14:10Z",
     "hostname": "klip",
     "load_average": [
-      1.23,
-      0.4,
-      0.24
+      0.01,
+      0.04,
+      0.16
     ],
-    "memory_available_mib": 4247,
+    "memory_available_mib": 4370,
     "cpu_mhz_now": {
       "min": 1400,
       "max": 2300
@@ -120,9 +120,9 @@
       "battery_percent": 0
     },
     "commits": {
-      "repo": "0d91d1a55e098cf76fb96ebe4ce509adefa8db93",
+      "repo": "239db3a226ad9524ae531883f1f8b1f82ec02b46",
       "repo_dirty": false,
-      "rust": "6a8190c91f1f9bbacea716f6f4d68e5c3e52c7eb"
+      "rust": "d6ff3e412f2c63a9fe716a7b98f2925bdd6bff18"
     }
   },
   "noise_rules": {
