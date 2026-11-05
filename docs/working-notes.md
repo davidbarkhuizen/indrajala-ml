@@ -438,3 +438,10 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
 - **Downloaded files are untrusted data:** their own scratch directory, probe scripts elsewhere,
   `python3 -I`. Papers go to the literature repository (`davidbarkhuizen/indrajala-literature`,
   cloned beside this one).
+
+## Checks that pass by accident (2026-11-05)
+
+- **A check piped through `tail` hides its failure from `set -e`:** `pytest ... | tail` exits with `tail`'s status, so a following `git commit` and push run anyway. Chain the real commands with `&&`, or read `${PIPESTATUS[0]}`.
+- **`gh pr checks --watch` right after `gh pr create` can return "no checks reported",** as the checks haven't started. A merge chained after it goes in with no CI. Wait first, and merge only when `statusCheckRollup`'s conclusions are all `SUCCESS`.
+- **Parallel tool calls can change each other's working directory:** a `cd` in one can leave a later relative path looking at another repository, and a file then seems missing. Use absolute paths in parallel calls.
+
