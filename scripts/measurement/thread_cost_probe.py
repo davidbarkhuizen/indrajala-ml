@@ -13,6 +13,8 @@ time, three questions, each a subcommand; D6 says the last decides, the first tw
 - `epochs`: N processes x T threads of a backdrop on one host, so training's own thread count and
   oversubscription are one sweep. Each process runs the backdrop once, Rust only, at
   `OPENBLAS_NUM_THREADS=1` as the studies run, all N started together; T 0 is training's default.
+  `--openblas` sweeps OpenBLAS's thread count beside the crate's, 0 being its own default (stage 12's
+  question; the window and prepared backdrops take it, as the sequence backdrop sets its own).
   Arguments after `--` go to the backdrop. **Plan the memory first:** N copies of the backdrop's peak
   must fit (`docs/measurement.md`, §2), and `d` 512 is large.
 
@@ -259,9 +261,13 @@ def backdrop_rows(backdrop: Backdrop, stdout: str, out: Path) -> list[tuple[str,
     return rows
 
 
-def run_backdrop(backdrop: Backdrop, setting: str, processes: int, extra: Sequence[str]) -> list[Any]:
+def run_backdrop(
+    backdrop: Backdrop, setting: str, processes: int, extra: Sequence[str], openblas: int = 1
+) -> list[Any]:
     """Every process's rows, the N started together, each through a file so no pipe fills."""
-    environment = {**os.environ, "OPENBLAS_NUM_THREADS": "1"}
+    environment = {**os.environ, "OPENBLAS_NUM_THREADS": str(openblas)}
+    if openblas == 0:
+        del environment["OPENBLAS_NUM_THREADS"]
     with tempfile.TemporaryDirectory() as directory:
         started: list[tuple[subprocess.Popen[bytes], Path, Path, Any]] = []
         for index in range(processes):
@@ -283,16 +289,23 @@ def run_backdrop(backdrop: Backdrop, setting: str, processes: int, extra: Sequen
 def run_epochs(args: argparse.Namespace, temperatures: Temperatures, table: Table) -> None:
     backdrop = BACKDROPS[args.backdrop]
     extra = args.backdrop_args[1:] if args.backdrop_args[:1] == ["--"] else args.backdrop_args
-    cells = [(processes, threads) for processes in args.processes for threads in args.threads]
+    cells = [
+        (processes, threads, openblas)
+        for processes in args.processes
+        for threads in args.threads
+        for openblas in args.openblas
+    ]
 
-    def run(cell: tuple[int, int]) -> dict[str, Any]:
-        processes, threads = cell
+    def run(cell: tuple[int, int, int]) -> dict[str, Any]:
+        processes, threads, openblas = cell
         setting = f"{threads}:{args.threshold}"
-        rows = run_backdrop(backdrop, setting, processes, extra)
+        rows = run_backdrop(backdrop, setting, processes, extra, openblas)
         temperatures.read()
+        blas = "" if args.openblas == [1] else f", OpenBLAS {openblas or 'default'}"
+        label = f"{processes} x {threads_label(threads)}{blas}"
         for case, metric, value, unit, control in rows:
-            emit(f"{processes} x {threads_label(threads)}, {case}", metric, value, unit, control)
-            table.add(f"{case}, {metric}", f"{processes} x {threads_label(threads)}", value, processes)
+            emit(f"{label}, {case}", metric, value, unit, control)
+            table.add(f"{case}, {metric}", label, value, processes)
         return {}
 
     interleaved_runs(cells, args.repeats, run)
@@ -328,6 +341,7 @@ def parser() -> argparse.ArgumentParser:
     epochs.add_argument("--threads", type=int, nargs="+", default=[0], help="0 is training's default")
     epochs.add_argument("--threshold", type=int, default=0, help="flops; 0 is training's default")
     epochs.add_argument("--processes", type=int, nargs="+", default=[1])
+    epochs.add_argument("--openblas", type=int, nargs="+", default=[1], help="OPENBLAS_NUM_THREADS; 0 is its default")
     epochs.add_argument("--repeats", type=int, default=2)
     epochs.add_argument("backdrop_args", nargs=argparse.REMAINDER, help="-- then the backdrop's own arguments")
     return top

@@ -100,6 +100,19 @@ def test_epochs_runs_n_processes_at_each_thread_count() -> None:
     assert all(line["control"] for line in lines if "matmul 256" in str(line["case"]))
 
 
+def test_epochs_sweeps_openblas_and_names_it_in_the_case() -> None:
+    lines = probe_lines(
+        "epochs",
+        *("--backdrop", "window", "--threads", "1", "--openblas", "1", "0", "--repeats", "1"),
+        *("--", "--cases", "learn-linear-k1-s16-m16-B4-W3", "--loops", "1"),
+    )
+    learn = {str(line["case"]) for line in lines if "learn" in str(line["case"])}
+    assert learn == {
+        "1 x 1 thread, OpenBLAS 1, learn linear k1 s16 m16 B4 W3",
+        "1 x 1 thread, OpenBLAS default, learn linear k1 s16 m16 B4 W3",
+    }
+
+
 def test_epochs_reads_a_backdrop_s_out_file(tmp_path: Path) -> None:
     out = tmp_path / "runs.json"
     out.write_text(json.dumps({"conv B=32 / rust": [{"epoch": 1.5}]}))
