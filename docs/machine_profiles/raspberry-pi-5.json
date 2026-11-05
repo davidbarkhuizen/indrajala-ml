@@ -118,10 +118,10 @@
     }
   },
   "thermal": {
-    "max_c": 65,
+    "max_c": 69,
     "abort_c": 70,
     "start_below_c": 50,
-    "set_by": "the owner, 2026-10-18, for the Raspberry Pi 5: at most 70 C inclusive, ideally at most 65 C; start_below_c from its idle 44-50 C (the aarch64 workplan, stage 5)"
+    "set_by": "from the measured response with the active cooler (the owner's O2, the crate performance workplan's stage 12, 2026-11-05): fan pinned at full, 10-minute means and peaks at 1 core 52 C, 57.85 C; 2 cores 64 C, 67.75 C; 4 cores 64.5 C, 66.65 C; no throttle flags; on the stock fan curve 4 cores pass 70 C in 141 s. The owner's 70 C hard limit stands as abort_c; their ideal of 65 C holds on average, and one-second readings jump 5-8 C, so max_c sits between the peaks and the hard limit."
   },
   "noise_rules": {
     "shifted_pass": 0.02,

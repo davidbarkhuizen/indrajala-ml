@@ -87,11 +87,17 @@ setup_raspberry_pi_5() {
     done
     # apt's daily runs (the package lists, unattended-upgrades) until the next boot
     systemctl stop apt-daily.timer apt-daily-upgrade.timer
+    # The active cooler's fan at full (the crate performance workplan's stage 12, the owner's O2): 4 cores
+    # level at a mean of 64.5 C pinned, and pass 70 C in 141 s on the stock curve, whose fan waits for
+    # 67.5 C. Under step_wise a write to cur_state lasts seconds, so the governor goes too.
+    echo user_space > /sys/class/thermal/thermal_zone0/policy
+    echo 4 > /sys/class/thermal/cooling_device1/cur_state
 
     common_setup
     echo "governor:        $(sort -u "$cpu_root"/cpufreq/policy*/scaling_governor | paste -sd,)"
     echo "max clock:       $(($(sort -u "$cpu_root"/cpufreq/policy*/scaling_max_freq | head -1) / 1000)) MHz"
     echo "apt timers:      $(systemctl is-active apt-daily.timer apt-daily-upgrade.timer | paste -sd,)"
+    echo "fan:             $(cat /sys/class/thermal/thermal_zone0/policy), state $(cat /sys/class/thermal/cooling_device1/cur_state)"
     echo "firmware:        $(vcgencmd get_throttled 2>/dev/null || echo 'throttled: not readable')"
     common_report
 }
