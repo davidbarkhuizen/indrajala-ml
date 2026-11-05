@@ -58,7 +58,7 @@ Timing a change follows [docs/measurement.md](docs/measurement.md); read it befo
   same hash twice means one crate was timed on both sides (docs/measurement.md, Gotchas).
 - **Put `remote ... report RUN --md FILE` into a PR body by concatenating files**, not by reading
   and retyping it.
-- **After a reboot, `ab.py remote run` re-applies `jebel`'s setup itself** (frequency policy, PL1
+- **After a reboot, `ab.py remote run` re-applies `jebel`'s setup itself** (frequency policy, PL1 and PL2
   65 W, `thermald` stopped, snap refreshes held), through the root-owned copy the owner installs
   with `sudo scripts/measurement/install_benchmark_setup.sh`. When it says the copy is missing or stale, ask
   the owner to run that in their own terminal on `jebel`.

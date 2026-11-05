@@ -669,7 +669,7 @@ oversubscribing each other.
 
 | machine | CPU | cores / threads | L2 per core, L3 | role here |
 |---|---|---|---|---|
-| jebel | i7-9700K (Coffee Lake) | 8 / 8, no SMT | 256 KB, 12 MB | **speedup claims:** every tier 2 A/B, PL1 65 W |
+| jebel | i7-9700K (Coffee Lake) | 8 / 8, no SMT | 256 KB, 12 MB | **speedup claims:** every tier 2 A/B, PL1 and PL2 65 W (PL2 120 W up to stage 10's first step) |
 | klip | Ryzen 7 3700U, CPU boost off | 4 / 8, SMT | 512 KB, 4 MB | **guard:** a change costs the Ryzen nothing; physical against logical cores. Its own profile. 5.3 GB, <= 85 C, under the thermal guard (`~/code/thermal-guard.sh`) |
 | pyramidon | Ryzen 7 3700U | 4 / 8, SMT | 512 KB, 4 MB | development; a guard only when klip is taken, under an address-space cap, beside no heavy job: its A/As are noisier |
 | stone | i7-1255U (Alder Lake, hybrid) | 2 P + 8 E, 12 threads | P 1.28 MB, E 2 MB across 4 (512 KB each); 12 MB | **guard:** hybrid scheduling, static splits leave the fast cores idle. The sandbox stands (no GitHub, bundles, `~/labour`); it needs a profile and noise rules (K27). Available weekdays 18:00-07:00 and weekends unless the owner says otherwise |

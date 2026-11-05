@@ -48,8 +48,9 @@ timing PR and workplan relies on it, not only optimization work.
 The benchmark machine is a Core i7-9700K desktop (`jebel`): 8 cores / 8 threads (Coffee Lake, no
 SMT), 32 KB L1d and 256 KB L2 per core, 12 MB L3, AVX2 and FMA without AVX-512, `intel_pstate`
 (active, hardware-managed clocks) with the `powersave` governor, EPP `balance_performance` and
-turbo on, and the package power limit PL1 lowered to 65 W (at the stock 95 W a long all-core load
-reaches 100 C and throttles). Its full record is `docs/machine_profiles/i7-9700k.json`, and its
+turbo on, and the package power limits PL1 and PL2 both at 65 W (at the stock 95 W a long all-core load
+reaches 100 C and throttles; PL2 from 120 W since 2026-11-05, to test whether it stops the machine's
+unclean resets: working-notes.md). Its full record is `docs/machine_profiles/i7-9700k.json`, and its
 noise and baseline, from six A/As of every benchmark, are in
 [`docs/machine_profiles/i7-9700k.md`](machine_profiles/i7-9700k.md). The noise figures below are
 this machine's. The gotchas in §7 were first measured on the Ryzen 7 3700U laptop before it
@@ -63,7 +64,8 @@ findings that didn't hold here are in its "Measured on the Ryzen laptop" note.
 - **The setup script, once per boot.** `scripts/measurement/benchmark_machine_setup.sh` sets the frequency
   policy the profile records (governor, EPP, turbo, PL1), `perf_event_paranoid` 2, and holds snap
   refreshes for 24 hours, then prints what it set. None of it survives a reboot (the snap hold
-  expires), and the machine check below refuses a run until it is applied. `ab.py remote run`
+  expires), and the machine check below refuses a run until it is applied. The installer also runs it at every boot
+  on a machine with power limits. `ab.py remote run`
   applies it after a reboot by itself, through a root-owned copy that a sudoers entry allows
   without a password: the owner installs both once with `sudo scripts/measurement/install_benchmark_setup.sh`
   on `jebel`, and again whenever the setup script changes (`ab.py` refuses to run a copy that

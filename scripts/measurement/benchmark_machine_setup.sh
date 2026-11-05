@@ -8,12 +8,13 @@
 # (docs/machine_profiles/), perf_event_paranoid 2 (for scripts/measurement/perf_region.py) and holds snap
 # refreshes, then prints the state it set:
 #
-# - the i7-9700K (jebel, intel_pstate): the governor, EPP, turbo and the package power limit PL1,
-#   stopping thermald, which resets the limit;
+# - the i7-9700K (jebel, intel_pstate): the governor, EPP, turbo and the package power limits PL1
+#   and PL2, stopping thermald, which resets them;
 # - a Raspberry Pi 5 (litshe, cpufreq-dt): the performance governor at a fixed maximum clock, and
 #   apt's daily timers stopped (the aarch64 workplan's D8).
 #
-# None of it survives a reboot except the snap hold, which expires, and ab.py's machine check
+# None of it survives a reboot except the snap hold, which expires, so on a machine with power limits
+# install_benchmark_setup.sh also runs it at every boot; ab.py's machine check
 # refuses a run when the policy differs from the machine's profile. It changes nothing that isn't
 # on this list (the benchmark machine workplan's D2 and D3: git show
 # 480164d:docs/benchmark-machine-workplan.md).
@@ -35,8 +36,12 @@ setup_i7_9700k() {
     local no_turbo="0"
     # PL1 (RAPL long_term), lowered from the stock 95 W: at 95 W a 10-minute all-core load reached
     # 100 C and throttled, and the cooling can't be improved (workplan stage 2). One busy core
-    # draws about 37 W, so single-threaded clocks are unaffected. PL2 (short_term) stays at 120 W.
+    # draws about 37 W, so single-threaded clocks are unaffected.
     local pl1_watts="65"
+    # PL2 (short_term), lowered from 120 W on 2026-11-05 by the owner, to see if it stops the machine's
+    # unclean resets, which come seconds into a run. PL1's window here is about 1 s, so from idle the
+    # package could draw up to PL2 for part of a second. 95 W is the next setting to try if this helps.
+    local pl2_watts="65"
 
     # the governor first: under intel_pstate, switching it to performance resets the EPP
     for policy in "$cpu_root"/cpufreq/policy*; do
@@ -46,17 +51,19 @@ setup_i7_9700k() {
     echo "$no_turbo" > "$intel_pstate/no_turbo"
 
     if [[ "$(cat "$rapl_package/name" 2>/dev/null)" != "package-0" \
-        || "$(cat "$rapl_package/constraint_0_name")" != "long_term" ]]; then
-        echo "expected RAPL's package-0 zone with long_term as constraint 0; PL1 not set" >&2
+        || "$(cat "$rapl_package/constraint_0_name")" != "long_term" \
+        || "$(cat "$rapl_package/constraint_1_name")" != "short_term" ]]; then
+        echo "expected RAPL's package-0 zone with long_term and short_term as constraints 0 and 1; limits not set" >&2
         exit 1
     fi
-    echo "$((pl1_watts * 1000000))" > "$rapl_package/constraint_0_power_limit_uw"
     # thermald (--adaptive) cools through RAPL first, and puts PL1 back to the package's 95 W
     # (RAPL's max_power_uw) within about 15-40 minutes, restarted after this script or not.
     # Stopped, PL1 held at 65 W for 109 minutes of A/As (workplan stage 4). It starts again at
     # boot. The CPU still throttles itself at 100 C, and 65 W keeps an all-core load near 78 C
-    # (stage 2). ab.py re-reads PL1 after every pass.
+    # (stage 2). ab.py re-reads PL1 and PL2 after every pass. Stopped first, so it can't undo them.
     systemctl stop thermald
+    echo "$((pl1_watts * 1000000))" > "$rapl_package/constraint_0_power_limit_uw"
+    echo "$((pl2_watts * 1000000))" > "$rapl_package/constraint_1_power_limit_uw"
 
     common_setup
     echo "governor:        $(sort -u "$cpu_root"/cpufreq/policy*/scaling_governor | paste -sd,)"

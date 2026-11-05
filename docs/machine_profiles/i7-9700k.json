@@ -59,7 +59,7 @@
       },
       "power_limits": {
         "long_term_w": 65,
-        "short_term_w": 120
+        "short_term_w": 65
       },
       "firmware_throttled": null
     },
