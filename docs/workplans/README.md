@@ -21,6 +21,6 @@ None open: steps 1-15 are done (their workplans retired, next-steps.md).
 
 | workplan | scope |
 | --- | --- |
-| [crate-performance-workplan.md](infrastructure/crate-performance-workplan.md) | the crate's speed as one plan: measurement, long-`k` products first, copies, kernels by epoch share, `CpuInfo`, then a thread pool, one thread budget a process, and threaded attention, conv and the window program |
+| [jebel-parked-workplan.md](infrastructure/jebel-parked-workplan.md) | **parked, 2026-11-05:** what's left of the crate performance plan, waiting for a healthy claim machine: the threshold re-sweep, the column split, new threaded sites and the closing baseline |
 
 Retired plans are listed in [next-steps.md](../next-steps.md).

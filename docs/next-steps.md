@@ -88,6 +88,7 @@ docs cite them by section:
 | The crate's module structure (D1-D6) | #1238 | crate #97, #98, #1240 | `git show d79074a:docs/workplans/infrastructure/crate-structure-workplan.md` |
 | Cross-attention: the encoder-decoder on Greek-English translation (roadmap step 15, D1-D18; its study decided from the literature) | #646 | #1219-#1236, crate #95, #96, this PR | `git show 2a512fb:docs/workplans/library/cross-attention-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
+| The crate's speed: kernels and threads as one plan (its jebel-dependent work parked) | #1243 | crate #100-#116, #1244-#1273 | `git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -103,6 +104,32 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From the crate performance workplan (retired 2026-11-05)
+
+Retired with its jebel-dependent work **[parked](workplans/infrastructure/jebel-parked-workplan.md)**, the owner's call, as `jebel` resets itself. The plan, with every stage's findings: `git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md`.
+
+**Done, kernels (stages 0-7):** a shape census, `CpuInfo`, slabs and packing for long `k`, `matmul_nt` past the L2, accumulate without its transpose, the attend's buffers, the window's kernels, `codes_forward` in lanes, `exp`'s table loads. The plan's readings give each. Closed under the 5% bar: K9, K10, K11, K13, K24, K29.
+
+**Done, threads (stages 8-10's first step):** `thread_cost_probe.py`; one budget a process (crate #113), defaulting to physical cores; launchers at 1 thread a worker, refusing past the host's CPUs (#1266, indrajala-studies #16); the pool (crate #114) with every threaded site on it (crate #115), bits unchanged. The crate's README, Threads, says how it behaves.
+
+**Stage 12's readings (2026-11-05, A/As; tables in indrajala-benchmarks' `readings/2026-11-05-crate-threads/`):**
+
+- **numpy beside the crate: leave OpenBLAS alone.** `OPENBLAS_NUM_THREADS` 1 against its default moved no Rust epoch or window row beyond noise on klip or stone, so it needn't follow the crate's budget. Studies keep 1, as they do. `jebel` wasn't read.
+- **`litshe`'s temperature with its active cooler** (the owner's O2): fan pinned at full, a 10-minute mean and peak of 52 C, 57.85 C at 1 core, 64 C, 67.75 C at 2, 64.5 C, 66.65 C at 4, no throttling; one-second readings jump 5-8 C, so 2 cores against 4 is noise. On the stock curve 4 cores pass 70 C in 141 s. So the setup pins the fan, and its profile has `max_c` 69, `abort_c` 70.
+- **`litshe`'s bits:** no Rust network differs from the current golden file; 44 numpy ones do, whose BLAS results are machine-specific (the script's docstring). The golden file isn't in git: copy the current one to a machine before checking, as its old one reads "NOT bit-identical" for no reason.
+- **`litshe`'s scaling: its memory bus is the limit, by the shape of these numbers.** `d` 512 epoch 70.0, 47.2, 50.0 s at 1, 2, 4 threads. The fixed-work call scales 3.9x at 4, warm or cold, as it touches no memory, and its clocks are fixed. 2048 x 2048 x 512 at 1, 2, 4 threads: 355, 224, 345 ms. But 32 x 30 x 784 gains 3x and dense forward at b512 2.5x. Epochs at the best count: conv B=512 -9.5% (4 threads), dense B=512 -8.4% (2).
+
+| one machine | `d` 512 epoch, 1 thread | best `d` 512 epochs a second (N x T) | window learn, 1 process, steps a second | window learn, 4 processes | window forward, 4 processes, runs a second |
+|---|---|---|---|---|---|
+| `jebel` | 18.2 s | 0.642 (2 x 4) | not read | not read | not read |
+| stone | 17.8 s | 0.56 (4 x 8) | 55.6 | 134 (at 8: 139) | 1.29 (at 8: 1.56) |
+| klip | 52.4 s | 0.21 (2 x 2) | 19.5 | 67.8 | 0.53 |
+| `litshe` | 70.0 s | 0.088 (1 x 2) | 19.9 | 26.6 | 0.45 |
+
+(Window: `learn-family-p7-f32-B64-W16` and `forward-family-p7-f32-n1024`, one thread a process, run on the three machines at once.)
+
+**Leftovers:** the parked plan. Not in it, as before: K17 (SVE or AVX-512, until a machine has them), K18 (a bits-changing kernel, the owner's approval and a golden re-record), K19 (musl's golden run), K20 (numpy's expressions), K21 (the forward context's 1.1%, accepted), K22 (checkpointing the window's forward), K13 (a batched decode step: no epoch reaches it, Rust flat at about 20,000 characters a second from batch 8). The next crates.io release is 0.2.0, with all of this in it.
 
 ## From the crate structure (retired 2026-11-04)
 
@@ -1165,8 +1192,8 @@ Not planned yet:
 
 - **Crate tuning for the gaps it found.** Where Rust lags numpy on the i7, or lost ground from
   the laptop, and what to investigate for each, ordered by payoff:
-  [the crate performance workplan](workplans/infrastructure/crate-performance-workplan.md), one plan
-  (D7), a speedup claimed on `jebel` with the laptops as guards (D12).
+  the crate performance workplan, retired below, one plan (D7), a speedup claimed on `jebel` with the laptops as guards
+  (D12); what's left is [parked](workplans/infrastructure/jebel-parked-workplan.md).
 - **Code placement on the i7** (multi-head attention, stage 5, #609). The multi-head crate's
   attention ops ran up to 14% slower per call on `jebel` with the same instructions per call
   (within 0.3%): in the new build, forward's µops from the legacy decoder (`idq.mite_uops`) tripled
@@ -1198,7 +1225,7 @@ Not planned yet:
   allows it; reviewing untrusted submissions needs its own plan.
 - **A run queue on `jebel`** (several A/Bs queued from `pyramidon`, run back to back), if one run
   at a time under the run lock turns out to be the bottleneck.
-- **Crate tuning on CPU attributes** ([the crate performance workplan](workplans/infrastructure/crate-performance-workplan.md),
+- **Crate tuning on CPU attributes** (the crate performance workplan, retired below,
   D5, D11) uses the archive's profiles and runs from each machine.
 
 Not planned yet:
