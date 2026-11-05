@@ -85,7 +85,9 @@
         }
       },
       "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
-      "crate_release_profile": "default",
+      "crate_release_profile": {
+        "codegen-units": 1
+      },
       "thread_env": {
         "OPENBLAS_NUM_THREADS": null,
         "OMP_NUM_THREADS": null,
@@ -95,14 +97,14 @@
     }
   },
   "state": {
-    "captured_at": "2026-10-18T13:35:56Z",
+    "captured_at": "2026-11-05T04:13:41Z",
     "hostname": "litshe",
     "load_average": [
-      0.16,
-      0.27,
-      0.15
+      1.48,
+      3.05,
+      2.62
     ],
-    "memory_available_mib": 7510,
+    "memory_available_mib": 7444,
     "cpu_mhz_now": {
       "min": 2400,
       "max": 2400
@@ -112,21 +114,21 @@
       "battery_percent": null
     },
     "commits": {
-      "repo": "8408acf639134ffb2588b44060bca468f15f5859",
+      "repo": "87b103ca01b2ed0f014ad636243e61d299077db4",
       "repo_dirty": false,
-      "rust": "40a2761cdc907efa28f8707510b3b4969ac1247f"
+      "rust": "d6ff3e412f2c63a9fe716a7b98f2925bdd6bff18"
     }
-  },
-  "thermal": {
-    "max_c": 69,
-    "abort_c": 70,
-    "start_below_c": 50,
-    "set_by": "from the measured response with the active cooler (the owner's O2, the crate performance workplan's stage 12, 2026-11-05): fan pinned at full, 10-minute means and peaks at 1 core 52 C, 57.85 C; 2 cores 64 C, 67.75 C; 4 cores 64.5 C, 66.65 C; no throttle flags; on the stock fan curve 4 cores pass 70 C in 141 s. The owner's 70 C hard limit stands as abort_c; their ideal of 65 C holds on average, and one-second readings jump 5-8 C, so max_c sits between the peaks and the hard limit."
   },
   "noise_rules": {
     "shifted_pass": 0.02,
     "high_load": 1.5,
     "small_consistent": 0.01,
     "measured_by": "the aarch64 workplan, stage 5 (2026-10-18): one A/A of focused_benchmark at e9ab957, ONNONO, each pass from below 50 C; pass shifts 0.0-0.1%, 2 of 270 rows consistent by chance (0.2% each); the per-pass spread median 2.5%, 90th percentile 27.4%, max 598%, noisier than jebel's rows (memory-bound rows, numpy's most)"
+  },
+  "thermal": {
+    "max_c": 69,
+    "abort_c": 70,
+    "start_below_c": 50,
+    "set_by": "from the measured response with the active cooler (the owner's O2, the crate performance workplan's stage 12, 2026-11-05): fan pinned at full, 10-minute means and peaks at 1 core 52 C, 57.85 C; 2 cores 64 C, 67.75 C; 4 cores 64.5 C, 66.65 C; no throttle flags; on the stock fan curve 4 cores pass 70 C in 141 s. The owner's 70 C hard limit stands as abort_c; their ideal of 65 C holds on average, and one-second readings jump 5-8 C, so max_c sits between the peaks and the hard limit."
   }
 }
