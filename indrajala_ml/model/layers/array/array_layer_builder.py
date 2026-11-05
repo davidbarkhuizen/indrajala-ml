@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from indrajala_ml.model.layers.array.branch_layers import BranchArrayLayer, MergeArrayLayer, SplitArrayLayer
+from indrajala_ml.model.layers.numpy.affine_output_array_layer import AffineOutputArrayLayer
 from indrajala_ml.model.layers.numpy.array_layer import ArrayLayer
 from indrajala_ml.model.layers.numpy.attention_array_layer import AttentionArrayLayer
 from indrajala_ml.model.layers.numpy.batch_norm_array_layer import BatchNormArrayLayer
@@ -40,6 +41,7 @@ from indrajala_ml.model.layers.python.activations import GELUS
 from indrajala_ml.model.layers.python.conv_front_end import ArrayFrontEndLayer
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
+from indrajala_ml.model.layers.rust.affine_output_rust_array_layer import AffineOutputRustArrayLayer
 from indrajala_ml.model.layers.rust.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
 from indrajala_ml.model.layers.rust.batch_norm_rust_array_layer import BatchNormRustArrayLayer
@@ -131,6 +133,8 @@ class ArrayLayerClasses:
     affine: LayerClass
     fork: LayerClass
     add: LayerClass
+    # the linear output layer with a given loss: W x + b, its delta the caller's gradient
+    affine_output: LayerClass
     # a window's branches (the window branches workplan): the split (size), a branch's end (its split)
     # and a merged split's merge (its split; the post-paper workplan, D7)
     split: LayerClass = SplitArrayLayer
@@ -154,6 +158,7 @@ LAYER_CLASSES = {
         affine=AffineArrayLayer,
         fork=ForkArrayLayer,
         add=AddArrayLayer,
+        affine_output=AffineOutputArrayLayer,
     ),
     "rust": ArrayLayerClasses(
         sigmoid=RustArrayLayer,
@@ -170,6 +175,7 @@ LAYER_CLASSES = {
         affine=AffineRustArrayLayer,
         fork=ForkRustArrayLayer,
         add=AddRustArrayLayer,
+        affine_output=AffineOutputRustArrayLayer,
     ),
 }
 
@@ -309,6 +315,8 @@ def _cross_attention_layer(
 def _dense_layer(classes: ArrayLayerClasses, spec: Dense, input_size: int) -> ArrayNetworkLayer[Any]:
     if spec.bias:
         return classes.affine(spec.size, input_size)
+    if spec.output and spec.loss == "given":
+        return classes.affine_output(spec.size, input_size)
     if spec.activation == "linear":
         return classes.linear(spec.size, input_size)
     if spec.dropout is not None:

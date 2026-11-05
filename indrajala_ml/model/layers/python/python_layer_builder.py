@@ -74,6 +74,11 @@ from indrajala_ml.model.specs.spec_validation import (
 
 
 def _dense_layer(spec: Dense, input_layer: InputLayer) -> TrainableLayer:
+    assert spec.loss != "given", (
+        "a given loss (a linear output layer learning from the caller's gradient) is the array networks' only: "
+        "learn_batch_output_gradient is a training entry for them, not a layer pure Python has (the NES plan's "
+        f"stage 1, in indrajala-research); got {spec!r}"
+    )
     if spec.bias:
         return AffineLayer(size=spec.size, input_layer=input_layer)
     if spec.activation == "linear":

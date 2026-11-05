@@ -539,6 +539,35 @@ bits. There's no `pow`, since `(var + eps)^(-3/2)` through a library `pow` could
 Python, numpy and Rust. `tests/gradient_check.py` checks each implementation's backward pass against
 finite differences of the whole batch's loss.
 
+## Learning from a given gradient
+
+For a loss the library doesn't hold, such as reinforcement learning's (the NES plan in
+indrajala-research, stage 1), an array network ends in a linear output layer with a given loss,
+and its caller supplies the loss's gradient at the output:
+
+```python
+from indrajala_ml.model.layers.array.array_backend import RUST
+from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
+from indrajala_ml.model.specs.layer_specs import Conv, Dense, Pool
+from indrajala_ml.model.specs.update_rules import Adam
+
+network = SequentialArrayNetwork(
+    (13, 16, 32),
+    [Conv(3, 16), Pool(2), Conv(3, 32), Dense(256, "relu"), Dense(8, "linear", output=True, loss="given")],
+    Adam(),
+    backend=RUST,
+)
+Y = network.forward_batch(X)  # X: (batch, inputs) in the backend's array; no conversion
+network.learn_batch_output_gradient(learning_rate, X, gradient)  # gradient(Y) -> d loss_i / d Y_i, row by row
+```
+
+The output layer is `W x + b`, and its delta is the given gradient, so the backward pass and the
+update are `learn_batch`'s and the step follows the mean loss over the batch. `gradient` receives
+the step's own forward outputs, so one forward pass serves the loss and the step. With the gradient
+set to softmax cross-entropy's, the steps are `learn_batch`'s on a softmax network, bit for bit, on
+both backends (`tests/test_output_gradient_learning.py`). A given-loss network refuses `learn` and
+`learn_batch`, and pure Python has no such layer: it's a training entry for the array networks.
+
 ## Residual connections
 
 A residual block adds its input to its body's output, `out = x + F(x)`, the pre-activation form of

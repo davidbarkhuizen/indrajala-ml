@@ -355,12 +355,18 @@ def _check_output(output: LayerSpec, token_wise: bool = False) -> None:
         f"got {output!r}"
     )
     assert output.loss is not None, (
-        f'the output layer names its loss, loss="squared" or loss="cross_entropy" (the audit-remedies workplan, '
-        f"D2); got {output!r}"
+        f'the output layer names its loss, loss="squared", "cross_entropy" or "given" (the audit-remedies '
+        f"workplan, D2); got {output!r}"
     )
     assert output.size >= 1, f"the output layer needs at least one node; got {output!r}"
     assert output.dropout is None, f"the output layer doesn't drop out; got {output!r}"
-    assert output.activation in ("sigmoid", "softmax"), f"the output layer is sigmoid or softmax; got {output!r}"
+    assert output.activation in ("sigmoid", "softmax", "linear"), (
+        f"the output layer is sigmoid, softmax or linear; got {output!r}"
+    )
+    assert (output.activation == "linear") == (output.loss == "given"), (
+        f'a linear output layer, and only one, has a given loss (loss="given"): its gradient comes from the '
+        f"caller, learn_batch_output_gradient; got {output!r}"
+    )
     assert output.activation != "softmax" or output.loss == "cross_entropy", (
         f"a softmax output layer's delta is the cross-entropy loss's; got {output!r}"
     )
