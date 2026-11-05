@@ -58,7 +58,10 @@ Pool = PoolSpec
 
 Activation = Literal["sigmoid", "relu", "gelu", "gelu_tanh", "softmax", "linear"]
 
-Loss = Literal["squared", "cross_entropy"]
+# "given": the caller supplies the loss's gradient at the output (ArrayNetworkBase.
+# learn_batch_output_gradient), for a loss the library doesn't hold, such as PPO's (the NES plan's
+# stage 1, in indrajala-research); only on a linear output layer
+Loss = Literal["squared", "cross_entropy", "given"]
 
 
 @dataclass(frozen=True)
@@ -68,8 +71,9 @@ class Dense:
     exact form through erf, or "gelu_tanh", GPT-2's; README, Activations), and a sigmoid one
     may drop out (dropout: the drop probability, during training only). A linear hidden layer
     has no bias and no activation, and a BatchNorm follows it. The output layer
-    (output=True, the last layer) is sigmoid, with the squared or the cross-entropy loss, or
-    softmax, with the cross-entropy loss.
+    (output=True, the last layer) is sigmoid, with the squared or the cross-entropy loss,
+    softmax, with the cross-entropy loss, or linear, W x + b, with a given loss: its gradient at the
+    output comes from the caller (learn_batch_output_gradient), on the array networks only.
 
     The output layer names its loss, and a hidden layer has none (the audit-remedies workplan, D2):
     no network gets the squared error by omission (Glorot & Bengio 2010 find it trains a sigmoid

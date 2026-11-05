@@ -11,6 +11,7 @@ import indrajala_math_rust as pa
 import numpy as np
 import pytest
 
+from indrajala_ml.model.layers.rust.affine_output_rust_array_layer import AffineOutputRustArrayLayer
 from indrajala_ml.model.layers.rust.affine_rust_array_layer import AffineRustArrayLayer
 from indrajala_ml.model.layers.rust.cross_entropy_rust_array_layer import CrossEntropyRustArrayLayer
 from indrajala_ml.model.layers.rust.dropout_rust_array_layer import DropoutRustArrayLayer
@@ -29,6 +30,7 @@ LAYER_CLASSES: dict[str, Callable[[int, int], RustArrayLayer]] = {
     "cross-entropy": lambda size, input_size: CrossEntropyRustArrayLayer(size, input_size),
     "dropout": lambda size, input_size: DropoutRustArrayLayer(size, input_size, 0.5),
     "affine": lambda size, input_size: AffineRustArrayLayer(size, input_size),
+    "affine-output": lambda size, input_size: AffineOutputRustArrayLayer(size, input_size),
 }
 
 # (size, input_size): a small layer, the dense production layers (784 -> 30 -> 10), and the conv

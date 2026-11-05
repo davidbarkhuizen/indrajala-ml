@@ -2,7 +2,7 @@
 # (matrices are named as in the literature, W, X, A, which strict mode takes for constants)
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any, ClassVar, NoReturn, Self, cast
 
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
@@ -25,7 +25,7 @@ from indrajala_ml.model.protocols.array_protocols import (
 )
 from indrajala_ml.model.protocols.layer_protocols import GeneratorLayer
 from indrajala_ml.model.specs.bounds import validate_batch
-from indrajala_ml.model.specs.layer_specs import Embedding, LayerSpec, expand_specs
+from indrajala_ml.model.specs.layer_specs import Dense, Embedding, LayerSpec, expand_specs
 from indrajala_ml.model.specs.single_example import (
     batch_norm_index,
     refuse_single_example_groups,
@@ -76,6 +76,10 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         self._segments = first if isinstance(first, Embedding) and first.segments else None
         self.layers = self._build_layers(specs, input_shape)
         self.output_layer = cast("WeightedArrayLayer[A]", self.layers[-1])
+        # a linear output layer with a given loss learns from the caller's gradient alone
+        # (learn_batch_output_gradient), never from targets
+        last = self.layer_specs[-1] if self.layer_specs else None
+        self.given_loss = isinstance(last, Dense) and last.output and last.loss == "given"
         # the dropout and batch-norm layers, which _set_training_mode switches
         self._training_mode_layers = [layer for layer in self.layers if isinstance(layer, TrainingModeLayer)]
         # the dropout layers, which draw their masks from the network's generator
@@ -160,6 +164,17 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
                 X = layer.forward_batch(X, context=context)
             yield X
 
+    def forward_batch(self, X: A) -> A:
+        """
+        The inference forward pass over a batch already in the backend's array, (batch, inputs)
+        rows: its (batch, outputs) rows, with no conversion either way. A batch built at memory speed
+        (numpy's own array, or the crate's Array.from_buffer and one_hot_planes) goes straight in.
+        """
+        context = self._forward_context(X)
+        for layer in self.layers:
+            X = layer.forward_batch(X, context=context)
+        return X
+
     def prepare_dataset(self, rows: Sequence[tuple[tuple[float, ...], object]]) -> PreparedDataset:
         return PreparedDataset.from_rows(rows, self.backend.name)
 
@@ -204,7 +219,15 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
     def _refuse_single_example(self, batch_norm_index: int) -> NoReturn:
         refuse_single_example_network(self.layer_specs, batch_norm_index)
 
+    def _refuse_given_loss(self) -> None:
+        if self.given_loss:
+            raise ValueError(
+                "this network's output layer has a given loss: it learns from the caller's gradient at the output, "
+                "learn_batch_output_gradient, not from targets"
+            )
+
     def _learn_input(self, learning_rate: float, x: A, category: Any) -> None:
+        self._refuse_given_loss()
         if self.batch_norm_index is not None:
             self._refuse_single_example(self.batch_norm_index)
         context = self._forward_context(x)
@@ -247,7 +270,49 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
     def _learn_batch_input(
         self, learning_rate: float, X: A, categories: Sequence[Any], clip_norm: float | None = None
     ) -> None:
-        batch_size = len(categories)
+        self._refuse_given_loss()
+        self._learn_batch_step(
+            learning_rate, X, len(categories), lambda _output: self._target_batch_array(categories), clip_norm
+        )
+
+    def learn_batch_output_gradient(
+        self, learning_rate: float, X: A, gradient: Callable[[A], A], clip_norm: float | None = None
+    ) -> A:
+        """
+        One training step on the batch X, (batch, inputs) in the backend's array, for a loss the
+        caller holds (a network whose output layer is Dense(n, "linear", output=True,
+        loss="given")): gradient(Y) maps this step's own forward outputs Y, (batch, outputs), to the
+        loss's gradient at them, row i being d loss_i / d Y_i. The backward pass and the update are
+        learn_batch's, so the step follows the mean loss over the batch, as learn_batch's does.
+        Returns Y. Taking a function rather than a gradient lets one forward pass serve both: a
+        loss such as PPO's depends on the outputs of the very pass it trains.
+        """
+        if not self.given_loss:
+            raise ValueError(
+                'learn_batch_output_gradient needs an output layer with a given loss, Dense(n, "linear", '
+                'output=True, loss="given")'
+            )
+        assert len(X.shape) == 2, f"X is a batch, (batch, inputs) rows; got shape {X.shape}"
+        batch_size = X.shape[0]
+        validate_batch(range(batch_size))
+        outputs: list[A] = []
+
+        def given(output: A) -> A:
+            outputs.append(output)
+            output_gradient = gradient(output)
+            assert output_gradient.shape == output.shape, (
+                f"the gradient is the output's shape, {output.shape}; got {output_gradient.shape}"
+            )
+            return output_gradient
+
+        self._learn_batch_step(learning_rate, X, batch_size, given, clip_norm)
+        return outputs[0]
+
+    def _learn_batch_step(
+        self, learning_rate: float, X: A, batch_size: int, delta_reference: Callable[[A], A], clip_norm: float | None
+    ) -> None:
+        # learn_batch's step: forward, the output layer's delta from delta_reference(its output) (a
+        # target batch, or a given loss's gradient), the hidden deltas, then the update
         if self.batch_norm_index is not None:
             if batch_size == 1:
                 self._refuse_single_example(self.batch_norm_index)
@@ -263,8 +328,8 @@ class ArrayNetworkBase[A: BackendArray](SpecHooks, Format2Persistence[list[tuple
         finally:
             self._set_training_mode(False)
 
-        target_batch = self._target_batch_array(categories)
-        self.output_layer.compute_output_delta_batch(target_batch, context=context)
+        reference_batch = delta_reference(X)
+        self.output_layer.compute_output_delta_batch(reference_batch, context=context)
 
         for i in reversed(range(len(self.layers) - 1)):
             self.layers[i].compute_hidden_delta_batch(self.layers[i + 1], context=context)
