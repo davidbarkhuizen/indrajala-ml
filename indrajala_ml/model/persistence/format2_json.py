@@ -321,7 +321,8 @@ def _parameter_names(spec: ExpandedSpec) -> tuple[str, ...]:
             return ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
         case Fork() | Add() | Split() | Branch() | Merge() | PoolSpec() | Patches() | Dropout() | TokenMean():
             return ()
-        case Dense() if spec.bias:
+        case Dense() if spec.bias or (spec.output and spec.loss == "given"):
+            # the given-loss output layer is W x + b whatever its bias flag (array_layer_builder)
             return ("W", "b")
         case Dense() | ConvSpec() if spec.activation == "linear":
             return ("W",)
