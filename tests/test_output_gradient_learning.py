@@ -7,6 +7,7 @@ linear output layer with loss="given", trained by learn_batch_output_gradient, a
 - Its gradients are the mean loss's, by finite differences.
 - numpy and Rust agree within rtol over several Adam steps.
 - It refuses target-based learning, and target-based networks refuse it.
+- Training on from a saved file equals training on: the optimizer's state survives format 2.
 """
 
 from collections.abc import Callable
@@ -22,6 +23,7 @@ from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.networks.python.sequential_backprop_network import SequentialMultiClassBackpropClassifierNetwork
 from indrajala_ml.model.networks.sequential_array_network import SequentialArrayNetwork
 from indrajala_ml.model.persistence.format2_json import layer_from_json, layer_to_json
+from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import Conv, Dense, LayerSpec, Pool
 from indrajala_ml.model.specs.spec_validation import validate_layer_specs
 from indrajala_ml.model.specs.update_rules import SGD, Adam
@@ -220,3 +222,22 @@ def test_pure_python_refuses_a_given_loss() -> None:
 
 def test_a_given_loss_survives_the_format2_spec_round_trip() -> None:
     assert layer_from_json(layer_to_json(GIVEN)) == GIVEN
+
+
+@pytest.mark.parametrize("backend", [NUMPY, RUST], ids=["numpy", "rust"])
+def test_training_on_from_a_saved_file_equals_training_on(backend: Any, tmp_path: Any) -> None:
+    """The given-loss layer's W and b both keep their optimizer state through format 2 (found 2026-11-06: b's was lost)."""
+    batches = _batches(4, 6)
+    on, saved = _seeded(GIVEN, backend), _seeded(GIVEN, backend)
+    gradient = _numpy_cross_entropy_gradient if backend is NUMPY else _rust_cross_entropy_gradient
+    for network in (on, saved):
+        for states, batch_labels in batches[:2]:
+            network.learn_batch_output_gradient(1e-2, backend.matrix(states.tolist()), gradient(batch_labels))
+    path = str(tmp_path / "given.json")
+    saved.save(path)
+    loaded = load_network(path)
+    assert loaded.optimizer.state().layers.keys() == on.optimizer.state().layers.keys()
+    for network in (on, loaded):
+        for states, batch_labels in batches[2:]:
+            network.learn_batch_output_gradient(1e-2, backend.matrix(states.tolist()), gradient(batch_labels))
+    assert _weights(loaded) == _weights(on)
