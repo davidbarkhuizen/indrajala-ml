@@ -231,6 +231,25 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   `git -c url."https://github.com/".insteadOf=git@github.com: submodule update --init --recursive`,
   and the same `-c` on a `fetch` inside the submodule (2026-11-05). A private repository
   (indrajala-rl) can't be fetched by `klip` or `stone` at all: send it as a bundle.
+- **The bundle recipe** (2026-11-06): `git bundle create F ^<a commit the runner has> <branch>`, then
+  on the runner `git fetch --no-recurse-submodules F <branch>:<branch>` (a squash merge's commit isn't
+  on the runner: bundle `main` whole, or check the tree is the branch's, `git rev-parse X^{tree}`).
+  Submodules (`ml`, `ml/rust`) go as their own bundles, fetched inside each. Run from a detached
+  worktree (`git worktree add --detach /tmp/rl-wt FETCH_HEAD`, `PYTHONPATH` at it) so a job running
+  from the main checkout isn't disturbed.
+- **`stone` keeps its ROMs under `~/labour/roms`:** run with `HOME=/home/david/labour`. After that `~`
+  is `~/labour`, so write every path in the job absolutely (2026-11-06: `~/code/.../python` then
+  pointed at nothing).
+- **Send a job's script as a file** (write it on `pyramidon`, `scp` it, `bash -n` it on the runner),
+  never as a here-document inside a single-quoted `ssh` command: a quoted delimiter there can end the
+  here-document early and run the script's lines on the runner, one by one (2026-11-06, harmless that
+  time only because the first `cd` failed).
+- **A program that starts workers by `spawn`** (indrajala-rl's vector runner) needs its main module
+  importable again: a script file, not code piped to `python -` (each worker dies at start-up).
+- **`klip` had no `curl`** until 2026-11-06 (the owner installed it); `python3 -c "import
+  urllib.request; ..."` fetches a file on any runner.
+- **indrajala-rl's `ml/rust` can lag its pin** after a bump: `git -C ml submodule update rust` before
+  `./cli build-rust`, or the crate built is the old one.
 - **The crate's stubtest is pinned to mypy 2.3.1 in CI:** a newer mypy (2.4.1) reports `__radd__`,
   `__rmatmul__` and `__rtruediv__` missing from the stub, which isn't this change's. Run stubtest
   at the pin.
