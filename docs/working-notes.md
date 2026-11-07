@@ -246,6 +246,11 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   time only because the first `cd` failed).
 - **A program that starts workers by `spawn`** (indrajala-rl's vector runner) needs its main module
   importable again: a script file, not code piped to `python -` (each worker dies at start-up).
+- **A large Rust dependency tree runs `pyramidon` out of memory** (5 GB, no swap): indrajala-nes's
+  `nes-view` (eframe) built with 8 jobs at `codegen-units = 1` had the kernel OOM-kill `rustc` and the
+  machine reset (2026-11-06). Build such trees with `-j 2` in a capped scope, so only cargo dies:
+  `systemd-run --user --scope -q -p MemoryMax=3G -p MemorySwapMax=0 cargo build --release -j 2 ...`
+  (the same for `clippy` and `test`).
 - **`klip` had no `curl`** until 2026-11-06 (the owner installed it); `python3 -c "import
   urllib.request; ..."` fetches a file on any runner.
 - **indrajala-rl's `ml/rust` can lag its pin** after a bump: `git -C ml submodule update rust` before
