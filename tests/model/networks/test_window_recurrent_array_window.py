@@ -30,6 +30,7 @@ from indrajala_ml.model.networks.python.window_recurrent_backprop_network import
 from indrajala_ml.model.networks.window_recurrent_array_network import (
     WindowRecurrentArrayNetwork,
     WindowRecurrentRustArrayNetwork,
+    per_layer_path,
 )
 from indrajala_ml.model.persistence.load_network import load_network
 from indrajala_ml.model.specs.layer_specs import (
@@ -606,3 +607,69 @@ def test_rusts_select_rows_is_numpys_by_bits():
     expected = NUMPY.select_rows(mask, A, B)
     assert np.array_equal(to_numpy(RUST.select_rows(mask, RUST.matrix(A.tolist()), RUST.matrix(B.tolist()))), expected)
     assert np.array_equal(expected, np.where(np.array(mask)[:, np.newaxis], A, B))
+
+
+# the window program (S4): a Rust array window's every pass in one crate call, by bits the per-layer
+# path's (per_layer_path), through resets, a stored state and the training reading
+
+
+def _program_pair(recurrence: WindowRecurrence, seed: int = 7) -> tuple[Any, Any]:
+    # two Rust networks from one seed: the program's, and the per-layer path's reference
+    return _network(recurrence, rule=Adam(), seed=seed, backend="rust"), _network(
+        recurrence, rule=Adam(), seed=seed, backend="rust"
+    )
+
+
+def _reading(network: Any, recurrence: str) -> None:
+    if recurrence != "one factor":
+        network.set_temperatures([0.6, None])
+        network.set_couplings([0.5, 1.0])
+
+
+PROGRAM_RECURRENCES = {"one factor": RECURRENCE, "two factors, soft": FACTORED, "continuous, crossed": CONTINUOUS}
+
+
+@pytest.mark.parametrize("recurrence", PROGRAM_RECURRENCES)
+def test_a_rust_array_window_runs_as_a_program_by_the_per_layer_paths_bits(recurrence: str):
+    program, reference = _program_pair(PROGRAM_RECURRENCES[recurrence])
+    assert program._program is not None
+    X = _in(program, _steps(3, rows=4))
+    starts = [[False, True, False], [False, False, True], [True, False, True], [False, False, False]]
+    G = np.random.default_rng(5).normal(size=(4, 3 * OUTPUTS))
+    for network in (program, reference):
+        _reading(network, recurrence)
+    state: Any = None
+    with per_layer_path(reference):
+        for step in range(3):
+            pair = [network.run_steps(_in(network, _steps(1, rows=4, seed=step))) for network in (program, reference)]
+            state = pair[0].states[-1]
+            assert _equal(state, pair[1].states[-1])
+            seen = [
+                network.learn_batch_output_gradient(
+                    0.01, X, _backend_given(network, G * (step + 1)), state=state, starts=starts
+                )
+                for network in (program, reference)
+            ]
+            assert _equal(seen[0], seen[1])
+            for a, b in zip(program.snapshot(), reference.snapshot(), strict=True):
+                assert all(_equal(x, y) for x, y in zip(a, b, strict=True))
+        assert program.rng.state == reference.rng.state
+        for machine in (False, True) if PROGRAM_RECURRENCES[recurrence].snapped else (False,):
+            expected = reference.run_steps(X, state=state, starts=starts, machine=machine)
+            actual = program.run_steps(X, state=state, starts=starts, machine=machine)
+            assert _equal(actual.outputs, expected.outputs)
+            for a, b in zip([*actual.states, *actual.cells], [*expected.states, *expected.cells], strict=True):
+                assert _equal(a, b)
+            assert actual.codes == expected.codes
+        assert _equal(program.forward_windows(X), reference.forward_windows(X))
+
+
+def test_an_array_window_with_a_layer_the_program_lacks_runs_the_per_layer_path():
+    # a sigmoid dense layer has no op: its window trains through the per-layer path
+    window: list[LayerSpec] = [Conv(1, 3), Conv(2, 3), Pool(2), StateInput(), Dense(6, "sigmoid"), GIVEN]
+    network = _network(window=window, rule=Adam(), backend="rust")
+    assert network._program is None
+    X = _in(network, _steps(2))
+    before = [entry[0].tolist() for entry in network.snapshot()[:2]]
+    network.learn_batch_output_gradient(0.01, X, _backend_given(network, np.ones((3, 2 * OUTPUTS))))
+    assert [entry[0].tolist() for entry in network.snapshot()[:2]] != before
