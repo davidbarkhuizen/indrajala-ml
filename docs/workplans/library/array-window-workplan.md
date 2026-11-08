@@ -1,6 +1,6 @@
 # Workplan: a window-recurrent network with an array window, learning from a given gradient
 
-**Status (2026-11-08): approved; S1 done (#1282), S2 done (#1283); S3 (Rust's per-layer path) in review, S4 next. Stage M1 of indrajala-research's
+**Status (2026-11-08): approved; S1 done (#1282), S2 done (#1283), S3 done (#1284); S4 (the crate's array ops, crate #119, and the bump here) in review; the plan retires after it. Stage M1 of indrajala-research's
 `smb-machine-policy-workplan.md` (the finite-state machine policy for Super Mario Bros 1-1, D24-D31
 there). The decisions below (D1-D9, this plan's own) are settled under the owner's delegation; the
 owner reviewed them and said go (2026-11-08), and chose D7 (the Rust path): the crate stage lands
@@ -315,6 +315,21 @@ policy = WindowRecurrentRustArrayNetwork((13, 16, C), window, recurrence, Adam()
   state, soft, coupled and continuous, so numpy's central differences cover Rust. The identity-codes
   patch reaches numpy only: Rust's recurrence calls the crate's snap directly, so the Rust tests
   check a stored state's (lack of) gradient against the initial snap's own codes' losses instead.
+
+- **S3's guards and golden run (klip, 2026-11-08):** `prepared_dataset_timing` (conv and dense
+  B=32) within noise; `window_recurrent_timing` had two consistent slower rows (+1.4%, +0.8%) under
+  a high load, gone when extended to ONNONO (every row within noise); golden bit-identical (164).
+- **S4 (2026-11-08).** The crate's program takes the given gradient as a function, called once
+  between its forward and backward passes (`Deltas::Given`; from Python, a callable whose exception
+  is the call's), not by a second forward pass as D7 planned: one forward pass, and `gradient(Y)`
+  sees the training forward's outputs exactly, dropout included. `window_program_learn` returns
+  `(dc, reset)`, the restarts' state gradient apart, so the network composes the initial state's
+  as the per-layer path does. The program takes the poolings' token count (`tokens`) apart from the
+  window's width. A flat ReLU dense layer is `TokenDense { tokens: 1 }` by bits (its fused hidden
+  delta is the same downstream and mask), so no `Dense` op was needed. The program covers the ops
+  the crate's tests check by bits (conv, max pool, a StateInput, a flat ReLU dense layer, the given
+  output); an array window holding another layer (a residual block, a LayerNorm, a sigmoid dense
+  layer, a FiLM StateInput) runs the per-layer path, which stays the reference.
 
 ## Risks
 

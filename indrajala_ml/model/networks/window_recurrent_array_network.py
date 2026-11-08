@@ -65,8 +65,12 @@ from indrajala_ml.model.layers.numpy.array_layer import FloatArray
 from indrajala_ml.model.layers.rust import recurrent_rust_array_layer as rust_parts
 from indrajala_ml.model.layers.rust import residual_rust_array_layer as residual_layers
 from indrajala_ml.model.layers.rust import token_rust_array_layer as token_layers
+from indrajala_ml.model.layers.rust.affine_output_rust_array_layer import AffineOutputRustArrayLayer
 from indrajala_ml.model.layers.rust.attention_rust_array_layer import AttentionRustArrayLayer
+from indrajala_ml.model.layers.rust.conv_rust_array_layer import ConvRustArrayLayer
 from indrajala_ml.model.layers.rust.layer_norm_rust_array_layer import LayerNormRustArrayLayer
+from indrajala_ml.model.layers.rust.max_pool_rust_array_layer import MaxPoolRustArrayLayer
+from indrajala_ml.model.layers.rust.relu_rust_array_layer import ActivationRustArrayLayer
 from indrajala_ml.model.networks.numpy.numpy_array_network_base import NumpyArrayNetworkBase
 from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNetworkBase
 from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
@@ -107,6 +111,7 @@ class _Starts:
 
     def __init__(self, mask: npt.NDArray[np.bool_]) -> None:
         self._columns: list[list[bool]] = [[bool(flag) for flag in mask[:, w]] for w in range(mask.shape[1])]
+        self.rows: list[list[bool]] = [[bool(flag) for flag in row] for row in mask]
 
     def any(self, step: int) -> bool:
         return any(self._columns[step])
@@ -228,6 +233,7 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         # those tokens' count and width from the shape walk: a token window's k, an array window's
         # one token of its shape there (token_shape; the array window workplan, D2)
         tokens, features = token_shape(spec_shapes(layers, input_shape)[self._pooling_reads[0]].input_shape)
+        self._pooled_tokens = tokens
         sizes = [
             (f.state_size, None, 0.0) if f.codes is None else (f.state_size, f.codes.count, f.codes.commitment)
             for f in recurrence.factors
@@ -602,7 +608,14 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
     def _accumulate_given_gradients(
         self, X: Any, gradient: Callable[[Any], Any], state: Any, starts: _Starts | None
     ) -> None:
-        # every layer's and part's gradient of a given loss: the per-layer path
+        # every layer's and part's gradient of a given loss: the per-layer path here, the window
+        # program on Rust
+        self.per_layer_given_gradients(X, gradient, state, starts)
+
+    def per_layer_given_gradients(
+        self, X: Any, gradient: Callable[[Any], Any], state: Any, starts: _Starts | None
+    ) -> None:
+        """A given loss's gradients through the per-layer path (per_layer_gradients)."""
         self.per_layer_gradients(X, gradient=gradient, state=state, starts=starts)
 
     def _resumed(self, X: Any, state: Any, starts: Sequence[Sequence[bool]] | None) -> _Starts | None:
@@ -641,15 +654,26 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         """
         resumed = self._resumed(X, state, starts)
         first = self._first_state(X.shape[0])
+        outputs, states, cells, indices = self._run_steps(X, first if state is None else state, machine, resumed, first)
+        return Steps(outputs, states, [self._machine_states(i) for i in indices], cells)
+
+    def _run_steps(
+        self, X: Any, C: Any, machine: bool, starts: _Starts | None, first: Any
+    ) -> tuple[Any, list[Any], list[Any], list[Any]]:
+        # run_steps' windows, the training reading's or the machine's: the per-layer path here, the
+        # window program on Rust
+        return self.per_layer_steps(X, C, machine, starts, first)
+
+    def per_layer_steps(
+        self, X: Any, C: Any, machine: bool, starts: _Starts | None, first: Any
+    ) -> tuple[Any, list[Any], list[Any], list[Any]]:
+        """run_steps' windows through the per-layer path: the training reading (soft), or the machine's."""
         recurrence = self.recurrence_layer
         recurrence.soft = not machine
         try:
-            outputs, states, cells, indices = self.per_layer_windows(
-                X, first if state is None else state, True, machine, starts=resumed, first=first
-            )
+            return self.per_layer_windows(X, C, True, machine, starts=starts, first=first)
         finally:
             recurrence.soft = False
-        return Steps(outputs, states, [self._machine_states(i) for i in indices], cells)
 
     def _accumulate_gradients(self, X: Any, Y: Any) -> None:
         # every layer's and part's gradient of the batch's loss: the per-layer path here, the window
@@ -836,11 +860,15 @@ def per_layer_path(network: Any) -> Generator[None]:
     # instance attributes shadow the class's methods while open
     setattr(network, "_run_windows", network.per_layer_windows)  # noqa: B010
     setattr(network, "_accumulate_gradients", network.per_layer_gradients)  # noqa: B010
+    setattr(network, "_run_steps", network.per_layer_steps)  # noqa: B010
+    setattr(network, "_accumulate_given_gradients", network.per_layer_given_gradients)  # noqa: B010
     try:
         yield
     finally:
         delattr(network, "_run_windows")
         delattr(network, "_accumulate_gradients")
+        delattr(network, "_run_steps")
+        delattr(network, "_accumulate_given_gradients")
 
 
 def _program_op(layer: Any) -> tuple[Any, ...]:
@@ -878,6 +906,23 @@ def _program_op(layer: Any) -> tuple[Any, ...]:
     raise ValueError(f"the window program has no op for a window's {type(layer).__name__}")
 
 
+def _array_program_op(layer: Any) -> tuple[Any, ...] | None:
+    # an array window's Rust layer as the window program's op (the array window workplan, D7): the
+    # kinds the crate's tests check by bits against the per-layer path; None for any other (a
+    # residual block, a LayerNorm, a dense layer with dropout), whose window runs the per-layer path
+    if isinstance(layer, ConvRustArrayLayer):
+        return ("conv", layer.geometry)
+    if isinstance(layer, MaxPoolRustArrayLayer):
+        return ("max_pool", layer.geometry)
+    if isinstance(layer, rust_parts.StateInputRustArrayLayer):
+        return None if isinstance(layer, rust_parts.FilmStateInputRustArrayLayer) else ("state_input", 1)
+    if isinstance(layer, AffineOutputRustArrayLayer):
+        return ("given_output",)
+    if isinstance(layer, ActivationRustArrayLayer) and layer.activation == "relu":
+        return ("token_dense", 1, "relu")  # a flat dense layer: a token-wise one of one token
+    return None
+
+
 class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayNetworkBase):
     """
     WindowRecurrentShape on the Rust backend. Its inference passes (forward_windows,
@@ -886,7 +931,9 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
     at construction (the window-program workplan, stages 3 and 5), by bits the per-layer path's
     (per_layer_windows, per_layer_gradients): one forward pass in training, each window's results
     and dropout masks kept, so no window's forward pass is recomputed (D5, D6). An array window
-    (the array window workplan) runs the per-layer path until the program has its ops (S4).
+    (the array window workplan, D7) runs as a program too, its training step from a given gradient
+    and its run_steps included, when every layer has an op (conv, max pool, a StateInput, a flat
+    ReLU dense layer and the given output); another runs the per-layer path.
     """
 
     def __init__(
@@ -897,16 +944,22 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
         update_rule: UpdateRule,
     ) -> None:
         super().__init__(input_shape, layers, recurrence, update_rule)
+        if self.array_window:
+            array_ops = [_array_program_op(layer) for layer in self.layers]
+            ops = None if None in array_ops else cast("list[tuple[Any, ...]]", array_ops)
+        else:
+            ops = [_program_op(layer) for layer in self.layers]
         self._program = (
             None
-            if self.array_window
+            if ops is None
             else pa.WindowProgram(
-                [_program_op(layer) for layer in self.layers],
+                ops,
                 self.columns,
                 self._pooling_reads,
                 [f.state_size for f in recurrence.factors],
                 [f.codes is not None for f in recurrence.factors],
                 cross=recurrence.cross,
+                tokens=self._pooled_tokens,
             )
         )
         # the consolidation as the program takes it, (duplicate, representative) pairs
@@ -935,7 +988,7 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
         windows = self._windows(X)
         weight = 1.0 / windows
         recurrence = self.recurrence_layer
-        dC = pa.window_program_learn(
+        dC, _ = pa.window_program_learn(
             self._program,
             X,
             Y,
@@ -952,6 +1005,68 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
             straight=recurrence.straight,
         )
         recurrence.first_state_backward(dC, weight)
+
+    def _accumulate_given_gradients(
+        self, X: Any, gradient: Callable[[Any], Any], state: Any, starts: _Starts | None
+    ) -> None:
+        # a given loss's training step in one call (the array window workplan, D7): the program calls
+        # gradient on every step's outputs between its forward and backward passes; then the initial
+        # state's gradient, as the per-layer path composes it (D5)
+        if self._program is None:
+            self.per_layer_given_gradients(X, gradient, state, starts)
+            return
+        assert not self._walled_codes(), "the snap wall is numpy's (the snap wall workplan's D8, retired)"
+        weight = 1.0 / self._windows(X)
+        rows = X.shape[0]
+        recurrence = self.recurrence_layer
+        first = self._first_state(rows)
+        dC, reset = pa.window_program_learn(
+            self._program,
+            X,
+            gradient,
+            self._program_parameters(),
+            self._program_gradients(),
+            first if state is None else state,
+            self.rng,
+            weight,
+            recurrence.commitments,
+            consolidation=self._consolidation,
+            temperatures=recurrence.temperatures,
+            continuous=recurrence.continuous if any(recurrence.continuous) else None,
+            couplings=recurrence.couplings if min(recurrence.couplings) < 1.0 else None,
+            straight=recurrence.straight,
+            starts=None if starts is None else starts.rows,
+            first=None if starts is None else first,
+        )
+        if state is None:
+            reset = dC if reset is None else reset + dC
+        recurrence.first_state_backward(
+            self.backend.zeros((rows, self.recurrence.state_size)) if reset is None else reset, weight
+        )
+
+    def _run_steps(
+        self, X: Any, C: Any, machine: bool, starts: _Starts | None, first: Any
+    ) -> tuple[Any, list[Any], list[Any], list[Any]]:
+        # run_steps' windows in one call: the training reading (the temperatures, continuous flags and
+        # couplings) or the machine's (every factor hard)
+        if self._program is None:
+            return self.per_layer_steps(X, C, machine, starts, first)
+        self._windows(X)  # whole windows, refused as the per-layer path refuses them
+        recurrence = self.recurrence_layer
+        continuous, couplings = recurrence.continuous, recurrence.couplings
+        return pa.window_program_forward(
+            self._program,
+            X,
+            self._program_parameters(),
+            C,
+            states=True,
+            codes=machine,
+            temperatures=None if machine else recurrence.temperatures,
+            continuous=None if machine or not any(continuous) else continuous,
+            couplings=None if machine or min(couplings) == 1.0 else couplings,
+            starts=None if starts is None else starts.rows,
+            first=None if starts is None else first,
+        )
 
     def consolidate(self, consolidation: Consolidation) -> None:
         super().consolidate(consolidation)
