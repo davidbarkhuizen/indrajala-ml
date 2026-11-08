@@ -280,6 +280,7 @@ def test_the_program_refuses_a_step_past_its_memory_budget():
     network = WindowRecurrentRustArrayNetwork.randomized((K,), WINDOW, RECURRENCES["one factor"], Adam(), seed=7)
     X, labels = _batch(3)
     X_rust = RUST.matrix(X.tolist())
+    assert network._program is not None
     with pytest.raises(ValueError, match="memory_budget"):
         pa.window_program_learn(
             network._program,

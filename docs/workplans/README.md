@@ -19,7 +19,7 @@ Steps 1-15 are done (their workplans retired, next-steps.md).
 
 | workplan | scope |
 | --- | --- |
-| [array-window-workplan.md](library/array-window-workplan.md) | **approved 2026-11-08; S2 (numpy) in review:** a window-recurrent network whose window is array layers (a conv body on planes), learning from a given gradient at every step, from stored states with resets: indrajala-research's machine-policy plan, M1 |
+| [array-window-workplan.md](library/array-window-workplan.md) | **approved 2026-11-08; S3 (Rust) in review:** a window-recurrent network whose window is array layers (a conv body on planes), learning from a given gradient at every step, from stored states with resets: indrajala-research's machine-policy plan, M1 |
 
 ## `infrastructure/`: machines, release and repositories
 

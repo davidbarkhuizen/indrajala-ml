@@ -8,7 +8,7 @@ import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.array.array_parameters import GammaAndBeta, RunningAverages
 from indrajala_ml.model.layers.rust.residual_rust_array_layer import ForkRustArrayLayer
-from indrajala_ml.model.layers.rust.rust_array_layer import before_layer_norm
+from indrajala_ml.model.layers.rust.rust_array_layer import reads_downstream
 from indrajala_ml.model.specs.hidden_layers import BatchOnly, Hidden
 from indrajala_ml.model.specs.single_example import ghost_groups, refuse_single_example
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
@@ -28,7 +28,7 @@ class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBet
 
     A sigmoid's hidden delta is ArrayLayer's fused call on the next layer's W and delta: a dense
     layer or a residual block's fork follows it (the fused skip op before a fork), or a LayerNorm,
-    which has no W, whose downstream it masks (before_layer_norm). A ReLU's masks the next
+    which has no W, whose downstream it masks (reads_downstream). A ReLU's masks the next
     layer's downstream, which may be a dense, conv, pool or layer-norm layer's (a conv layer's
     output can be one position, so positions doesn't tell); after a dense layer that is the fused
     layer_activation_hidden_delta_batch's ReLU bits.
@@ -121,7 +121,7 @@ class BatchNormRustArrayLayer(Hidden[pa.Array], BatchOnly[pa.Array], GammaAndBet
     def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         # dl/dy: the downstream times the activation's derivative
         assert self._was_training, "the backward pass needs a training forward pass's batch statistics"
-        if self.activation == "sigmoid" and before_layer_norm(next_layer):
+        if self.activation == "sigmoid" and reads_downstream(next_layer):
             self.delta_batch = pa.array_sigmoid_mask(next_layer.downstream_batch(context=context), self.A)
         elif self.activation == "sigmoid" and isinstance(next_layer, ForkRustArrayLayer):
             # before a residual block: the fused skip op (D8, RustArrayLayer.compute_hidden_delta)
