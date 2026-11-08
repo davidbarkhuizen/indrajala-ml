@@ -1,6 +1,6 @@
 # Workplan: a window-recurrent network with an array window, learning from a given gradient
 
-**Status (2026-11-08): approved; S1 done (#1282); S2 (numpy) in review, S3 next. Stage M1 of indrajala-research's
+**Status (2026-11-08): approved; S1 done (#1282), S2 done (#1283); S3 (Rust's per-layer path) in review, S4 next. Stage M1 of indrajala-research's
 `smb-machine-policy-workplan.md` (the finite-state machine policy for Super Mario Bros 1-1, D24-D31
 there). The decisions below (D1-D9, this plan's own) are settled under the owner's delegation; the
 owner reviewed them and said go (2026-11-08), and chose D7 (the Rust path): the crate stage lands
@@ -303,6 +303,18 @@ policy = WindowRecurrentRustArrayNetwork((13, 16, C), window, recurrence, Adam()
   (a given state and no reset): the token window's objective, unchanged, and simpler than a row
   mask on the codes' losses; a stored state's row then pulls the initial state only through those
   losses.
+
+- **S2's guard and golden run (klip, 2026-11-08):** `window_recurrent_timing` ONNO had no slower
+  row (three consistent rows 0.9-2.1% faster, a guard's noise, not a claim); the golden run,
+  recorded at `main` and checked at the branch, bit-identical (164 networks).
+- **S3 (2026-11-08).** The delta rule is now `reads_downstream` (it was `before_layer_norm`): an
+  activation layer reads `downstream_batch()` whenever the next layer (or a fork's body's first)
+  has no `W`. Every existing path had a `W` or a LayerNorm there, so none moves. A Rust array window
+  builds no window program and runs the per-layer path (S4 adds the ops). Its steps, states, codes
+  and every gradient are numpy's within 1e-12 of each array's scale through resets and a stored
+  state, soft, coupled and continuous, so numpy's central differences cover Rust. The identity-codes
+  patch reaches numpy only: Rust's recurrence calls the crate's snap directly, so the Rust tests
+  check a stored state's (lack of) gradient against the initial snap's own codes' losses instead.
 
 ## Risks
 

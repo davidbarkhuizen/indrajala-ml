@@ -5,7 +5,7 @@ from typing import Any
 import indrajala_math_rust as pa
 
 from indrajala_ml.model.layers.rust.residual_rust_array_layer import ForkRustArrayLayer
-from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer, before_layer_norm
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer, reads_downstream
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
@@ -47,7 +47,7 @@ class DropoutRustArrayLayer(RustArrayLayer):
         return self.A
 
     def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
-        if before_layer_norm(next_layer):
+        if reads_downstream(next_layer):
             self.delta = pa.array_dropout_mask(
                 next_layer.downstream(context=context), self._base_activation, self._mask, self._keep_probability, self._was_training
             )
@@ -75,7 +75,7 @@ class DropoutRustArrayLayer(RustArrayLayer):
         )
 
     def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
-        if before_layer_norm(next_layer):
+        if reads_downstream(next_layer):
             self.delta_batch = pa.array_dropout_mask(
                 next_layer.downstream_batch(context=context),
                 self._base_activation_batch,

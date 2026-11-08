@@ -885,7 +885,8 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
     step's gradients run every window in one crate call, the window program built from its layers
     at construction (the window-program workplan, stages 3 and 5), by bits the per-layer path's
     (per_layer_windows, per_layer_gradients): one forward pass in training, each window's results
-    and dropout masks kept, so no window's forward pass is recomputed (D5, D6).
+    and dropout masks kept, so no window's forward pass is recomputed (D5, D6). An array window
+    (the array window workplan) runs the per-layer path until the program has its ops (S4).
     """
 
     def __init__(
@@ -896,13 +897,17 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
         update_rule: UpdateRule,
     ) -> None:
         super().__init__(input_shape, layers, recurrence, update_rule)
-        self._program = pa.WindowProgram(
-            [_program_op(layer) for layer in self.layers],
-            self.columns,
-            self._pooling_reads,
-            [f.state_size for f in recurrence.factors],
-            [f.codes is not None for f in recurrence.factors],
-            cross=recurrence.cross,
+        self._program = (
+            None
+            if self.array_window
+            else pa.WindowProgram(
+                [_program_op(layer) for layer in self.layers],
+                self.columns,
+                self._pooling_reads,
+                [f.state_size for f in recurrence.factors],
+                [f.codes is not None for f in recurrence.factors],
+                cross=recurrence.cross,
+            )
         )
         # the consolidation as the program takes it, (duplicate, representative) pairs
         self._consolidation: list[tuple[list[int], list[int]]] = []
@@ -924,6 +929,9 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
         # the windows forward in training and back in one call, each gradient accumulated in place;
         # then the initial state's, through its codes (W14, W20; D5, D6)
         assert not self._walled_codes(), "the snap wall is numpy's (the snap wall workplan's D8, retired)"
+        if self._program is None:
+            self.per_layer_gradients(X, Y)
+            return
         windows = self._windows(X)
         weight = 1.0 / windows
         recurrence = self.recurrence_layer
@@ -952,6 +960,8 @@ class WindowRecurrentRustArrayNetwork(WindowRecurrentShape[pa.Array], RustArrayN
     def _run_windows(
         self, X: Any, C: Any, states: bool, codes: bool, live: bool = False
     ) -> tuple[Any, list[Any], list[Any], list[Any]]:
+        if self._program is None:
+            return self.per_layer_windows(X, C, states, codes, live)
         dropping = (AttentionRustArrayLayer, token_layers.TokenDropoutRustArrayLayer)
         assert not any(layer.training for layer in self.layers if isinstance(layer, dropping)), (
             "the window program runs inference only: training's forward pass is the per-layer path"

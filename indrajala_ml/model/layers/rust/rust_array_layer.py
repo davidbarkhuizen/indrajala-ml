@@ -13,16 +13,17 @@ from indrajala_ml.model.layers.rust.residual_rust_array_layer import ForkRustArr
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 
 
-def before_layer_norm(next_layer: Any) -> bool:
+def reads_downstream(next_layer: Any) -> bool:
     """
     Whether next_layer has no W for a fused hidden delta to read: a LayerNorm, or a residual
-    block's fork whose body starts with one (the layer-norm and attention workplan, D5). A sigmoid,
-    ReLU or dropout layer there takes next_layer's downstream and a mask op instead (the crate's
-    array_*_mask), its own expression unchanged.
+    block's fork whose body starts with one (the layer-norm and attention workplan, D5), or any
+    other layer without a W, such as a window's StateInput or the layer the window's poolings read
+    (its _WithPooling, the array window workplan, D7). A sigmoid, ReLU or dropout layer there takes
+    next_layer's downstream and a mask op instead (the crate's array_*_mask), its own expression
+    unchanged.
     """
-    return isinstance(next_layer, LayerNormRustArrayLayer) or (
-        isinstance(next_layer, ForkRustArrayLayer) and isinstance(next_layer.body_first, LayerNormRustArrayLayer)
-    )
+    first = next_layer.body_first if isinstance(next_layer, ForkRustArrayLayer) else next_layer
+    return isinstance(first, LayerNormRustArrayLayer) or not hasattr(first, "W")
 
 
 def fan_in_aware_random_rust_layer(rng: pa.Generator, size: int, previous_size: int) -> tuple[pa.Array, pa.Array]:
@@ -83,14 +84,14 @@ class RustArrayLayer(WeightAndBias[pa.Array]):
         # layer is never followed by a conv or pool layer, and splitting the fusion would add a
         # boundary crossing to every dense backward step. Before a residual block's fork they call
         # the fused skip ops instead, which read the fork's body_first and add (D8). Before a
-        # LayerNorm, which has no W, they mask its downstream (before_layer_norm).
+        # LayerNorm, or any layer without a W, they mask its downstream (reads_downstream).
         return pa.layer_downstream(self.W, self.delta)
 
     def downstream_batch(self, *, context: ForwardContext = NO_CONTEXT) -> pa.Array:
         return pa.layer_downstream_batch(self.W, self.delta_batch)
 
     def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
-        if before_layer_norm(next_layer):
+        if reads_downstream(next_layer):
             self.delta = pa.array_sigmoid_mask(next_layer.downstream(context=context), self.a)
             return
         if isinstance(next_layer, ForkRustArrayLayer):
@@ -103,7 +104,7 @@ class RustArrayLayer(WeightAndBias[pa.Array]):
         self.delta_batch = pa.layer_output_delta(self.A, reference_batch)
 
     def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
-        if before_layer_norm(next_layer):
+        if reads_downstream(next_layer):
             self.delta_batch = pa.array_sigmoid_mask(next_layer.downstream_batch(context=context), self.A)
             return
         if isinstance(next_layer, ForkRustArrayLayer):

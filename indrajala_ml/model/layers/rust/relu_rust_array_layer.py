@@ -9,7 +9,7 @@ import indrajala_math_rust as pa
 from indrajala_ml.model.layers.forward_context import NO_CONTEXT, ForwardContext
 from indrajala_ml.model.layers.python.activations import HiddenActivation
 from indrajala_ml.model.layers.rust.residual_rust_array_layer import ForkRustArrayLayer
-from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer, before_layer_norm
+from indrajala_ml.model.layers.rust.rust_array_layer import RustArrayLayer, reads_downstream
 
 
 class ActivationRustArrayLayer(RustArrayLayer):
@@ -49,7 +49,7 @@ class ActivationRustArrayLayer(RustArrayLayer):
 
     def compute_hidden_delta(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         cached = self.a if self.z is None else self.z
-        if before_layer_norm(next_layer):
+        if reads_downstream(next_layer):
             self.delta = pa.array_activation_mask(next_layer.downstream(context=context), cached, self.activation)
             return
         if isinstance(next_layer, ForkRustArrayLayer):
@@ -63,7 +63,7 @@ class ActivationRustArrayLayer(RustArrayLayer):
 
     def compute_hidden_delta_batch(self, next_layer: Any, *, context: ForwardContext = NO_CONTEXT) -> None:
         cached = self.A if self.Z is None else self.Z
-        if before_layer_norm(next_layer):
+        if reads_downstream(next_layer):
             downstream = next_layer.downstream_batch(context=context)
             self.delta_batch = pa.array_activation_mask(downstream, cached, self.activation)
             return
