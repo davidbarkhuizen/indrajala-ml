@@ -330,6 +330,11 @@ policy = WindowRecurrentRustArrayNetwork((13, 16, C), window, recurrence, Adam()
   the crate's tests check by bits (conv, max pool, a StateInput, a flat ReLU dense layer, the given
   output); an array window holding another layer (a residual block, a LayerNorm, a sigmoid dense
   layer, a FiLM StateInput) runs the per-layer path, which stays the reference.
+- **S4's guards and golden run (2026-11-08):** golden bit-identical on klip (164, each side's crate
+  built). `window_recurrent_timing`: on klip, `forward family p7 f32 n1024` stayed consistent at
+  +1.2% through ONNONO (a candidate regression in the program's inference forward on token
+  windows, no mechanism found; to re-check on `jebel` when it is back, next-steps.md); on stone
+  every row within noise at ONNONO, its control moved +23.5% (it can't resolve 1%).
 
 ## Risks
 
