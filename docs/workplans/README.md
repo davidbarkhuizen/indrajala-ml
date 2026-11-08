@@ -15,11 +15,8 @@ indrajala-ml, which it bloats for reuse). Their names in this repository's code 
 
 The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 1) and not yet built.
 
-Steps 1-15 are done (their workplans retired, next-steps.md).
-
-| workplan | scope |
-| --- | --- |
-| [array-window-workplan.md](library/array-window-workplan.md) | **approved 2026-11-08; S4 (the crate's ops) in review:** a window-recurrent network whose window is array layers (a conv body on planes), learning from a given gradient at every step, from stored states with resets: indrajala-research's machine-policy plan, M1 |
+None open: steps 1-15 are done, and so is the array window (the machine-policy plan's M1), their
+workplans retired (next-steps.md).
 
 ## `infrastructure/`: machines, release and repositories
 
