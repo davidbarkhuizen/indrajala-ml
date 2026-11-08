@@ -89,6 +89,7 @@ docs cite them by section:
 | Cross-attention: the encoder-decoder on Greek-English translation (roadmap step 15, D1-D18; its study decided from the literature) | #646 | #1219-#1236, crate #95, #96, this PR | `git show 2a512fb:docs/workplans/library/cross-attention-workplan.md` |
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 | The crate's speed: kernels and threads as one plan (its jebel-dependent work parked) | #1243 | crate #100-#116, #1244-#1273 | `git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md` |
+| A window of array layers, a given gradient, stored states (the array window; indrajala-research's machine-policy plan, M1) | #1282 | #1283-#1285, crate #119 | `git show 32d4d23:docs/workplans/library/array-window-workplan.md` |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
@@ -104,6 +105,34 @@ and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
 `scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
 the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
 `scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+
+## From the array window (retired 2026-11-08)
+
+The window-recurrent network's window of array layers, learning from a given gradient at every
+step, from stored states with resets (`git show 32d4d23:docs/workplans/library/array-window-workplan.md`;
+the machine-policy plan's M1, indrajala-research). Not planned yet:
+
+- **A supervised per-step output on an array window** (its D3 (b)): a softmax output layer with a
+  label per step. Only the given loss is accepted now; a task that needs labels gets the target
+  layout and its loss weighting then.
+- **The pure-Python implementation has no array window** (D8): `WindowRecurrentBackpropNetwork`
+  refuses one by name; a Python conv front end has no user.
+- **The program's array ops are the policy's** (D7): conv, max pool, a StateInput, a flat ReLU dense
+  layer and the given output. An array window holding a residual block, a LayerNorm, a sigmoid dense
+  layer, a dense layer with dropout or a FiLM StateInput runs the per-layer path (correct, slower).
+  Each gets an op, checked by bits against the per-layer path, when a window needs it.
+- **No golden entries for an array window:** the golden run holds token windows only; the array
+  window is pinned by its tests (central differences on numpy, numpy against Rust within rounding,
+  the program against the per-layer path by bits). Entries when its bits must be watched across
+  refactors (M2's recipe, if it settles on one).
+- **The state enters after the conv stack only as the policy places it** (D2 (a)); D2 (b) (only
+  before the output layer) and (c) (as extra planes into the first conv) wait for M5's probes.
+- **A candidate +1.2% in the program's inference forward on token windows** (S4's guard, klip:
+  `window_recurrent_timing`'s `forward family p7 f32 n1024`, consistent through ONNONO, 5.761 ->
+  5.832 s; within noise on stone, whose control moved). No mechanism found: the forward's
+  per-window work is unchanged but for a restarts `Option` check and the temperatures argument.
+  Re-check on `jebel` when it is back (an A/B of crate f73d652 against 2c4415b, then
+  `kernel_code_diff.py` on `program::forward` if it holds), with the parked plan's runs.
 
 ## From the crate performance workplan (retired 2026-11-05)
 
