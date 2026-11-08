@@ -21,6 +21,14 @@ column, W * k of them; every example of a batch has the same W, and the network 
 Aligning the columns in their windows (W6-i) and the final window of zero columns (W9) are the
 caller's (the harness, stage 8).
 
+A window of array layers (the array window workplan; array_window: a Conv or Dense first) reads S
+steps, each one observation of prod(input_shape) values, flat, side by side; its StateInputs add
+the state as one token wherever they stand (D2), and its output layer's loss is the caller's
+(D3): learn_batch_output_gradient takes the gradient at every step's outputs, the codes' losses
+weighted 1 / S (D4). Its run_steps reads the steps as the training step does (D6), or as the
+machine; both, and learn_batch_output_gradient, start from a stored state and restart rows at
+given steps (D5). Either window's columns is a step's width, k for a token window.
+
 The loss per example (W14): the mean of every column's cross-entropy, over all W windows, plus, for
 each snapped state (the initial one and each window's), 1 / W times the codes' losses. A training
 step runs the windows forward, keeping each window's state and the generator's state before it,
@@ -39,12 +47,14 @@ backend's, so the two networks agree to within those products' rounding.
 
 from __future__ import annotations
 
-from collections.abc import Generator, Iterator, Sequence
+import math
+from collections.abc import Callable, Generator, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any, ClassVar, NamedTuple, Self, cast
 
 import indrajala_math_rust as pa
 import numpy as np
+import numpy.typing as npt
 
 from indrajala_ml.data.prepared_dataset import CLASSIFY_CHUNK_ROWS, PreparedDataset
 from indrajala_ml.model.layers.array.array_backend import NUMPY, RUST
@@ -62,7 +72,7 @@ from indrajala_ml.model.networks.rust.rust_array_network_base import RustArrayNe
 from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT, NetworkFile
 from indrajala_ml.model.protocols.array_protocols import BackendArray, TrainedArrayLayer
 from indrajala_ml.model.specs.array_network_shapes import TokenWiseOutput
-from indrajala_ml.model.specs.bounds import validate_class_count
+from indrajala_ml.model.specs.bounds import validate_batch, validate_class_count
 from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, factor_reads
 from indrajala_ml.model.specs.spec_hooks import GivenRule
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes, token_shape
@@ -71,10 +81,39 @@ from indrajala_ml.model.specs.update_rules import UpdateRule
 from indrajala_ml.model.specs.window_recurrence import (
     Consolidation,
     WindowRecurrence,
+    array_window,
     pooling_reads,
     validate_consolidation,
 )
 from indrajala_ml.pcg64 import generator_state, set_generator_state
+
+
+class Steps[A](NamedTuple):
+    """
+    run_steps' reading of S steps (the array window workplan): each step's outputs, side by side,
+    (N, S * step_outputs); each step's next state, (N, state_size) each; with machine=True each
+    step's state as a machine's, a code per factor, per row (else empty); and each step's cells'
+    outputs before the snap, (N, state_size) each.
+    """
+
+    outputs: A
+    states: list[A]
+    codes: list[list[tuple[int, ...]]]
+    cells: list[A]
+
+
+class _Starts:
+    """A sequence's resets (the array window workplan, D5): (N, S) flags, a row's true at each step it starts again."""
+
+    def __init__(self, mask: npt.NDArray[np.bool_]) -> None:
+        self._columns: list[list[bool]] = [[bool(flag) for flag in mask[:, w]] for w in range(mask.shape[1])]
+
+    def any(self, step: int) -> bool:
+        return any(self._columns[step])
+
+    def select(self, backend: Any, step: int, A: Any, B: Any) -> Any:
+        """Each row A's where it starts again at step, else B's."""
+        return backend.select_rows(self._columns[step], A, B)
 
 
 class _Parts(NamedTuple):
@@ -169,33 +208,39 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         self.recurrence = recurrence
         self.update_rule = update_rule
         self.class_count = output.size
-        self.columns = input_shape[0]
+        # a step's width and its outputs': a token window's k columns, a digit each; an array
+        # window's one observation, flat, and its output layer's n outputs (the array window
+        # workplan, D1, D3)
+        self.array_window = array_window(layers)
+        self.columns = math.prod(input_shape) if self.array_window else input_shape[0]
+        self.step_outputs = self.class_count if self.array_window else self.columns * self.class_count
         super().__init__(layers, input_shape)
 
-        # the layer whose input tokens the poolings read (D10), and their width; with branches, each
-        # factor's branch's end (the window branches workplan)
+        parts = _PARTS[self.backend.name]
+        self._state_inputs: list[Any] = [layer for layer in self.layers if isinstance(layer, parts.state_input)]
+        # the layer whose input tokens the poolings read (D10), among the built layers (a built layer
+        # a spec, expanded), each factor's: the output layer, the first StateInput, or its branch's
+        # end (the window branches workplan)
         reads = pooling_reads(layers, recurrence)
         ends = factor_reads(layers)  # each factor's branch's end, or none
-        _, features = token_shape(spec_shapes(layers, input_shape)[ends[0] if ends else reads].input_shape)
-        parts = _PARTS[self.backend.name]
+        read = len(self.layers) - 1 if reads == len(layers) - 1 else self.layers.index(self._state_inputs[0])
+        self._pooling_reads: list[int] = ends or [read] * len(recurrence.factors)
+        # those tokens' count and width from the shape walk: a token window's k, an array window's
+        # one token of its shape there (token_shape; the array window workplan, D2)
+        tokens, features = token_shape(spec_shapes(layers, input_shape)[self._pooling_reads[0]].input_shape)
         sizes = [
             (f.state_size, None, 0.0) if f.codes is None else (f.state_size, f.codes.count, f.codes.commitment)
             for f in recurrence.factors
         ]
         self.recurrence_layer: Any = parts.recurrence(
             sizes,
-            self.columns,
+            tokens,
             features,
             recurrence.cross,
             recurrence.cell.update_bias,
             linear_codes=_linear_codes(recurrence),
         )
         self.parts: list[Any] = self.recurrence_layer.parts()
-        self._state_inputs: list[Any] = [layer for layer in self.layers if isinstance(layer, parts.state_input)]
-        # that layer among the built layers, each factor's: the output layer, the first StateInput,
-        # or its branch's end (a built layer a spec, expanded)
-        read = len(self.layers) - 1 if reads == len(layers) - 1 else self.layers.index(self._state_inputs[0])
-        self._pooling_reads: list[int] = ends or [read] * len(recurrence.factors)
 
     def _window_state_size(self) -> int | None:
         return self.recurrence.state_size
@@ -316,14 +361,24 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         return self.per_layer_windows(X, C, states, codes, live)
 
     def per_layer_windows(
-        self, X: Any, C: Any, states: bool, codes: bool, live: bool = False
+        self,
+        X: Any,
+        C: Any,
+        states: bool,
+        codes: bool,
+        live: bool = False,
+        *,
+        starts: _Starts | None = None,
+        first: Any = None,
     ) -> tuple[Any, list[Any], list[Any], list[Any]]:
         """
         The inference forward pass over every window of X from the snapped state C: the outputs
-        (N, W * k * classes), and, as kept, each window's next state and its cells' outputs before
+        (N, W * step_outputs), and, as kept, each window's next state and its cells' outputs before
         the snap (states) and each factor's code indices (codes), W of each; what isn't kept is an
-        empty list. The per-layer path, window by window; the Rust network's window program runs it
-        in one call (the window-program workplan, stage 3), and this stays its reference.
+        empty list. With starts (each window's rows that start again, _starts), those rows' state
+        before the window is first, the initial state's snap (the array window workplan, D5). The
+        per-layer path, window by window; the Rust network's window program runs it in one call (the
+        window-program workplan, stage 3), and this stays its reference.
         """
         outputs: list[Any] = []
         kept_states: list[Any] = []
@@ -332,6 +387,8 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         self.recurrence_layer.reading = live  # live: the continuous factors read unsnapped (the screen)
         try:
             for w in range(self._windows(X)):
+                if starts is not None:
+                    C = starts.select(self.backend, w, first, C)
                 output, C = self._window_forward(self._window(X, w), C)
                 outputs.append(output)
                 if states:
@@ -484,59 +541,198 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
     def _learn_batch_input(
         self, learning_rate: float, X: A, categories: Sequence[Any], clip_norm: float | None = None
     ) -> None:
+        self._refuse_given_loss()
         self._accumulate_gradients(X, self._target_batch_array(categories))
+        self._step(learning_rate, len(categories), clip_norm)
+
+    def _step(self, learning_rate: float, batch_size: int, clip_norm: float | None) -> None:
+        # every layer's and part's update from the gradients accumulated
         codes = [f.codes for f in self.recurrence_layer.factors if f.codes is not None]
         for part in codes:
             part.before_step()  # a linear factor's W's gradient from its codes' (D6)
-        self.optimizer.step([*self.layers, *self.parts], learning_rate, len(categories), clip_norm)
+        self.optimizer.step([*self.layers, *self.parts], learning_rate, batch_size, clip_norm)
         for part in codes:
             part.after_step()  # its codes formed from the stepped W
+
+    def learn_batch_output_gradient(
+        self,
+        learning_rate: float,
+        X: A,
+        gradient: Callable[[A], A],
+        clip_norm: float | None = None,
+        *,
+        state: A | None = None,
+        starts: Sequence[Sequence[bool]] | None = None,
+    ) -> A:
+        """
+        One training step on the batch X, (N, S * step) for S steps, for a loss the caller holds
+        (the array window workplan, D4-D6; an output layer Dense(n, "linear", output=True,
+        loss="given")): gradient(Y) maps every step's outputs Y, (N, S * n), of this step's own
+        forward pass (run_steps' training reading) to the loss's gradient at them, row i being
+        d loss_i / d Y_i. The gradient enters as given and each snap's codes' losses are weighted
+        1 / S, as a token window's 1 / W: a loss that is each row's mean over its steps keeps the
+        codes' share a token window's has (one summed over the steps gives them S times less). The
+        step follows the mean over the rows. state (N, state_size) is the state before the first
+        step (None: the initial state's snap) and starts (N, S) each step's rows that start again
+        from the initial state (run_steps); a given state takes no gradient (it is stale, R2D2's
+        stored state). Returns Y.
+        """
+        if not self.given_loss:
+            raise ValueError(
+                'learn_batch_output_gradient needs an output layer with a given loss, Dense(n, "linear", '
+                'output=True, loss="given")'
+            )
+        rows = X.shape[0]
+        validate_batch(range(rows))
+        resumed = self._resumed(X, state, starts)
+        outputs: list[A] = []
+
+        def given(output: A) -> A:
+            outputs.append(output)
+            output_gradient = gradient(output)
+            assert output_gradient.shape == output.shape, (
+                f"the gradient is the output's shape, {output.shape}; got {output_gradient.shape}"
+            )
+            return output_gradient
+
+        self._accumulate_given_gradients(X, given, state, resumed)
+        self._step(learning_rate, rows, clip_norm)
+        return outputs[0]
+
+    def _accumulate_given_gradients(
+        self, X: Any, gradient: Callable[[Any], Any], state: Any, starts: _Starts | None
+    ) -> None:
+        # every layer's and part's gradient of a given loss: the per-layer path
+        self.per_layer_gradients(X, gradient=gradient, state=state, starts=starts)
+
+    def _resumed(self, X: Any, state: Any, starts: Sequence[Sequence[bool]] | None) -> _Starts | None:
+        # a sequence's stored state and resets checked against X (the array window workplan, D5)
+        rows, steps = X.shape[0], self._windows(X)
+        if state is not None:
+            assert tuple(state.shape) == (rows, self.recurrence.state_size), (
+                f"a stored state is a row's state, ({rows}, {self.recurrence.state_size}); got {tuple(state.shape)}"
+            )
+        if starts is None:
+            return None
+        mask = np.asarray(starts, dtype=bool)
+        assert mask.shape == (rows, steps), f"starts is a flag per row and step, ({rows}, {steps}); got {mask.shape}"
+        return _Starts(mask)
+
+    def run_steps(
+        self,
+        X: A,
+        *,
+        state: A | None = None,
+        starts: Sequence[Sequence[bool]] | None = None,
+        machine: bool = False,
+    ) -> Steps[A]:
+        """
+        The forward pass over the S steps of X, (N, S * step) (the array window workplan, D5, D6):
+        every step's outputs (N, S * step_outputs), its next state (N, state_size), S of them, and
+        its cells' outputs before the snap, S of them. state is the state before the first step
+        (None: the initial state's snap); starts, (N, S) flags, the steps at which a row's state
+        is the initial state's snap, whatever came before (an episode began there).
+
+        machine=False reads the network as its training step does (D6): the factors' temperatures,
+        couplings and continuous flags, dropout off; for one batch its outputs are a training
+        step's on it, bit for bit (learn_batch_output_gradient's Y). machine=True is the machine:
+        every factor hard-snapped, and each step's state as a machine's, a code per factor, per row
+        (codes, S of them; empty otherwise).
+        """
+        resumed = self._resumed(X, state, starts)
+        first = self._first_state(X.shape[0])
+        recurrence = self.recurrence_layer
+        recurrence.soft = not machine
+        try:
+            outputs, states, cells, indices = self.per_layer_windows(
+                X, first if state is None else state, True, machine, starts=resumed, first=first
+            )
+        finally:
+            recurrence.soft = False
+        return Steps(outputs, states, [self._machine_states(i) for i in indices], cells)
 
     def _accumulate_gradients(self, X: Any, Y: Any) -> None:
         # every layer's and part's gradient of the batch's loss: the per-layer path here, the window
         # program on Rust
         self.per_layer_gradients(X, Y)
 
-    def per_layer_gradients(self, X: Any, Y: Any) -> None:
+    def per_layer_gradients(
+        self,
+        X: Any,
+        Y: Any = None,
+        *,
+        gradient: Callable[[Any], Any] | None = None,
+        state: Any = None,
+        starts: _Starts | None = None,
+    ) -> None:
         """
         Every layer's and part's gradient of the batch's loss, accumulated (W14, W20), window by
         window: numpy's training step, and the reference of the Rust network's window program
-        (the window-program workplan, stage 5).
+        (the window-program workplan, stage 5). The output layer's deltas are the targets Y's,
+        weighted 1 / W, or (a given loss, the array window workplan, D4) gradient(outputs)'s, as
+        given, gradient called once on every window's outputs of this pass's forward windows. state
+        is the state before the first window (None: the initial state's snap), and starts each
+        window's rows that start again from the initial state's snap (D5): a reset row's state
+        gradient goes to the initial state, summed from the last reset back and then the first
+        window's, and a given state's is dropped. The initial state's snap counts its codes' losses
+        once per row either way.
         """
         windows = self._windows(X)
         weight = 1.0 / windows
-        width = self.columns * self.class_count
+        width = self.step_outputs
+        rows = X.shape[0]
+        assert (Y is None) == (gradient is not None), "a training step's deltas are the targets' or a given loss's"
         states: list[Any] = []
         generators: list[dict[str, Any]] = []
         walled = self._walled_codes()
+        assert gradient is None or not walled, "the snap wall's gate reads each digit's target: a given loss has none"
         right: list[bool] = []
         self._set_training_mode(True)
         recurrence = self.recurrence_layer
         recurrence.soft = True
+        zeros = self.backend.zeros((rows, self.recurrence.state_size))
+        reset: Any = None  # the initial state's gradient from the resets
         try:
-            C = self._first_state(X.shape[0])
+            first = C = self._first_state(rows)
+            if state is not None:
+                C = state
+            outputs: list[Any] = []
             for w in range(windows):
+                if starts is not None:
+                    C = starts.select(self.backend, w, first, C)
                 states.append(C)
                 generators.append(generator_state(self.rng))
                 output, C = self._window_forward(self._window(X, w), C)
+                if gradient is not None:
+                    outputs.append(output)
                 if walled:
                     right = self._all_right(right, output, self.backend.columns(Y, w * width, (w + 1) * width))
             after = generator_state(self.rng)
             for codes in walled:
                 codes.gate = np.array(right, dtype=float)
+            deltas = Y if gradient is None else gradient(self.backend.concatenate_columns(outputs))
+            output_weight = weight if gradient is None else None
 
-            dC = self.backend.zeros((X.shape[0], self.recurrence.state_size))
+            dC = zeros
             for w in reversed(range(windows)):
                 set_generator_state(self.rng, generators[w])
                 self._window_forward(self._window(X, w), states[w])
-                dC = self._window_backward(self.backend.columns(Y, w * width, (w + 1) * width), dC, weight)
+                dC = self._window_backward(
+                    self.backend.columns(deltas, w * width, (w + 1) * width), dC, weight, output_weight
+                )
+                if starts is not None and starts.any(w):
+                    restarted = starts.select(self.backend, w, dC, zeros)
+                    reset = restarted if reset is None else reset + restarted
+                    dC = starts.select(self.backend, w, zeros, dC)
             set_generator_state(self.rng, after)
         finally:
             recurrence.soft = False
             self._set_training_mode(False)
 
-        self._first_state(X.shape[0])
-        self.recurrence_layer.first_state_backward(dC, weight)
+        if state is None:
+            reset = dC if reset is None else reset + dC
+        self._first_state(rows)
+        self.recurrence_layer.first_state_backward(zeros if reset is None else reset, weight)
         for codes in walled:
             codes.gate = None  # this batch's only
 
@@ -552,16 +748,19 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         now = [p == t for p, t in zip(predicted, targets, strict=True)]
         return now if not right else [a and b for a, b in zip(right, now, strict=True)]
 
-    def _window_backward(self, Y: Any, dC_next: Any, weight: float) -> Any:
+    def _window_backward(self, Y: Any, dC_next: Any, weight: float, output_weight: float | None) -> Any:
         # one window's backward pass after its forward pass: its gradients accumulated, and its
-        # state's gradient returned, from the next state's dC_next and its digits' targets Y
+        # state's gradient returned, from the next state's dC_next and its digits' targets Y (or a
+        # given loss's gradient at its outputs); the codes' losses weighted weight, the output
+        # layer's delta output_weight (None: as given)
         pooled, dC = self.recurrence_layer.backward_batch(dC_next, weight)
         context = self._window_context
 
         output_layer: Any = self.layers[-1]
         output_layer.compute_output_delta_batch(Y, context=context)
-        # the mean over every window's columns: each window's mean over its own, times 1 / W
-        output_layer.delta_batch = output_layer.delta_batch * weight
+        if output_weight is not None:
+            # the mean over every window's columns: each window's mean over its own, times 1 / W
+            output_layer.delta_batch = output_layer.delta_batch * output_weight
         reads = self._pooling_reads
         for i in reversed(range(len(self.layers) - 1)):
             following = self.layers[i + 1]
@@ -588,8 +787,9 @@ class WindowRecurrentShape[A: BackendArray](GivenRule, TokenWiseOutput[A]):
         """
         The batch's digits' loss, summed over the examples, each the mean of its columns'
         cross-entropies, in inference: the loss whose gradient a training step takes, but for
-        the codes' losses.
+        the codes' losses. A given loss is the caller's: refused.
         """
+        self._refuse_given_loss()
         P = np.array(self.forward_windows(X).tolist()).reshape(len(categories), -1, self.class_count)
         labels = np.array(categories)
         chosen = np.take_along_axis(P, labels[:, :, np.newaxis], axis=2)[:, :, 0]

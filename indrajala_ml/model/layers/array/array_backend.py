@@ -122,6 +122,10 @@ class NumpyBackend:
         return np.concatenate(matrices, axis=1)
 
     @staticmethod
+    def select_rows(mask: Sequence[bool], A: FloatArray, B: FloatArray) -> FloatArray:
+        return np.where(np.asarray(mask, dtype=bool)[:, np.newaxis], A, B)
+
+    @staticmethod
     def argmax(vector: FloatArray) -> int:
         return int(np.argmax(vector))
 
@@ -225,6 +229,14 @@ class RustBackend:
     @staticmethod
     def concatenate_columns(matrices: Sequence[pa.Array]) -> pa.Array:
         return pa.concatenate_columns(list(matrices))
+
+    @staticmethod
+    def select_rows(mask: Sequence[bool], A: pa.Array, B: pa.Array) -> pa.Array:
+        # A's and B's rows side by side, read as their rows interleaved (row 2i A's, 2i + 1 B's), then
+        # each row's taken: copies only, so every bit is A's or B's
+        rows, width = A.shape
+        both = pa.concatenate_columns([A, B]).reshape((2 * rows, width))
+        return both.take_rows([2 * i + (0 if m else 1) for i, m in enumerate(mask)])
 
     @staticmethod
     def argmax(vector: pa.Array) -> int:

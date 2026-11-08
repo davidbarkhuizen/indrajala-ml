@@ -51,6 +51,7 @@ from indrajala_ml.model.specs.update_rules import UpdateRule
 from indrajala_ml.model.specs.window_recurrence import (
     Consolidation,
     WindowRecurrence,
+    array_window,
     pooling_reads,
     validate_consolidation,
 )
@@ -78,6 +79,10 @@ class WindowRecurrentBackpropNetwork(GivenRule, BackpropNetworkBase[TrainableLay
         update_rule: UpdateRule,
         input_bounds: list[tuple[float, float]] | None = None,
     ) -> None:
+        assert not array_window(layers), (
+            "a window of array layers (a Conv or Dense first) is the array networks' (numpy and Rust; the array "
+            "window workplan, D8): the Python reference has no conv front end"
+        )
         validate_window_recurrent(layers, recurrence, input_shape)
         assert not branch_ends(layers), (
             "a window's Branches are the array networks' (numpy and Rust; the window branches workplan, D6), not "

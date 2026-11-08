@@ -261,6 +261,10 @@ class ArrayBackend[A: BackendArray](Protocol):
 
     def concatenate_columns(self, matrices: Sequence[A]) -> A: ...
 
+    # each row A's where mask is true, else B's, A and B of one shape (a window-recurrent network's
+    # resets, the array window workplan, D5)
+    def select_rows(self, mask: Sequence[bool], A: A, B: A, /) -> A: ...
+
     # a matrix's values, row-major, as rows by columns (an encoder-decoder's memory gradient, its
     # (N * S, d_m) rows as the encoder's (N, S * d_m) output, the cross-attention workplan, D2)
     def reshape(self, matrix: A, rows: int, columns: int) -> A: ...

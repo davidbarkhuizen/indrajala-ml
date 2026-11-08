@@ -37,7 +37,7 @@ from indrajala_ml.model.specs.layer_specs import (
     token_wise_output,
 )
 from indrajala_ml.model.specs.spec_shapes import InputShape, spec_shapes
-from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE, OUTPUT, Factor, WindowRecurrence
+from indrajala_ml.model.specs.window_recurrence import BEFORE_STATE, OUTPUT, Factor, WindowRecurrence, array_window
 
 
 def _check_batch_norm(spec: BatchNorm, before: LayerSpec | None) -> None:
@@ -449,14 +449,19 @@ def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -
     token ids through an Embedding and ending in a token-wise output layer, its sum digits (W9,
     W17), or that has no StateInput, by which the state enters it (W1b-ii, W18). Otherwise the
     window is checked as validate_layer_specs checks a sequence model, StateInputs allowed, then by
-    the shape walk. What a builder of a window checks (validate_window_recurrent checks the rest).
+    the shape walk. A window of array layers (array_window) is checked by _validate_array_window
+    instead. What a builder of a window checks (validate_window_recurrent checks the rest).
     """
-    assert len(input_shape) == 1 and input_shape[0] >= 1, (
-        f"a window's input is its k columns' token ids, k at least 1; got the input shape {input_shape}"
-    )
+    if array_window(specs):
+        _validate_array_window(specs, input_shape)
+        return
     assert specs and isinstance(specs[0], Embedding), (
         f"a window starts with an Embedding of its columns' token ids (the window-recurrent adder workplan, The "
-        f"network); got {list(specs)!r}"
+        f"network), or a Conv or Dense over each step's observation (the array window workplan, D1); got "
+        f"{list(specs)!r}"
+    )
+    assert len(input_shape) == 1 and input_shape[0] >= 1, (
+        f"a window's input is its k columns' token ids, k at least 1; got the input shape {input_shape}"
     )
     assert token_wise_output(specs), (
         "a window ends in a token-wise output layer, a digit per column (the window-recurrent adder workplan, The "
@@ -487,6 +492,34 @@ def validate_window_specs(specs: Sequence[LayerSpec], input_shape: InputShape) -
         "the state enters a window through at least one StateInput, right before a residual block (the "
         f"window-recurrent adder workplan, W1b-ii, W18); got {list(specs)!r}"
     )
+    spec_shapes(specs, input_shape)
+
+
+def _validate_array_window(specs: Sequence[LayerSpec], input_shape: InputShape) -> None:
+    # a window of array layers (the array window workplan, D1-D3): a conv or dense network over one
+    # step's observation, its StateInputs aside, each adding the state to the shape it stands in as
+    # one token (D2), ending in a given loss's output layer (D3)
+    state_inputs = [i for i, spec in enumerate(specs) if isinstance(spec, StateInput)]
+    assert state_inputs, (
+        "the state enters a window through at least one StateInput (the array window workplan, D2); got "
+        f"{list(specs)!r}"
+    )
+    assert all(0 < i < len(specs) - 1 for i in state_inputs), (
+        "an array window's StateInput stands after its first layer and before its output layer (the array window "
+        f"workplan, D2); got {list(specs)!r}"
+    )
+    output = specs[-1]
+    assert isinstance(output, Dense) and output.output and output.loss == "given", (
+        'an array window\'s output layer has a given loss, Dense(n, "linear", output=True, loss="given"): its '
+        f"gradient comes from the caller at every step (the array window workplan, D3); got {output!r}"
+    )
+    norm = next((spec for spec in expand_specs(specs) if isinstance(spec, BatchNorm)), None)
+    assert norm is None, (
+        "an array window holds no BatchNorm: a training step re-runs each step's forward pass, which would move "
+        f"its running statistics twice (the array window workplan); got {norm!r}"
+    )
+    # the rest as a network of array layers: no token layer but the StateInputs
+    _validate_layer_specs([spec for spec in specs if not isinstance(spec, StateInput)], window=False)
     spec_shapes(specs, input_shape)
 
 
