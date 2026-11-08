@@ -87,7 +87,8 @@ def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputSha
     layer-norm and attention workplan, D4), a token-wise output layer included (the sequence task
     workplan, D6), and a Position, a LayerNorm, an Attention and a Dropout keep their input's shape (a
     LayerNorm after a conv front end normalizes the flat image as one token), as does a StateInput,
-    which reads tokens (the window-recurrent adder workplan, W18). A Split keeps its input's
+    which reads tokens (the window-recurrent adder workplan, W18), or in an array window any shape,
+    as one token (token_shape; the array window workplan, D2). A Split keeps its input's
     shape, every branch keeps it (each Branch checks its branch's end, a Merge the last's), and each
     branch starts from it (the window branches workplan); a Merge keeps it too, its branches' ends
     summed (the post-paper workplan, D7). The specs' own arguments are checked by the layers built
@@ -165,7 +166,7 @@ def spec_shapes(specs: Sequence[LayerSpec | ExpandedSpec], input_shape: InputSha
         elif isinstance(spec, Position | LayerNorm | Dropout):
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, StateInput):
-            assert len(shape) == 2, f"a StateInput adds the state to each token, so it reads tokens; got {shape}"
+            # over tokens, or (an array window's, the array window workplan, D2) any shape as one token
             shapes.append(SpecShape(shape, shape))
         elif isinstance(spec, TokenMean):
             assert len(shape) == 2, f"a TokenMean reads tokens; got {shape}"

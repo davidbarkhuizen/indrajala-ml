@@ -22,6 +22,11 @@ D3). A single factor is the network of one state.
     WindowRecurrence((Factor(4, Codes(8)), Factor(4, Codes(8))), cross=False)
     WindowRecurrence((Factor(4, None),))
 
+A window of array layers (the array window workplan, D1) starts with a Conv or a Dense instead of
+an Embedding: each step's window reads one observation's flat array, its StateInputs add P c to it as
+one token wherever they stand, and its output layer is a given loss's, n outputs per step
+(array_window).
+
 validate_window_recurrent (spec_validation.py) checks a window and its recurrence together.
 """
 
@@ -32,7 +37,16 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from indrajala_ml.model.specs.layer_specs import LayerSpec, StateInput
+from indrajala_ml.model.layers.python.conv_layer import ConvSpec
+from indrajala_ml.model.specs.layer_specs import Dense, LayerSpec, StateInput
+
+
+def array_window(specs: Sequence[LayerSpec]) -> bool:
+    """
+    Whether a window's specs are array layers (the array window workplan, D1): its first layer a Conv
+    or a Dense, each step one observation's flat array; an Embedding's window is a token window.
+    """
+    return bool(specs) and isinstance(specs[0], ConvSpec | Dense)
 
 
 @dataclass(frozen=True)

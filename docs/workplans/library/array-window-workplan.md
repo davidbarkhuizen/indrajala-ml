@@ -1,6 +1,6 @@
 # Workplan: a window-recurrent network with an array window, learning from a given gradient
 
-**Status (2026-11-08): approved; S1 done, S2 next. Stage M1 of indrajala-research's
+**Status (2026-11-08): approved; S1 done (#1282); S2 (numpy) in review, S3 next. Stage M1 of indrajala-research's
 `smb-machine-policy-workplan.md` (the finite-state machine policy for Super Mario Bros 1-1, D24-D31
 there). The decisions below (D1-D9, this plan's own) are settled under the owner's delegation; the
 owner reviewed them and said go (2026-11-08), and chose D7 (the Rust path): the crate stage lands
@@ -282,6 +282,27 @@ policy = WindowRecurrentRustArrayNetwork((13, 16, C), window, recurrence, Adam()
 | S2 | numpy: the shape walk and validator accept an array window (D1, D2, D3); the recurrence's tokens from the shape walk; `run_steps`, `learn_batch_output_gradient`, `state`/`starts` (D4-D6); the Python refusal (D8); tests 1-7 on numpy | CI green; golden run bit-identical; tier-1 guard on klip read |
 | S3 | Rust: the widened delta rule, the per-layer path for array windows, `select_rows` (D5, D7); test 8 and tests 2-7 on Rust. | CI green; golden run bit-identical; M2 can start in indrajala-rl |
 | S4 | The window program's array ops in the crate (D7's list), released; a "Bump rust/" PR here routes array windows through the program; parity with S3's path by bits; the tier-1 guards; next-steps.md takes the leftovers; this plan retired | crate CI and release; CI green here; parity by bits; golden run bit-identical |
+
+## Findings
+
+- **S2 (2026-11-08).** The network's FD checks pass through hard, soft-coupled and continuous
+  snaps, through resets and from a stored state. A hard snap's analytic gradient is exactly the
+  gradient of its straight-through surrogate, `q = h + sg(e - h)` with the codes' losses holding
+  their stop-gradients, so the tests check every snap kind against central differences of that
+  surrogate (the snaps' stop-gradient values recorded at the point), not only identity codes.
+- **The 2-step memory needs the coupling's handover** (the state formation workplan's D25): with
+  hard codes from the first step, 2 of 3 seeds collapse both cues onto one code and stay at 50%;
+  with the coupling raised from 0 to 1 over 300 steps, 8 of 8 seeds reach 100% with every factor
+  snapped. The library's test uses the handover; M2's recipe should too (the machine-policy plan's
+  D28).
+- **`select_rows` needs no new crate op** (D5): on Rust it is the two arrays side by side read as
+  their rows interleaved (`concatenate_columns`, `reshape`), then `take_rows`, copies only, so
+  every bit is one side's. Built in S2 with numpy's, as the backend protocol has both; S3 tests it
+  in use.
+- **The initial state's snap counts its codes' losses once per row** whether or not a row uses it
+  (a given state and no reset): the token window's objective, unchanged, and simpler than a row
+  mask on the codes' losses; a stored state's row then pulls the initial state only through those
+  losses.
 
 ## Risks
 

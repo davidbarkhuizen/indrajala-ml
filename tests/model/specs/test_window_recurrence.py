@@ -170,8 +170,9 @@ def test_a_state_input_outside_a_window_is_rejected():
 def test_a_state_input_keeps_its_tokens_shape():
     shapes = spec_shapes(WINDOWS["the state once, before the first block"], WINDOW)
     assert shapes[2] == SpecShape((3, 16), (3, 16))
-    with pytest.raises(AssertionError, match="reads tokens"):
-        spec_shapes([STATE, Dense(2, output=True, loss="squared")], (4,))
+    # in an array window, any shape, as one token (the array window workplan, D2)
+    assert spec_shapes([STATE, Dense(2, output=True, loss="squared")], (4,))[0] == SpecShape((4,), (4,))
+    assert spec_shapes([STATE], (2, 3, 4))[0] == SpecShape((2, 3, 4), (2, 3, 4))
 
 
 @pytest.mark.parametrize("specs", WINDOWS.values(), ids=WINDOWS.keys())
