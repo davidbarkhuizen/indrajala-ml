@@ -36,6 +36,38 @@ boot menu, each stick alone; XMP off and voltages, in the BIOS; reseat RAM and p
 run of that benchmark:** each reset is an unclean reset of their machine. **Healthy means** three clean A/Bs of it in a
 row: it has run clean between resets before, once as late as 2026-11-05 05:13.
 
+**2026-11-09, read without load** (the owner rebooted it; it stays off-line while the owner diagnoses it on the side):
+- **Each unplanned reset is an instant cut:** in seven of the boots ending 2026-11-04 to 11-05 the journal stops
+  mid-routine (an ssh login from `pyramidon`), with no shutdown, panic, oops or machine check, and the machine is back
+  in one to two minutes. The other boot endings (2026-11-05 04:53, 05:24, 05:29) were orderly shutdowns. That points at
+  power or the board (the supply's power-good dropping, the CPU regulators' over-current or over-temperature trip, or
+  a CPU internal error), not software or a plain RAM fault, which usually leave a trace.
+- **The board:** ASUS PRIME H310M-K R2.0, BIOS 1005 (2019-08-07), legacy boot, i7-9700K, 30 GB. A budget board whose CPU
+  regulators have no heatsink, under an 8-core 95 W part: a suspect, though 65 W should be within it.
+- **Missing:** lm-sensors (no board voltages), stress-ng, memtester; no passwordless sudo. memtest86+ 8.00 is installed,
+  but GRUB's menu is hidden (timeout 0): hold Shift at boot.
+- **The raw runs are copied off** to `pyramidon:~/data/jebel-rescue-2026-11-09/` (`ab-runs/`: the `2026-11-04-thr-*` and
+  `2026-11-05-pool-seq*` runs; `k24-profile/`). No `budget-*` or `pool-sequence*` runs were on its disk.
+
+**The diagnosis (agreed with the owner, 2026-11-09):**
+1. memtest86+, each stick alone (the owner, at the machine).
+2. Instruments: `sudo apt install lm-sensors stress-ng`, `sudo sensors-detect --auto` (the owner).
+3. A logger that outlives a reset: `pyramidon` reads `jebel`'s sensors, clocks and temperatures once a second over ssh,
+   kept on `pyramidon`, so the seconds before a reset are kept.
+4. A load ladder, the owner's OK before each step (each reset is unclean), up to 30 minutes a step or until it resets:
+
+   | step | load | a reset here points at |
+   |---|---|---|
+   | a | 1 core, integer | the supply or the board, badly |
+   | b | all 8 cores, integer | sustained power: supply or regulators |
+   | c | all 8 cores, AVX2 (stress-ng matrix) | vector current: regulators or CPU voltage |
+   | d | stress-ng `--vm`, 75% of RAM | RAM or the memory controller |
+   | e | the benchmark at `--rust-threads 1` | its own load at one thread |
+   | f | the benchmark at a 4 GHz cap | the top clocks |
+
+   Only (c) or (e): cap frequency or voltage. Everything from (b): another supply.
+5. BIOS: a newer version than 1005, memory at defaults (XMP off).
+
 **Or replace it.** D12 then names the new machine. A new machine is tier 3: a full baseline, with its own noise rules.
 klip is the nearest stand-in, quiet (1.1% median spread at one thread) but 4 cores, 5.3 GB and thermally guarded: a claim
 there says less about a production machine, so it wasn't taken.
