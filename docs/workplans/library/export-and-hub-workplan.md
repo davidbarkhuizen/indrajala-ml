@@ -8,7 +8,8 @@ local file. In future it must also:
 
 This plan settles how, in stages. Its decisions are D1-D14 and the owner's calls O1-O3.
 
-**Progress:** stage 1 (format 3) done 2026-11-11.
+**Progress:** stage 1 (format 3) done 2026-11-11. Stage 2 (the Hub functions) built and tested offline
+2026-11-11; its live acceptance (a push to a private repository and back by revision) waits for O1.
 
 ## The short answers
 
