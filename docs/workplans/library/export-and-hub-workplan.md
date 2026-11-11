@@ -6,8 +6,9 @@ local file. In future it must also:
 2. save to and load from Hugging Face, presumably through a custom extension of Hugging Face's own
    format, where that is pluggable.
 
-This plan settles how, in stages; nothing is built yet. Its decisions are D1-D14 and the owner's calls
-O1-O3.
+This plan settles how, in stages. Its decisions are D1-D14 and the owner's calls O1-O3.
+
+**Progress:** stage 1 (format 3) done 2026-11-11.
 
 ## The short answers
 
@@ -137,8 +138,12 @@ Format 3's `config.json` is format 2's document with `"format": 3`:
     - Unreadable on the Hub's file viewer.
     - A layer added in the middle renames everything after it.
 - **(b) By expanded layer and parameter:** `layers.3.Wq`, `layers.3.bq`, `layers.0.E`;
-  `recurrence.0.cell.W`, `recurrence.0.codes.E` (or `.Q`, `.W` for linear codes),
-  `recurrence.0.pooling.q`, `recurrence.0.initial`; the optimizer's as `layers.3.m_Wq`. An
+  `recurrence.0.cell.W`, `recurrence.0.codes.E` (or `.W`, `.Q` for linear codes),
+  `recurrence.0.pooling.q`, `recurrence.0.initial.c`; the optimizer's as `layers.3.m_Wq`.
+  (Stage 1 named the initial state `recurrence.0.initial.c`, not `recurrence.0.initial`: every
+  tensor is then `{part}.{parameter}`, and its optimizer's `recurrence.0.initial.m_c` follows the
+  same rule.) A batch-norm layer's running averages follow its parameters:
+  `layers.1.running_mean`, `layers.1.running_var`. An
   encoder-decoder's layers are numbered over `expand_specs(encoder + decoder)`, as format 2's
   weights are; an ensemble's are `classifiers.4.layers...`. **Chosen.**
   - Pros:

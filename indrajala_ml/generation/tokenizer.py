@@ -20,13 +20,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from indrajala_ml.data.text_data import PAD, SPECIAL_TOKENS, Vocabulary
+from indrajala_ml.model.persistence.format3 import TOKENIZER_FILE
 
 KINDS = ("characters",)
 
 
 def tokenizer_path(model: str | Path) -> Path:
-    """The tokenizer file beside a model file: model.json's is model.tokenizer.json."""
+    """
+    The tokenizer file beside a model file, model.json's model.tokenizer.json; or a format-3
+    directory's, inside it as indrajala_tokenizer.json (the export-and-hub workplan, D6).
+    """
     model = Path(model)
+    if model.is_dir():
+        return model / TOKENIZER_FILE
     return model.with_name(f"{model.stem}.tokenizer.json")
 
 

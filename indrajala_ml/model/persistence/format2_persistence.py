@@ -8,6 +8,7 @@ Backend-free, so the pure-Python networks import it too.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.persistence.checkpoint import Checkpoint
@@ -21,6 +22,7 @@ from indrajala_ml.model.persistence.format2 import (
     preset_init_kwargs,
     restore_file,
 )
+from indrajala_ml.model.persistence.format3 import is_directory, read_directory
 from indrajala_ml.model.persistence.model_io import load_json, save_json
 from indrajala_ml.pcg64 import generator_state, set_generator_state
 
@@ -54,9 +56,12 @@ class Format2Persistence[W, S]:
         save_json(path, network_to_json(self._network()))
 
     @classmethod
-    def load(cls, path: str) -> Self:
-        # a format-2 file, or the class's legacy envelope, which loads with fresh optimizer state
-        state = load_json(path)
+    def load(cls, path: str | Path) -> Self:
+        # a format-2 file, a format-3 directory (format3.py), or the class's legacy envelope, which
+        # loads with fresh optimizer state
+        if is_directory(path):
+            return cls.from_format2(read_directory(path))
+        state = load_json(str(path))
         return cls.from_format2(state) if is_format2(state) else cls._load_legacy(state)
 
     @classmethod

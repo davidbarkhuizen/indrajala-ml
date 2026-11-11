@@ -221,8 +221,25 @@ def checkpoint_to_json(network: Format2Network, checkpoint: Checkpoint[Any, Any]
     A format-2 file's contents for network with checkpoint's weights, optimizer state and generator
     state in place of its own: a checkpoint network took earlier, as a file (run_checkpoint.py).
     """
-    python = network.implementation == PYTHON
-    rule = network.optimizer.rule
+    state = description_to_json(network)
+    state["weights"] = lists(checkpoint.weights)
+    state["optimizer_state"] = optimizer_state_to_json(
+        network.optimizer.rule,
+        network.implementation == PYTHON,
+        checkpoint.optimizer,
+        network.layer_specs,
+        _recurrence(network),
+    )
+    state["rng"] = rng_to_json(checkpoint.rng)
+    return state
+
+
+def description_to_json(network: Format2Network) -> dict[str, Any]:
+    """
+    A format-2 file's contents without its arrays: its format, implementation, shape, preset,
+    input, layers (an encoder-decoder's encoder too), recurrence and update rule. Format 3's
+    config.json (format3.py) is this, with its arrays in safetensors.
+    """
     state: dict[str, Any] = {"format": FORMAT, "implementation": network.implementation, "shape": network.format2_shape}
     if network.preset_arguments is not None:
         state["preset"] = {
@@ -244,12 +261,7 @@ def checkpoint_to_json(network: Format2Network, checkpoint: Checkpoint[Any, Any]
     recurrence = _recurrence(network)
     if recurrence is not None:
         state["recurrence"] = recurrence_to_json(recurrence)
-    state["update_rule"] = rule_to_json(rule)
-    state["weights"] = lists(checkpoint.weights)
-    state["optimizer_state"] = optimizer_state_to_json(
-        rule, python, checkpoint.optimizer, network.layer_specs, _recurrence(network)
-    )
-    state["rng"] = rng_to_json(checkpoint.rng)
+    state["update_rule"] = rule_to_json(network.optimizer.rule)
     return state
 
 

@@ -16,6 +16,10 @@ dependencies = [
     "numpy>=1.20",  # numpy.lib.stride_tricks.sliding_window_view (conv_array_layer.py)
 ]
 
+# the export-and-hub workplan's extras (D7): format 3's directories and the Hub (hub)
+[project.optional-dependencies]
+hub = ["safetensors>=0.8", "huggingface_hub>=2.4"]
+
 [tool.setuptools.packages.find]
 include = ["indrajala_ml*"]
 namespaces = true

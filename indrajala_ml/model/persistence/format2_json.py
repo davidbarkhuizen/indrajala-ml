@@ -293,7 +293,7 @@ def recurrence_from_json(recurrence: dict[str, Any]) -> WindowRecurrence:
     )
 
 
-def _state_names(rule: UpdateRule) -> tuple[str, ...]:
+def state_names(rule: UpdateRule) -> tuple[str, ...]:
     # the rule's state per parameter, in the optimizers' order
     match rule:
         case Momentum():
@@ -359,7 +359,7 @@ def recurrence_parameters(recurrence: WindowRecurrence) -> tuple[tuple[str, ...]
     )
 
 
-def _layer_parameter_names(specs: Sequence[LayerSpec], recurrence: WindowRecurrence | None) -> list[tuple[str, ...]]:
+def layer_parameter_names(specs: Sequence[LayerSpec], recurrence: WindowRecurrence | None) -> list[tuple[str, ...]]:
     # each expanded layer's parameters' names, then a window-recurrent network's own parts'
     names = [_parameter_names(spec) for spec in expand_specs(specs)]
     return names if recurrence is None else [*names, *recurrence_parameters(recurrence)]
@@ -372,8 +372,8 @@ def optimizer_state_to_json(
     specs: Sequence[LayerSpec],
     recurrence: WindowRecurrence | None = None,
 ) -> dict[str, Any]:
-    names = _state_names(rule)
-    parameter_names = _layer_parameter_names(specs, recurrence)
+    names = state_names(rule)
+    parameter_names = layer_parameter_names(specs, recurrence)
     layers: list[Any] = [None] * len(parameter_names)
     for index, layer_state in state.layers.items():
         if python:
@@ -403,8 +403,8 @@ def optimizer_state_from_json(
     specs: Sequence[LayerSpec],
     recurrence: WindowRecurrence | None = None,
 ) -> OptimizerState[Any]:
-    names = _state_names(rule)
-    parameter_names = _layer_parameter_names(specs, recurrence)
+    names = state_names(rule)
+    parameter_names = layer_parameter_names(specs, recurrence)
     layers: dict[int, Any] = {}
     for index, layer_state in enumerate(state["layers"]):
         if layer_state is None:

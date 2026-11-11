@@ -5,12 +5,12 @@ from typing import Any
 
 from indrajala_ml.model.persistence.format2 import ENCODER_DECODER
 from indrajala_ml.model.persistence.format2_json import (
-    _layer_parameter_names,  # pyright: ignore[reportPrivateUsage]
     encoder_decoder_from_json,
     encoder_decoder_input_from_json,
     encoder_decoder_input_to_json,
     encoder_decoder_to_json,
     layer_from_json,
+    layer_parameter_names,
     layer_to_json,
 )
 from indrajala_ml.model.specs.layer_specs import (
@@ -66,7 +66,7 @@ def test_an_encoder_decoder_s_layers_and_input_round_trip_through_json():
 
 
 def test_a_cross_attention_s_parameters_are_an_attention_s_in_the_one_index_space():
-    names = _layer_parameter_names(SPEC.layers(), None)
+    names = layer_parameter_names(SPEC.layers(), None)
     attention = ("Wq", "bq", "Wk", "bk", "Wv", "bv", "Wo", "bo")
     # the encoder's expanded layers (embedding, fork, norm, attention, add, norm), then the decoder's
     assert names[:6] == [("E",), (), ("gamma", "beta"), attention, (), ("gamma", "beta")]
