@@ -66,6 +66,15 @@ class Graph:
             self.initializers.append(onnx().numpy_helper.from_array(array, self._constants[key]))
         return self._constants[key]
 
+    def tensor(self, values: Any, base: str = "table") -> str:
+        """A constant of values' own dtype (a mask's bools, ids), not cast to the graph's."""
+        array = np.asarray(values)
+        key = (str(array.dtype), array.tobytes(), array.shape)
+        if key not in self._constants:
+            self._constants[key] = self.fresh(base)
+            self.initializers.append(onnx().numpy_helper.from_array(array, self._constants[key]))
+        return self._constants[key]
+
     def op(self, op_type: str, inputs: Sequence[str], base: str | None = None, **attributes: Any) -> str:
         """A node of op_type over inputs, with one output, whose name it returns."""
         (output,) = self.ops(op_type, inputs, 1, base, **attributes)
@@ -88,6 +97,8 @@ class Graph:
 
     def rename(self, name: str, output: str) -> str:
         """name under output, a graph output's name, through an Identity."""
+        if output in self._names:
+            raise ValueError(f"{output!r} already names a tensor in the graph")
         self._names.add(output)
         self.nodes.append(onnx().helper.make_node("Identity", [name], [output], name=self.fresh(f"node_{output}")))
         return output

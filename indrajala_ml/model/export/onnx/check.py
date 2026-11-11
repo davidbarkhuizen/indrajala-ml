@@ -70,11 +70,20 @@ def check_export(model: Any, state: dict[str, Any], dtype: Dtype) -> CheckReport
         checker.shape_inference.infer_shapes(model, check_type=True, strict_mode=True)
     except Exception as error:  # onnx raises its own ValidationError and InferenceError
         raise ExportCheckError(f"the exported model fails onnx's checks: {error}") from error
-    dims: list[int] = [dim.dim_value for dim in model.graph.input[0].type.tensor_type.shape.dim[1:]]
-    x = inputs(math.prod(dims))
-    expected: np.ndarray[Any, np.dtype[np.float64]] = numpy_forward(state, x)
-    # our row, reshaped to the graph's input (an image's NCHW is our row's own order)
-    feed = {"x": x.reshape(len(x), *dims).astype(dtype)}
+    graph_input = model.graph.input[0]
+    dims: list[int] = [dim.dim_value for dim in graph_input.type.tensor_type.shape.dim[1:]]
+    output_dims: list[int] = [dim.dim_value for dim in model.graph.output[0].type.tensor_type.shape.dim[1:]]
+    first = state["classifiers"][0] if state["shape"] == ENSEMBLE else state
+    if graph_input.name == "ids":
+        # token ids over the whole vocabulary, so a vocabulary with a separator and a pad has segments
+        ids = np.random.default_rng(SEED).integers(0, first["layers"][0]["vocabulary"], (ROWS, *dims))
+        x = ids.astype(np.float64)
+        feed = {"ids": ids.astype(np.int64)}
+    else:
+        x = inputs(math.prod(dims))
+        # our row, reshaped to the graph's input (an image's NCHW is our row's own order)
+        feed = {"x": x.reshape(len(x), *dims).astype(dtype)}
+    expected: np.ndarray[Any, np.dtype[np.float64]] = numpy_forward(state, x).reshape(len(x), *output_dims)
     runs: dict[str, Any] = {
         "reference": lambda: onnx_reference().ReferenceEvaluator(model).run(None, feed)[0],
     }

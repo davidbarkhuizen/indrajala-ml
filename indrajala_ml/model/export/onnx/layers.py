@@ -6,7 +6,8 @@ walk over expand_specs mirrors _build_layers: a residual block's fork keeps its 
 Stage 3's kinds: dense (every activation and output), batch norm over a flat layer, the residual
 fork and add, and dropout (the identity at inference, D12). Stage 4's: conv (im2col, D10), max
 pool, batch norm per channel, patches and the token mean, over NCHW images, our row's own
-channel-major order. Each kind a later stage adds raises NotImplementedError naming that stage.
+channel-major order. Stage 5's (sequence.py): embedding, position, layer norm, token-wise dense
+layers and outputs, the gated FFN and attention, over tokens (N, T, F). Each kind a later stage adds raises NotImplementedError naming that stage.
 """
 
 from __future__ import annotations
@@ -18,8 +19,10 @@ from typing import Any
 
 import numpy as np
 
+from indrajala_ml.model.export.onnx import sequence
 from indrajala_ml.model.export.onnx.functions import activate
 from indrajala_ml.model.export.onnx.graph import Graph
+from indrajala_ml.model.export.onnx.sequence import Segments
 from indrajala_ml.model.layers.python.conv_layer import ConvSpec
 from indrajala_ml.model.layers.python.max_pool_layer import PoolSpec
 from indrajala_ml.model.specs.layer_specs import (
@@ -48,11 +51,6 @@ from indrajala_ml.model.specs.window_geometry import output_size
 
 # the kinds later stages export, by the stage that adds them
 _LATER: dict[type[Any], int] = {
-    Embedding: 5,
-    Position: 5,
-    LayerNorm: 5,
-    Attention: 5,
-    GatedDense: 5,
     StateInput: 6,
     Split: 6,
     Branch: 6,
@@ -210,6 +208,7 @@ def layers(
     shape (spec_shapes), a residual block's add over its fork's input in the add's shape.
     """
     forks: list[Tensor] = []
+    context: Segments | None = None
     expanded = expand_specs(specs)
     shapes = spec_shapes(specs, input_shape)
     for spec, shape, entry_names, entry in zip(expanded, shapes, names, weights, strict=True):
@@ -224,6 +223,22 @@ def layers(
             continue
         elif isinstance(spec, Dense) and len(x.dims) == 1:
             x = Tensor(dense(g, spec, x.name, entry_names, entry), (spec.size,))
+        elif isinstance(spec, Dense):
+            x = Tensor(sequence.token_dense(g, spec, x.name, entry_names, entry), (x.dims[0], spec.size))
+        elif isinstance(spec, Embedding):
+            (tokens,) = x.dims
+            if spec.segments:
+                context = sequence.segments(g, x.name, spec, tokens)
+            x = Tensor(sequence.embedding(g, x.name, entry_names[0], entry[0]), (tokens, spec.size))
+        elif isinstance(spec, Position):
+            x = Tensor(sequence.position(g, x.name, entry_names[0], entry[0], context), x.dims)
+        elif isinstance(spec, LayerNorm):
+            x = Tensor(sequence.layer_norm(g, spec, x.name, entry_names, entry), x.dims)
+        elif isinstance(spec, Attention):
+            tokens, features = x.dims
+            x = Tensor(sequence.attention(g, spec, x.name, tokens, features, entry_names, entry, context), x.dims)
+        elif isinstance(spec, GatedDense):
+            x = Tensor(sequence.gated_dense(g, spec, x.name, entry_names, entry), (x.dims[0], spec.size))
         elif isinstance(spec, BatchNorm):
             x = Tensor(batch_norm(g, spec, x, entry_names, entry), x.dims)
         elif isinstance(spec, ConvSpec):

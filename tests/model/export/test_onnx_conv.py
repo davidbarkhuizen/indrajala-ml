@@ -38,7 +38,7 @@ from tests.model.persistence.test_format2 import ENSEMBLES, _trained
 from tests.saved_model_fixtures import FIXTURES
 
 DTYPES = ["float32", "float64"]
-# the kinds stage 5 adds
+# the kinds stage 5 adds, tested in test_onnx_sequence.py
 _LATER = (Attention, LayerNorm, Position, Embedding, GatedDense)
 
 

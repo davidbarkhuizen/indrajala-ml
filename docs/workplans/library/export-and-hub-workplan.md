@@ -26,6 +26,23 @@ Stage 4 (conv, max pool, batch norm per channel, patches, the token mean) done 2
 - **Conv is im2col and a MatMul in both dtypes** (D10): a strided Slice per kernel offset,
   stacked into W's column order. Max pool is ONNX's `MaxPool`, which onnxruntime runs in float64.
 
+Stage 5 (sequence models) done 2026-11-11:
+- **The input is the ids, (N, T) int64, and nothing else** (D12 amended). A network derives its
+  segments and positions from its ids (`segments.segment_context`), so the graph does too:
+  CumSum over the separators, and the segment's first column as a running max over an (N, T, T)
+  table, numpy's accumulate. It equals `segment_context` on ids with pads and separators anywhere.
+- **Attention is decomposed** (D11 amended): MatMul, the division by sqrt(d_k), `Where` to -inf
+  for the scores `Masking` forbids (causal, another segment's or a pad's key, never the query's
+  own column), Softmax, MatMul; grouped key/value heads by Expand. Every rule is checked in both
+  evaluators and dtypes. The fused `Attention` op stays a speed-up to revisit.
+- **onnxruntime's default optimisations lose float64 precision in one fusion:**
+  `MatMulScaleFusion` folds a scalar divisor after a MatMul into `FusedMatMul`'s `alpha`, a float32
+  attribute, 3e-8 of every score (5e-10 in the outputs). The graph divides by a (T,) vector of
+  sqrt(d_k), the same bits, which the fusion leaves alone; a test reads onnxruntime's optimised
+  graph for `FusedMatMul`. **The check runs onnxruntime at its default level**, what a user gets,
+  so a fusion like it fails the check. This matters most for stage 6, where a flipped code
+  changes the machine (D10).
+
 ## The short answers
 
 - **Hugging Face has no single universal model format to extend.** A Hub model is a git repository
