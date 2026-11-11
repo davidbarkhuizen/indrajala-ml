@@ -193,17 +193,6 @@ def test_erf_is_fdlibms_within_an_ulp(dtype: str):
 # refusals
 
 
-@pytest.mark.parametrize(
-    "name, stage",
-    [
-        ("EncoderDecoderArrayNetwork", 7),
-    ],
-)
-def test_a_later_stages_network_is_refused_naming_its_stage(name: str, stage: int):
-    with pytest.raises(NotImplementedError, match=f"stage {stage}"):
-        export_onnx(FIXTURES[name].build())
-
-
 def test_a_pure_python_network_is_refused(tmp_path: Path):
     network = FIXTURES["SequentialBackpropClassifierNetwork"].build()
     network.save(str(tmp_path / "model.json"))

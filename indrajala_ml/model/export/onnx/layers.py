@@ -7,7 +7,7 @@ Stage 3's kinds: dense (every activation and output), batch norm over a flat lay
 fork and add, and dropout (the identity at inference, D12). Stage 4's: conv (im2col, D10), max
 pool, batch norm per channel, patches and the token mean, over NCHW images, our row's own
 channel-major order. Stage 5's (sequence.py): embedding, position, layer norm, token-wise dense
-layers and outputs, the gated FFN and attention, over tokens (N, T, F). Each kind a later stage adds raises NotImplementedError naming that stage.
+layers and outputs, the gated FFN and attention, over tokens (N, T, F). Every expanded spec kind has its emitter.
 """
 
 from __future__ import annotations
@@ -43,16 +43,10 @@ from indrajala_ml.model.specs.layer_specs import (
     Position,
     Split,
     StateInput,
-    TokenMean,
     expand_specs,
 )
-from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, spec_shapes, token_shape
+from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, SpecShape, spec_shapes, token_shape
 from indrajala_ml.model.specs.window_geometry import output_size
-
-# the kinds later stages export, by the stage that adds them
-_LATER: dict[type[Any], int] = {
-    CrossAttention: 7,
-}
 
 
 def dense(g: Graph, spec: Dense, x: str, names: Sequence[str], weights: Sequence[Any]) -> str:
@@ -199,9 +193,25 @@ def layers(
     names: Sequence[Sequence[str]],
     weights: Sequence[Sequence[Any]],
 ) -> Tensor:
-    """The output of specs over x (walk's)."""
-    output, _inputs = walk(g, specs, input_shape, x, names, weights)
-    return output
+    """The output of specs over x (walk_all's)."""
+    return walk_all(g, specs, input_shape, x, names, weights).output
+
+
+@dataclass(frozen=True)
+class Memory:
+    """An encoder's output, (N, S, d_m), and its segments (N, S), which a decoder's cross-attention reads."""
+
+    tensor: Tensor
+    segments: str | None
+
+
+@dataclass
+class Walked:
+    """A walk's output, each expanded spec's input, and the segments its Embedding derived (or None)."""
+
+    output: Tensor
+    inputs: list[Tensor]
+    context: Segments | None
 
 
 def walk(
@@ -212,20 +222,50 @@ def walk(
     names: Sequence[Sequence[str]],
     weights: Sequence[Sequence[Any]],
     state: str | None = None,
+    *,
+    shapes: Sequence[SpecShape] | None = None,
+    memory: Memory | None = None,
+    step: sequence.StepContext | None = None,
+    caches: Sequence[sequence.StepCache] = (),
 ) -> tuple[Tensor, list[Tensor]]:
+    """walk_all's output and inputs."""
+    walked = walk_all(
+        g, specs, input_shape, x, names, weights, state, shapes=shapes, memory=memory, step=step, caches=caches
+    )
+    return walked.output, walked.inputs
+
+
+def walk_all(
+    g: Graph,
+    specs: Sequence[LayerSpec],
+    input_shape: InputShape,
+    x: Tensor,
+    names: Sequence[Sequence[str]],
+    weights: Sequence[Sequence[Any]],
+    state: str | None = None,
+    *,
+    shapes: Sequence[SpecShape] | None = None,
+    memory: Memory | None = None,
+    step: sequence.StepContext | None = None,
+    caches: Sequence[sequence.StepCache] = (),
+) -> Walked:
     """
     The output of specs over x, and each expanded spec's input (a window's poolings read one): each
     expanded spec's emitter over x reshaped to the spec's input shape (spec_shapes), a residual
     block's add over its fork's input in the add's shape. state, (N, S), is a window's, which its
     StateInputs add (stage 6); a split's branches each start from its input, a branch's end is kept,
-    and a merge sums the ends in branch order, its own input last (branch_layers.py).
+    and a merge sums the ends in branch order, its own input last (branch_layers.py). shapes, when
+    given, are the specs' (a decoder's, encoder_decoder_shapes'); memory is a decoder's encoder
+    output; step and caches make a decoder's walk one token's decode step (stage 7), each
+    self-attention reading its cache in order.
     """
+    pending = iter(caches)
     forks: list[Tensor] = []
     splits: list[tuple[Tensor, list[Tensor]]] = []
     inputs: list[Tensor] = []
     context: Segments | None = None
     expanded = expand_specs(specs)
-    shapes = spec_shapes(specs, input_shape)
+    shapes = spec_shapes(specs, input_shape) if shapes is None else shapes
     for spec, shape, entry_names, entry in zip(expanded, shapes, names, weights, strict=True):
         # a dense layer reads an image as our flat row; a state input its tokens (an array window's
         # one); every other kind its input shape
@@ -265,16 +305,46 @@ def walk(
             x = Tensor(sequence.token_dense(g, spec, x.name, entry_names, entry), (x.dims[0], spec.size))
         elif isinstance(spec, Embedding):
             (tokens,) = x.dims
-            if spec.segments:
+            if step is not None:
+                context = Segments(step.segments, step.positions)
+            elif spec.segments:
                 context = sequence.segments(g, x.name, spec, tokens)
             x = Tensor(sequence.embedding(g, x.name, entry_names[0], entry[0]), (tokens, spec.size))
         elif isinstance(spec, Position):
             x = Tensor(sequence.position(g, x.name, entry_names[0], entry[0], context), x.dims)
         elif isinstance(spec, LayerNorm):
             x = Tensor(sequence.layer_norm(g, spec, x.name, entry_names, entry), x.dims)
+        elif isinstance(spec, Attention) and step is not None:
+            _tokens, features = x.dims
+            x = Tensor(
+                sequence.attention_step(g, spec, x.name, features, entry_names, entry, next(pending), step), x.dims
+            )
         elif isinstance(spec, Attention):
             tokens, features = x.dims
             x = Tensor(sequence.attention(g, spec, x.name, tokens, features, entry_names, entry, context), x.dims)
+        elif isinstance(spec, CrossAttention):
+            if memory is None:
+                raise ValueError(
+                    "a CrossAttention reads an encoder's output: only an encoder-decoder's decoder has one"
+                )
+            tokens, features = x.dims
+            query_segments = None if context is None else context.segments
+            x = Tensor(
+                sequence.cross_attention(
+                    g,
+                    spec,
+                    x.name,
+                    tokens,
+                    features,
+                    memory.tensor.name,
+                    memory.tensor.dims[0],
+                    entry_names,
+                    entry,
+                    query_segments,
+                    memory.segments,
+                ),
+                x.dims,
+            )
         elif isinstance(spec, GatedDense):
             x = Tensor(sequence.gated_dense(g, spec, x.name, entry_names, entry), (x.dims[0], spec.size))
         elif isinstance(spec, BatchNorm):
@@ -285,11 +355,10 @@ def walk(
             x = max_pool(g, spec, x)
         elif isinstance(spec, Patches):
             x = patches(g, spec, x)
-        elif isinstance(spec, TokenMean):
-            x = token_mean(g, x)
         else:
-            raise NotImplementedError(unsupported(spec))
-    return x, inputs
+            # the last kind: pyright's exhaustiveness over ExpandedSpec leaves only TokenMean
+            x = token_mean(g, x)
+    return Walked(x, inputs, context)
 
 
 def state_input(g: Graph, spec: StateInput, x: str, state: str, names: Sequence[str], weights: Sequence[Any]) -> str:
@@ -306,13 +375,3 @@ def state_input(g: Graph, spec: StateInput, x: str, state: str, names: Sequence[
     gain = g.op("MatMul", [state, g.op("Transpose", [g.weight(names[1], weights[1])], perm=[1, 0])])
     gamma = g.op("Unsqueeze", [g.op("Add", [g.constant(1.0), gain]), g.int64([1])])
     return g.op("Add", [g.op("Mul", [x, gamma]), projected])
-
-
-def unsupported(spec: object) -> str:
-    """Why spec's kind doesn't export yet: the workplan stage that adds it."""
-    kind = type(spec)
-    stage = _LATER.get(kind)
-    kind_name = kind.__name__
-    if stage is None:
-        return f"no ONNX emitter for {kind_name}"
-    return f"ONNX export of {kind_name} comes in the export-and-hub workplan's stage {stage}"

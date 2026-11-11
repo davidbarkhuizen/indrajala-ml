@@ -9,6 +9,8 @@ The graphs (D12), stages 3-5's shapes:
 - an ensemble (one-vs-rest): x (N, d) to each sub-network's probability, concatenated, (N, classes);
 - window_recurrent: the step (window.py), the transducer's transition and output, one window a
   call, float64 always (D10), checked over runs of windows looped by the host (D13);
+- encoder_decoder: three models (encoder_decoder.py), the full forward, the encoder and a decode
+  step with its cache, saved side by side;
 - sequence: ids (N, T), int64, to each token's "probabilities" (N, T, classes); a network whose
   first layer is an Embedding reads ids whatever its shape. Its segments come from the ids in the
   graph, as the network derives them (D12 amended: no segments input).
@@ -20,17 +22,25 @@ float64 always (stage 6). Every export is checked (D13, check.py) unless check=F
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from indrajala_ml.model.export.onnx import window
-from indrajala_ml.model.export.onnx.check import CheckReport, check_export, check_window
+from indrajala_ml.model.export.onnx import encoder_decoder, window
+from indrajala_ml.model.export.onnx.check import CheckReport, check_encoder_decoder, check_export, check_window
 from indrajala_ml.model.export.onnx.dependencies import onnx
 from indrajala_ml.model.export.onnx.graph import Dtype, Graph
 from indrajala_ml.model.export.onnx.layers import Tensor, layers, onnx_dims
-from indrajala_ml.model.persistence.format2 import ENSEMBLE, WINDOW_RECURRENT, description_to_json, is_format2
+from indrajala_ml.model.persistence.format2 import (
+    ENCODER_DECODER,
+    ENSEMBLE,
+    WINDOW_RECURRENT,
+    description_to_json,
+    is_format2,
+)
 from indrajala_ml.model.persistence.format2_json import (
+    encoder_decoder_from_json,
+    encoder_decoder_input_from_json,
     input_shape_from_json,
     layer_from_json,
     layer_parameter_names,
@@ -46,21 +56,26 @@ FLOAT64_WARNING = (
     "float64 required: a conversion to float32 (OpenVINO, TFLite and other converters do this silently) "
     "may change the machine"
 )
-# the shapes each stage exports, by the stage that adds them
-_LATER_SHAPES = {"encoder_decoder": 7}
 
 
 @dataclass(frozen=True)
 class Export:
-    """An export: the model (onnx.ModelProto), its dtype, and its check's report (None unchecked)."""
+    """
+    An export: the model (onnx.ModelProto), its dtype, and its check's report (None unchecked);
+    an encoder-decoder's other models by name (encoder, decoder_step), each saved beside the model
+    as <stem>_<name>.onnx.
+    """
 
     model: Any
     dtype: Dtype
     report: CheckReport | None
+    parts: dict[str, Any] = field(default_factory=dict[str, Any])
 
     def save(self, path: str | Path) -> Path:
         path = Path(path)
         path.write_bytes(self.model.SerializeToString())
+        for name, part in self.parts.items():
+            path.with_name(f"{path.stem}_{name}{path.suffix}").write_bytes(part.SerializeToString())
         return path
 
 
@@ -91,11 +106,6 @@ def document(source: Any) -> dict[str, Any]:
 
 
 def _input_shape(state: dict[str, Any]) -> InputShape:
-    if state["shape"] in _LATER_SHAPES:
-        raise NotImplementedError(
-            f"ONNX export of a {state['shape']} network comes in the export-and-hub workplan's stage "
-            f"{_LATER_SHAPES[state['shape']]}"
-        )
     return input_shape_from_json(state["input"])
 
 
@@ -127,6 +137,8 @@ def export_onnx(
     state = document(source)
     if state["shape"] == WINDOW_RECURRENT:
         return _export_window(state, path, dtype, check)
+    if state["shape"] == ENCODER_DECODER:
+        return _export_encoder_decoder(state, path, dtype or "float32", check)
     dtype = dtype or "float32"
     g = Graph(dtype)
     first = state["classifiers"][0] if state["shape"] == ENSEMBLE else state
@@ -190,6 +202,37 @@ def _export_window(state: dict[str, Any], path: str | Path | None, dtype: Dtype 
     )
     report = check_window(model, state) if check else None
     export = Export(model, "float64", report)
+    if path is not None:
+        export.save(path)
+    return export
+
+
+def _export_encoder_decoder(state: dict[str, Any], path: str | Path | None, dtype: Dtype, check: bool) -> Export:
+    # the full forward, the encoder and the decode step (encoder_decoder.py)
+    if state["implementation"] == "python":
+        raise ValueError(
+            "a pure-Python network holds its weights per node and doesn't export (D2): export its numpy twin"
+        )
+    spec = encoder_decoder_from_json(state)
+    source_tokens, target_tokens = encoder_decoder_input_from_json(state["input"])
+    metadata = {
+        "library": "indrajala-ml",
+        "shape": ENCODER_DECODER,
+        "dtype": dtype,
+        "description": json.dumps(_description(state)),
+    }
+    models: dict[str, Any] = {}
+    for name, build in (
+        ("model", encoder_decoder.full),
+        ("encoder", encoder_decoder.encoder),
+        ("decoder_step", encoder_decoder.decoder_step),
+    ):
+        g = Graph(dtype)
+        inputs, outputs = build(g, spec, source_tokens, target_tokens, state["weights"])
+        models[name] = g.model(inputs, outputs, f"indrajala-ml encoder_decoder {name}", {**metadata, "graph": name})
+    report = check_encoder_decoder(models, state, dtype) if check else None
+    model = models.pop("model")
+    export = Export(model, dtype, report, models)
     if path is not None:
         export.save(path)
     return export
