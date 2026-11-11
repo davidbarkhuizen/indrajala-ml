@@ -294,72 +294,48 @@ as it cites a Zenodo DOI. The card records the ml and crate commits the network 
 (format 2) or a format-3 directory. So numpy and Rust networks export alike, and so does a Hub
 download. It is backend-free, as `format2.py` is: `indrajala_ml/model/export/onnx/`.
 
-### D10: precision (revised 2026-11-11, with the owner)
+### D10: precision (settled with the owner, 2026-11-11)
 
-**The owner:** portability first, but a machine that no longer snaps as trained makes the
-exercise pointless. So the default is float32 everywhere, and a window-recurrent network's float32
-export must earn it.
+**The owner:** portability is preferred in general, but if the machines stop snapping as trained
+for lack of precision, the whole exercise is pointless. This architecture is ours: almost no one
+else runs it, and it needs the precision. The continuous networks should follow general practice.
+
+**The rule:**
+- **A window-recurrent network exports float64, always.** The exporter takes no dtype for it.
+- **Every other shape exports float32 by default,** with `dtype="float64"` available.
 
 **Why the shapes differ:**
 - **A continuous network** (the classifiers, the sequence models): float32 moves each number by
   about 1e-7 relative, and nothing feeds a discrete choice back. An answer changes only at a
   genuine near-tie between two outputs, and the error doesn't grow.
 - **A window-recurrent network with codes:** each step snaps the state to the nearest code, and
-  that code is the next step's input. A flip changes every later step: the machine itself changes.
-- **But snapping corrects error.** Where the winning code beats the runner-up by more than
-  float32's error, the snap lands on the same code, the state is that code vector again, and the
-  error resets to zero each step. So float32 computes the same machine exactly when, at every
-  reachable (state, window) pair, the next code's margin and the output's argmax margin exceed
-  float32's error.
-- **For a token window, that is a finite check:** finitely many reachable states, finitely many
-  distinct windows (the family's 11 tokens, 3 a column: at most 1,331).
-- **A continuous factor** (codes None) has no snapping: float32's error never resets and drifts
+  that code is the next step's input. A flip at a near tie changes every later step, so the
+  machine itself changes, the one the certificate proved.
+- **A window-recurrent network with continuous factors:** float32's error never resets and drifts
   over long sequences.
 
-**The rule:**
+**What float64 costs** (from the runtimes' documentation as known, not tested here except
+onnxruntime's CPU provider):
+- onnxruntime runs a float64 graph wherever it runs, falling back to CPU for nodes an accelerator
+  lacks.
+- TensorRT, CoreML, DirectML, NNAPI, QNN and WebGPU have no float64.
+- OpenVINO and the TFLite converters downcast to float32 silently.
 
-1. **float32 is the default for every shape.** It is what runtimes, accelerators and converters
-   expect. `dtype="float64"` is always available.
-2. **A window-recurrent network's float32 export runs the exhaustive check** (`check_machine`,
-   D13 step 4) on the export's own float32 graph, through onnxruntime:
-   - Its input is a set of states. The library verifies the set; it doesn't find it. The
-     studies' certificate code supplies it: a certified network's reachable states.
-   - **It starts** from the float32 graph's own initial state, snapped.
-   - **For every state in the set and every window** (the vocabulary to the window's width, its
-     padding included), it checks that the next code equals float64's, the next state lies in the
-     set, and the output's argmax equals float64's.
-   - **Passing proves** that the float32 graph computes the same transitions from the same initial
-     state, so the same machine at every length (the certificate's induction).
-   - **Its scope:** this runtime. A float32 runtime that sums in another order could differ.
-3. **The smallest margins found go into the export's metadata and the model card:** the next
-   code's (the runner-up's distance less the winner's, relative to the winner's) and the output
-   argmax's.
-   - A margin far above float32's error (1e-3 against about 1e-7) is strong evidence that any
-     faithful float32 runtime agrees. It also says whether float16 would hold.
-   - **Evidence, not proof:** a rigorous bound on float32's error through attention, layer norm
-     and softmax is not planned. The card says which runtime the proof covers.
-4. **The exporter refuses float32 and says why** when:
-   - the check fails, a margin is under `margin_floor` (default 1e-4), or no state set is given
-     for a coded network;
-   - or the network has a continuous factor.
-   The user then exports in float64, or, for a coded network, gives the state set.
-5. **Array windows** (continuous inputs: the NES observations) can't be enumerated:
-   - Their check runs on given sequences, and the card says "sampled".
-   - Their float32 export is allowed, never called faithful to the machine.
+For this architecture, run on CPUs by its few users, that is a cost worth paying.
+
+**What stays:** the exporter's correctness check (D13), at every precision. Every export is
+compared with our numpy forward. For a window-recurrent network that includes the same code at
+every step over test sequences: it catches exporter bugs, and the vanishing chance that
+onnxruntime's float64 summation order flips a tie within about 1e-15.
+
+**What goes:** precision checking of window-recurrent float32 exports, since there are none.
+
+**The model card of a window-recurrent export says:** "float64 required: a conversion to float32
+(OpenVINO, TFLite and other converters do this silently) may change the machine."
 
 **Where float64 has no kernel** (onnxruntime: Conv, AveragePool, `RotaryEmbedding`), the emitter
 decomposes: Conv as im2col and MatMul, rotary as constant cos and sin tables. This is the same
 graph in both dtypes, so a float64 export of any shape runs on onnxruntime's CPU provider.
-
-**On the Hub,** `model.onnx` is the float32 graph where it passed, with `model_fp64.onnx` beside
-it for a window-recurrent network. Otherwise `model.onnx` is float64.
-
-**The cost of float64, for the record** (from the runtimes' documentation as known, not tested
-here except onnxruntime's CPU provider):
-- onnxruntime runs a float64 graph wherever it runs, falling back to CPU for nodes an
-  accelerator lacks.
-- TensorRT, CoreML, DirectML, NNAPI, QNN and WebGPU have no float64.
-- OpenVINO and the TFLite converters downcast to float32 silently, the risk this rule closes.
 
 **The options weighed:**
 - **(a) float32 only.**
@@ -369,24 +345,28 @@ here except onnxruntime's CPU provider):
     - A coded network's machine can change unseen.
 - **(b) float64 only.**
   - Pros:
-    - Faithful.
+    - Faithful everywhere.
   - Cons:
-    - It loses accelerators.
-    - A downcasting converter reopens the risk with no check at all.
-- **(c) float64 for window-recurrent networks, float32 for the rest** (this plan's first choice).
+    - The continuous networks lose accelerators, against general practice, for no gain.
+- **(c) float64 for window-recurrent networks, float32 by default for the rest.** **Chosen.**
   - Pros:
-    - Safe.
+    - Each kind gets what it needs.
+    - It needs no machinery.
   - Cons:
-    - It gives up portability where the check shows float32 holds.
-- **(d) float32 by default, a coded network's export gated by the exhaustive check and its
-  margins.** **Chosen.**
+    - A window-recurrent export runs on CPU in practice.
+- **(d) float32 by default everywhere, a coded network's float32 export gated by an exhaustive
+  check** (`check_machine`) over a given reachable state set and every window, its smallest
+  margins recorded.
   - Pros:
-    - Portable where it is proved safe.
-    - The margin tells users of other runtimes how safe.
+    - Portable where proved safe.
   - Cons:
-    - The check needs the reachable states from the studies.
-    - The proof covers one runtime.
-    - Array windows get evidence only.
+    - It needs the reachable states from the studies.
+    - It proves the result only for the runtime it ran on, and for token windows only.
+    - A lot of code to protect a portability this architecture's users don't need.
+  - **Not planned; kept as the route if a float32 window-recurrent export is ever wanted.** The
+    argument: snapping corrects error, so float32 computes the same machine exactly when every
+    reachable (state, window) pair's next-code and output margins exceed float32's error. For a
+    token window that is a finite check, a proof by the certificate's induction.
 
 ### D11: opset and IR
 
@@ -429,11 +409,8 @@ Every export, in its tests and at export time (`check=True` by default), passes:
    - Under both `onnx.reference.ReferenceEvaluator` (pure numpy, every dtype, the spec's own
      semantics) and onnxruntime.
 3. **Classes:** the same argmax on every input; a disagreement is reported, as at a near tie.
-4. **Window-recurrent networks:**
-   - Over a run of windows looped by the host, the same code index at every step (float64).
-   - For float32, `check_machine`, D10's exhaustive check over a given state set and every
-     window. It is a proof for token windows on the runtime it ran on, sampled for array
-     windows, and it records the smallest margins.
+4. **Window-recurrent networks** (float64, D10): over runs of windows looped by the host, the
+   same code index at every step as our numpy network.
 5. **aarch64:** the same on `litshe` once a stage's emitters are whole (the wheels exist).
 
 ### D14: where it lives, and the user's entry points
@@ -493,8 +470,8 @@ so they pass the golden run.
    - the poolings, the GRU cells, the codes (ArgMin and Gather; linear codes' `E = Q W` computed at
      export), continuous factors, the initial state;
    - array windows;
-   - the code-sequence check (D13, 4) and `check_machine` (D10), tested against a certified
-     division network's states from the studies' data.
+   - the code-sequence check (D13, 4);
+   - the model card's float64 warning (D10).
 7. **Encoder-decoder:** the full forward, the encoder, and the decoder step with its cache.
 8. **Together, and on aarch64:**
    - `push_to_hub(..., onnx=True)` adds `model.onnx`, which tags the repository `onnx`.
