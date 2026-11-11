@@ -7,6 +7,8 @@ The graphs (D12), stages 3-5's shapes:
 - multiclass and single_output: x (N, d), or an image's (N, C, H, W) (our row's channel-major
   order), to "probabilities" (N, classes), or "outputs" for a linear (given-loss) output layer;
 - an ensemble (one-vs-rest): x (N, d) to each sub-network's probability, concatenated, (N, classes);
+- window_recurrent: the step (window.py), the transducer's transition and output, one window a
+  call, float64 always (D10), checked over runs of windows looped by the host (D13);
 - sequence: ids (N, T), int64, to each token's "probabilities" (N, T, classes); a network whose
   first layer is an Embedding reads ids whatever its shape. Its segments come from the ids in the
   graph, as the network derives them (D12 amended: no segments input).
@@ -22,7 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from indrajala_ml.model.export.onnx.check import CheckReport, check_export
+from indrajala_ml.model.export.onnx import window
+from indrajala_ml.model.export.onnx.check import CheckReport, check_export, check_window
 from indrajala_ml.model.export.onnx.dependencies import onnx
 from indrajala_ml.model.export.onnx.graph import Dtype, Graph
 from indrajala_ml.model.export.onnx.layers import Tensor, layers, onnx_dims
@@ -38,8 +41,13 @@ from indrajala_ml.model.persistence.model_io import load_json
 from indrajala_ml.model.specs.layer_specs import Dense
 from indrajala_ml.model.specs.spec_shapes import InputShape
 
+# a window-recurrent export's warning, in its metadata and its model card (D10)
+FLOAT64_WARNING = (
+    "float64 required: a conversion to float32 (OpenVINO, TFLite and other converters do this silently) "
+    "may change the machine"
+)
 # the shapes each stage exports, by the stage that adds them
-_LATER_SHAPES = {WINDOW_RECURRENT: 6, "encoder_decoder": 7}
+_LATER_SHAPES = {"encoder_decoder": 7}
 
 
 @dataclass(frozen=True)
@@ -117,6 +125,8 @@ def export_onnx(
     our numpy forward unless check is False (D13).
     """
     state = document(source)
+    if state["shape"] == WINDOW_RECURRENT:
+        return _export_window(state, path, dtype, check)
     dtype = dtype or "float32"
     g = Graph(dtype)
     first = state["classifiers"][0] if state["shape"] == ENSEMBLE else state
@@ -146,6 +156,40 @@ def export_onnx(
     )
     report = check_export(model, state, dtype) if check else None
     export = Export(model, dtype, report)
+    if path is not None:
+        export.save(path)
+    return export
+
+
+def _export_window(state: dict[str, Any], path: str | Path | None, dtype: Dtype | None, check: bool) -> Export:
+    # the window-recurrent step (window.py), float64 always (D10)
+    if dtype not in (None, "float64"):
+        raise ValueError(
+            "a window-recurrent network exports float64 only (D10): float32 can snap a state to another "
+            "code and change the machine"
+        )
+    if state["implementation"] == "python":
+        raise ValueError(
+            "a pure-Python network holds its weights per node and doesn't export (D2): export its numpy twin"
+        )
+    g = Graph("float64")
+    specs = [layer_from_json(spec) for spec in state["layers"]]
+    recurrence = recurrence_from_json(state["recurrence"])
+    inputs, outputs = window.step(g, specs, _input_shape(state), recurrence, state["weights"])
+    model = g.model(
+        inputs,
+        outputs,
+        "indrajala-ml window_recurrent step",
+        {
+            "library": "indrajala-ml",
+            "shape": WINDOW_RECURRENT,
+            "dtype": "float64",
+            "warning": FLOAT64_WARNING,
+            "description": json.dumps(_description(state)),
+        },
+    )
+    report = check_window(model, state) if check else None
+    export = Export(model, "float64", report)
     if path is not None:
         export.save(path)
     return export

@@ -43,6 +43,23 @@ Stage 5 (sequence models) done 2026-11-11:
   so a fusion like it fails the check. This matters most for stage 6, where a flipped code
   changes the machine (D10).
 
+Stage 6 (the window-recurrent step) done 2026-11-11:
+- **The step:** inputs `state` (N, S) and `window`, k int64 ids (N, k) or an array window's
+  observation; outputs `outputs`, `next_state` (snapped), `codes` (N, factors) int64 (-1 for a
+  continuous factor), and `initial_state` (1, S), the learned initial state snapped, computed in the
+  graph. float64 only: a float32 request is refused (D10), and the metadata and the model card carry
+  the warning.
+- **The parts, factor by factor, as `RecurrenceArrayLayer` at inference:** the attention pooling
+  over the tokens its factor reads (the output layer's input, the first StateInput's, or its
+  branch's end), the GRU over [u, c_(-g)] (cross) or u, the snap by squared distance with `ArgMin`
+  (the lowest index on a tie, as `nearest`), and a linear factor's E = Q W in the graph. The
+  window's StateInputs (additive and FiLM) and branches (by factor, shared, merged) in the walk.
+- **The check loops the host** (D13, 4): from `initial_state`, each window fed the graph's own
+  `next_state`, against our network over the whole run: outputs and states within 1e-12, and every
+  code index equal at every step. Every window architecture of the window tests (token and array
+  windows; one, two and three factors; crossed; continuous; linear codes; FiLM; poolings before the
+  state; branches) passes on numpy and Rust, under both evaluators, at about 1e-16.
+
 ## The short answers
 
 - **Hugging Face has no single universal model format to extend.** A Hub model is a git repository
