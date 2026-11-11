@@ -16,8 +16,12 @@ indrajala-ml, which it bloats for reuse). Their names in this repository's code 
 Workplans for ML primitives, each planned (stage 1) and not yet built; the candidates are
 [next-steps.md](../next-steps.md)'s infrastructure items.
 
-None open: the roadmap's steps 1-15 and the array window (the machine-policy plan's M1) are done,
-their workplans retired ([retired.md](retired.md)).
+| workplan | scope |
+| --- | --- |
+| [export-and-hub-workplan.md](library/export-and-hub-workplan.md) | **open, 2026-11-11:** format 3 (a directory: `config.json` and safetensors), the Hugging Face Hub (save, push, load by revision) and ONNX export of every shape, the window-recurrent network as its step; nothing built, the owner's O1-O3 open |
+
+The roadmap's steps 1-15 and the array window (the machine-policy plan's M1) are done, their
+workplans retired ([retired.md](retired.md)).
 
 ## `infrastructure/`: machines, release and repositories
 
