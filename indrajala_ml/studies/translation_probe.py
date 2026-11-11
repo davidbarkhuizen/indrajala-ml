@@ -1,6 +1,6 @@
 """
-The encoder-decoder's first runs on the parallel corpora (next-steps.md, From cross-attention: "the
-encoder-decoder has never trained on the corpora"): a probe, not a registered study. It asks
+The encoder-decoder's first runs on the parallel corpora (the cross-attention workplan's leftover:
+the encoder-decoder had never trained on the corpora): a probe, not a registered study. It asks
 whether the model learns to translate at all, held-out bits per character falling and chrF above an
 English-only model's, and what an epoch costs; it claims nothing (experiment-design.md, §2).
 

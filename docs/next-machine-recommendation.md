@@ -2,7 +2,7 @@
 
 A recommendation for the next development and benchmark machine (CPU, motherboard, RAM and GPU),
 written 2026-10-08. It's a buying guide, not a plan: nothing in the code changes for this
-machine before it arrives (see the crate performance workplan, retired: [next-steps.md](next-steps.md),
+machine before it arrives (see the crate performance workplan, retired: [workplans/retired.md](workplans/retired.md),
 its D5 and D11).
 
 ## The brief

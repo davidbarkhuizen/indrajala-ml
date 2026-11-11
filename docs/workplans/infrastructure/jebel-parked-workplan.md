@@ -5,8 +5,10 @@ one benchmark, so nothing here can be claimed until it, or a replacement, is hea
 workplan is retired and this holds what's left of it. Nothing here is running, and nothing else depends on it.
 
 The retired plan, with its decisions, findings and every stage's readings:
-`git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md`. What it delivered and the
-close-out readings: [next-steps.md](../../next-steps.md), "From the crate performance workplan".
+`git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md`. Its stage 12
+close-out readings are in indrajala-benchmarks' `readings/2026-11-05-crate-threads/`
+([retired.md](../retired.md)); its leftovers outside this plan in [next-steps.md](../../next-steps.md),
+"From the crate performance workplan".
 
 ## To resume
 
@@ -86,7 +88,7 @@ there says less about a production machine, so it wasn't taken.
 | P8 | **Placement (K2, K3, K4):** loops aligned to 32 bytes, as a full baseline; `litshe`'s cheaper pin; `learn linear k1 s16 m16 B64 W19` +4.2%, #1174's loader +2.3%, #1175's numpy causal forward +2.5%; K30's `prepare / rust` +5-7% on `jebel`, no epoch moved | All under the bar, or small. When a read needs them | A full baseline |
 | P9 | **PL2 at 95 W** once the supply and machine are settled: the owner's next setting | 65 W may clip threaded bursts: unmeasured | The machine |
 
-Stage 12's threshold for aarch64 is P5; the rest of stages 12 and 13 are done. K13, K17-K22 stay in next-steps.
+Stage 12's threshold for aarch64 is P5; the rest of stages 12 and 13 are done. K13, K17-K20 and K22 stay in next-steps; K21 (the forward context's 1.1%) was accepted.
 
 ## Decisions carried over
 

@@ -1,110 +1,25 @@
-# Next steps: work left over from completed workplans
+# Next steps: work to be done
 
 **The goal all of it serves:** [machine-discovery.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/machine-discovery.md), discovering finite-state
 machines from behaviour and known structure, each discovery proved; its route in stages A-F.
 
-A workplan is deleted once its last stage merges, and never before: only when every stage and
-decision is resolved and only future work is left. Whatever it left open (its "After this plan"
-list, and what its "Out of scope" left unbuilt) moves here. Nothing listed here is excluded:
-"not planned yet" means only that no workplan has taken it up. A workplan still
-in progress keeps its own list; the open ones are indexed, by group, in
-[workplans/README.md](workplans/README.md). Of the research plans, the general algebras, the
-factorisation machine and the adders of any length have been paused since 2026-10-20, when the owner
-set planned work aside for the state-formation plan; each waits for a decision to resume or retire
-(the programme audit's F29). The order of the next ML
-primitives is in [primitives-roadmap.md](primitives-roadmap.md).
+This file lists work that no open workplan holds: what a retired workplan left open (its "After this
+plan" list, and what its "Out of scope" left unbuilt), with enough of the reasoning to take it up.
+When an item is done, it is deleted here; the record of what was built is the README, the study
+scripts' docstrings, and the retired plan itself ([workplans/retired.md](workplans/retired.md) says
+how to read each from git history). Nothing listed here is excluded: "not planned yet" means only
+that no workplan has taken it up.
 
-## After paper 1: the agreed order (the owner, 2026-10-24)
+The open workplans keep their own lists: this repository's are indexed in
+[workplans/README.md](workplans/README.md) (the parked `jebel` plan holds the crate's remaining speed
+work), the research plans in indrajala-research's
+[workplans/README.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/README.md).
+Of the research plans, the general algebras, the factorisation machine and the adders of any length
+have been paused since 2026-10-20; each waits for a decision to resume or retire (the programme
+audit's F29). The order of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
 
-1. Finish paper 1: **done**. The stand-alone preprint was published on 2026-10-31
-   (doi:10.5281/zenodo.23826655), and the owner closed the paper on 2026-11-03: no more work on it.
-2. A statistically sound verdict on the continuous quasi-static crystallisation (out of the paper
-   by D2: about 3 in 5 on two backdrops, 0 of 10 beyond): whether it keeps the solutions the snap to
-   codes loses, without harm, against the paper cell at the same epoch budget; the default if so.
-3. Then, on that default, branching re-tested properly (the window branches at the base width, and
-   the owner's recombining window: branch a factor, recombine before the output), then whether more
-   network depth helps the cases still struggling (varied alone). Depth has not been varied on the
-   window-recurrent architecture (only in the primitives' early studies).
-
-The plan for all three: [post-paper-retests-workplan.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/post-paper-retests-workplan.md).
-
-## Retired workplans
-
-Each one is still in git history, with its decisions (D1, D2, ...), design and stages. Code and
-docs cite them by section:
-
-| Workplan | Plan PR | Stages | Read it with |
-| --- | --- | --- | --- |
-| Composable layers and optimizers (roadmap step 1) | #475 | #476-#485 | `git show 3a5d179:docs/composable-layers-workplan.md` |
-| The A/B harness and a stand-alone measurement guide | #487 | #488-#491 | `git show 3a5d179:docs/ab-harness-workplan.md` |
-| Batch normalization (roadmap step 2) | #486 | #493-#503 | `git show 189921c:docs/batch-norm-workplan.md` |
-| Removing duplicated code (DRY) | #506 | #507-#514 | `git show e066333:docs/dry-workplan.md` |
-| The conv batch-size study with batch norm | #516 | #517-#519 | `git show acbc49c:docs/conv-batch-norm-scaling-workplan.md` |
-| Explicit generator objects (RNG generators) | #521 | crate #46, #522-#529 | `git show aaf8bb2:docs/rng-generators-workplan.md` |
-| Residual connections (roadmap step 3) | #531 | crate #47, #532-#538 | `git show 365a173:docs/residual-connections-workplan.md` |
-| Layer norm and single-head attention (roadmap step 4) | #540 | crate #48, #542-#548 | `git show 7d3bd0a:docs/layer-norm-attention-workplan.md` |
-| Removing duplicated code, second pass (DRY rerun) | #550 | #551-#557 | `git show 88e1815:docs/dry-rerun-workplan.md` |
-| Presets for the one-change combinations | #559 | #560-#564 | `git show 2a799bf:docs/presets-workplan.md` |
-| The source layout | #566 | #567-#573 | `git show b362621:docs/source-layout-workplan.md` |
-| A baseline on the new benchmark machine (i7-9700K) | #575 | #576-#590, #592 | `git show 480164d:docs/benchmark-machine-workplan.md` |
-| A benchmark archive, tiered benchmarking, and a remote benchmark machine | #584 | #593-#598, archive #1-#11 | `git show 056b808:docs/benchmark-archive-workplan.md` |
-| Multi-head attention and a transformer block (roadmap step 5) | #602 | crate #51-#52, #603-#613, archive #12-#13 | `git show d70cf0f:docs/multi-head-attention-workplan.md` |
-| A sequence task with causal masking (roadmap step 6) | #620 | crate #53, #621-#634, archive #14-#17 | `git show f6e843b:docs/sequence-task-workplan.md` |
-| Pure Python's random draws in numpy's order (RNG draw order) | #637 | #649-#652, archive #18-#19 | `git show 7a80858:docs/rng-draw-order-workplan.md` |
-| Dropout in attention (roadmap step 7) | #638 | crate #54, #654-#660, #666, archive #20-#21 | `git show 8d2019e:docs/attention-dropout-workplan.md` |
-| Length generalisation for the column adders (terminated by the owner before its existence study) | #683 | #684 | `git show c3d619b:docs/length-generalisation-workplan.md` |
-| Rotary position embedding (roadmap step 8) | #639 | crate #55, #668-#669, #678-#682, #688, archive #22-#23 | `git show 9b27175:docs/rotary-positions-workplan.md` |
-| Studies and timing runs sharing `jebel` (study-runs) | #670 | #673-#676, #695 | `git show 868838e:docs/study-runs-workplan.md` |
-| The smallest network that adds (the addition study) | #661 | #662-#665, #672, #677, #696, models `7748416` | `git show 8990f74:docs/addition-study-workplan.md` |
-| The demos in their own repository (the demo split) | #720 | #722-#724, indrajala-demos #1-#2 | `git show 9c50fe6:docs/demos-split-workplan.md` |
-| The window loop in the crate (the window program) | #792 | #799-#802, crate #58-#59, archive #28-#30, #804 | `git show ad651d8:docs/window-program-workplan.md` |
-| Substantiating the window-recurrent adder's findings (the claims workplan, C0-C8, E1-E8) | #701 | #703-#808 (findings #712-#808), models #1; report [window-recurrent-report.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/window-recurrent-report.md) | `git show fea9de1:docs/window-recurrent-claims-workplan.md` |
-| The window-recurrent adder (milestone A; its claims in the row above) | #685 | #686-#702, #809 | `git show e45944e:docs/window-recurrent-adder-workplan.md` |
-| A factored state for the window-recurrent network (C9, C9', C9'') | #737 | #738-#764, crate #57 | `git show e45944e:docs/factored-state-workplan.md` |
-| A family of modular operations on one state (option 2) | #765 | #766 | `git show e45944e:docs/modular-family-workplan.md` |
-| Modular division with the family (`p` 5 and 7, the registered claim) | #766 | #767-#782 | `git show e45944e:docs/division-workplan.md` |
-| Where division fails in `p` (the division ladder, L1-L3) | #817 | #824, #856, #859, #861 | `git show f9101d8:docs/division-ladder-workplan.md` |
-| A path through the window for each factor and for the answers (window branches; W1, W2, B1-B3) | #863 | #864-#868, crate #66, #884 | `git show e7f1ff6:docs/window-branches-workplan.md` |
-| Consolidating codes (A) and longer words (B) for extra codes (P1, P2) | #822 | #829, #832-#836, #845, #849, #854, #857 | `git show df1dcac:docs/code-consolidation-workplan.md` |
-| Controlling the codes' commitment (the diagnostic, the thermostat, annealing) | #765 | #851, #852, #871, #876, #881, #885, crate #67, #886 | `git show df1dcac:docs/commitment-control-workplan.md` |
-| One code, one state (R1-R4, C0, C2) | #873 | #874, #875, #878, #879, #883 | `git show df1dcac:docs/one-code-one-state-workplan.md` |
-| A population of runs selected by their machines (level 2, not built) | #882 | - | `git show df1dcac:docs/population-workplan.md` |
-| An audit of the research programme (2026-10-23) | #953 | indrajala-research #48-#50, #954 | `git show 4ea65cc:docs/workplans/programme-audit-workplan.md`; the four reviews at indrajala-research's top level (`review-2026-10-23-*.md`) |
-| The batch runner (restarts at a cutoff; a controller and a worker on each machine) | #935 | #943, #944, #946, #948, #952, #956 | `git show 53d7fef:docs/workplans/batch-runner-workplan.md` |
-| The snap wall (an asymmetric margin on the snap; P1, C1 refuted) | #787 | #788, #789, #793, #797, #803 | `git show 53d7fef:docs/workplans/snap-wall-workplan.md` |
-| The rest of the research code to indrajala-studies (D1-D9) | #1134 | #1135-#1138, studies #5, #6, research #131, this PR | `git show bbe51b4:docs/workplans/infrastructure/research-separation-workplan.md` |
-| The studies' clean-moving code to indrajala-studies (D1-D11) | #1116 | studies #1-#4, #1131, #1132, research #130, this PR | `git show 6475d18:docs/workplans/infrastructure/studies-repo-workplan.md` |
-| Publishing the crate on PyPI and crates.io, the first release 0.1.0 (D1-D11) | #1118 | crate #78-#84, #1119-#1121, #1127, #1129, this PR | `git show 995f0bd:docs/workplans/infrastructure/release-workplan.md` |
-| The crate's kernel loose ends: the vector `exp`, the build pinned (D1-D7) | #1084 | #1089, #1093, #1095-#1097, crate #74, #76, bump #1088 | `git show 7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md` |
-| aarch64 on a Raspberry Pi 5, the crate bit-identical across architectures (D1-D10) | #721 | #722, #806, #810, #813, #842, #843, #846, #869, #880, #902, #926, crate #62-#65, #71 | `git show 6b9c6fe:docs/workplans/infrastructure/aarch64-workplan.md` |
-| Generation with a key/value cache (roadmap step 9, D1-D9) | #640 | #1143-#1148, crate #85, #1149 | `git show 836e9a3:docs/workplans/library/generation-workplan.md` |
-| The training recipe: schedules, AdamW, clipping (roadmap step 10, D1-D11) | #641 | #1150-#1156, crate #86, #1160 | `git show b446c31:docs/workplans/library/training-recipe-workplan.md` |
-| Segments: packing, document masks and padding (roadmap step 11, D1-D11) | #642 | #1157, #1158, #1162-#1166, crate #87, #1159, this PR | `git show 69e2e93:docs/workplans/library/segments-workplan.md` |
-| Context length: tiled attention, windows cut anew every epoch, the study (roadmap step 12, D1-D13) | #643 | #647, #1168-#1175, crate #88, #1178, this PR | `git show ec20e8c:docs/workplans/library/context-length-workplan.md` |
-| FFN activations: GELU and SwiGLU (roadmap step 13, D1-D11; its study abandoned) | #644 | #1176, #1177, #1182-#1187, crate #90, #92, this PR | `git show dcedf28:docs/workplans/library/ffn-activations-workplan.md` |
-| Grouped- and multi-query attention (roadmap step 14, D1-D13; its study abandoned for the literature) | #645 | #1189-#1197, crate #93, this PR | `git show 3a09724:docs/workplans/library/grouped-query-attention-workplan.md` |
-| Paper 1: learning finite-state transducers through their approximations, with proof (D1-D39; retired 2026-11-03 after the preprint, doi:10.5281/zenodo.23826655) | indrajala-research's | T1-T12, R1-R9; datapack doi:10.5281/zenodo.23733575; tags `paper1-v1` to `paper1-v1.2` | `git show 0d1aaef:docs/workplans/paper-workplan.md` in indrajala-research |
-| The implementation audit's remedies (§16; D1-D11) | #1202, #1203 | #1204-#1212, crate #94, studies #15, research #139, this PR | `git show 85d1705:docs/workplans/library/audit-remedies-workplan.md` |
-| The crate's module structure (D1-D6) | #1238 | crate #97, #98, #1240 | `git show d79074a:docs/workplans/infrastructure/crate-structure-workplan.md` |
-| Cross-attention: the encoder-decoder on Greek-English translation (roadmap step 15, D1-D18; its study decided from the literature) | #646 | #1219-#1236, crate #95, #96, this PR | `git show 2a512fb:docs/workplans/library/cross-attention-workplan.md` |
-| Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
-| The crate's speed: kernels and threads as one plan (its jebel-dependent work parked) | #1243 | crate #100-#116, #1244-#1273 | `git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md` |
-| A window of array layers, a given gradient, stored states (the array window; indrajala-research's machine-policy plan, M1) | #1282 | #1283-#1285, crate #119 | `git show 32d4d23:docs/workplans/library/array-window-workplan.md` |
-
-The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
-candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
-`git show 0a04977:docs/optimizations/<name>.md`.
-
-What they built is documented in the README (Models, Saving and loading, Update rules, Batch
-normalization, Residual connections, Layer norm and attention, The sequence task, Dropout among the
-tokens, Rotary positions, Generation, Activations, The addition study; grouped key/value heads in Layer norm and attention), [measurement.md](measurement.md)
-and [rng-audit.md](rng-audit.md). The batch-size studies' findings are in
-`indrajala_ml/studies/batch_size_scaling.py`'s docstring, the depth study's in
-`scripts/studies/residual_depth_study.py`'s, the patch-attention study's in
-`scripts/studies/patch_attention_study.py`'s, the multi-head attention study's in
-`scripts/studies/multi_head_attention_study.py`'s, the sequence study's in `scripts/studies/sequence_study.py`'s,
-the attention dropout study's in `scripts/studies/attention_dropout_study.py`'s, the rotary study's in
-`scripts/studies/rotary_study.py`'s, the context-length study's in `scripts/studies/context_length_study.py`'s, the addition study's in indrajala-studies' `scripts/studies/addition_study.py`'s.
+Sections are named for the plan that left the work ("From ..."), so citations of the form
+"next-steps, From X" find them.
 
 ## From the array window (retired 2026-11-08)
 
@@ -136,77 +51,38 @@ the machine-policy plan's M1, indrajala-research). Not planned yet:
 
 ## From the crate performance workplan (retired 2026-11-05)
 
-Retired with its jebel-dependent work **[parked](workplans/infrastructure/jebel-parked-workplan.md)**, the owner's call, as `jebel` resets itself. The plan, with every stage's findings: `git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md`.
+Its `jebel`-dependent work is **[parked](workplans/infrastructure/jebel-parked-workplan.md)** (the
+owner's call, as `jebel` resets itself). Not in the parked plan:
 
-**Done, kernels (stages 0-7):** a shape census, `CpuInfo`, slabs and packing for long `k`, `matmul_nt` past the L2, accumulate without its transpose, the attend's buffers, the window's kernels, `codes_forward` in lanes, `exp`'s table loads. The plan's readings give each. Closed under the 5% bar: K9, K10, K11, K13, K24, K29.
-
-**Done, threads (stages 8-10's first step):** `thread_cost_probe.py`; one budget a process (crate #113), defaulting to physical cores; launchers at 1 thread a worker, refusing past the host's CPUs (#1266, indrajala-studies #16); the pool (crate #114) with every threaded site on it (crate #115), bits unchanged. The crate's README, Threads, says how it behaves.
-
-**Stage 12's readings (2026-11-05, A/As; tables in indrajala-benchmarks' `readings/2026-11-05-crate-threads/`):**
-
-- **numpy beside the crate: leave OpenBLAS alone.** `OPENBLAS_NUM_THREADS` 1 against its default moved no Rust epoch or window row beyond noise on klip or stone, so it needn't follow the crate's budget. Studies keep 1, as they do. `jebel` wasn't read.
-- **`litshe`'s temperature with its active cooler** (the owner's O2): fan pinned at full, a 10-minute mean and peak of 52 C, 57.85 C at 1 core, 64 C, 67.75 C at 2, 64.5 C, 66.65 C at 4, no throttling; one-second readings jump 5-8 C, so 2 cores against 4 is noise. On the stock curve 4 cores pass 70 C in 141 s. So the setup pins the fan, and its profile has `max_c` 69, `abort_c` 70.
-- **`litshe`'s bits:** no Rust network differs from the current golden file; 44 numpy ones do, whose BLAS results are machine-specific (the script's docstring). The golden file isn't in git: copy the current one to a machine before checking, as its old one reads "NOT bit-identical" for no reason.
-- **`litshe`'s scaling: its memory bus is the limit, by the shape of these numbers.** `d` 512 epoch 70.0, 47.2, 50.0 s at 1, 2, 4 threads. The fixed-work call scales 3.9x at 4, warm or cold, as it touches no memory, and its clocks are fixed. 2048 x 2048 x 512 at 1, 2, 4 threads: 355, 224, 345 ms. But 32 x 30 x 784 gains 3x and dense forward at b512 2.5x. Epochs at the best count: conv B=512 -9.5% (4 threads), dense B=512 -8.4% (2).
-
-| one machine | `d` 512 epoch, 1 thread | best `d` 512 epochs a second (N x T) | window learn, 1 process, steps a second | window learn, 4 processes | window forward, 4 processes, runs a second |
-|---|---|---|---|---|---|
-| `jebel` | 18.2 s | 0.642 (2 x 4) | not read | not read | not read |
-| stone | 17.8 s | 0.56 (4 x 8) | 55.6 | 134 (at 8: 139) | 1.29 (at 8: 1.56) |
-| klip | 52.4 s | 0.21 (2 x 2) | 19.5 | 67.8 | 0.53 |
-| `litshe` | 70.0 s | 0.088 (1 x 2) | 19.9 | 26.6 | 0.45 |
-
-(Window: `learn-family-p7-f32-B64-W16` and `forward-family-p7-f32-n1024`, one thread a process, run on the three machines at once.)
-
-**Leftovers:** the parked plan. Not in it, as before: K17 (SVE or AVX-512, until a machine has them), K18 (a bits-changing kernel, the owner's approval and a golden re-record), K19 (musl's golden run), K20 (numpy's expressions), K21 (the forward context's 1.1%, accepted), K22 (checkpointing the window's forward), K13 (a batched decode step: no epoch reaches it, Rust flat at about 20,000 characters a second from batch 8). The next crates.io release is 0.2.0, with all of this in it.
-
-## From the crate structure (retired 2026-11-04)
-
-Done: the core's flat modules became a layered tree (D1): `Array`, `Shape` and `Error` at the
-bottom, then `num` (scalar kernels, the correctly rounded `exp`, `erf`, the `Activation` enum),
-then `ops`, `linalg` and `random`, then `nn`, then `program` and `data`; `core/tests/layers.rs`
-fails on an upward import (crate #97). Names lost their module's stutter (D2: `layer_forward` is
-`nn::dense::forward`, `ConvGeometry` is `nn::conv::Geometry`); the full map is in the crate's
-`pypi-pre-release-notes.md`, and the core's next crates.io release is 0.2.0 with no aliases (D4).
-The bindings' source mirrors the tree, one `register` per module (crate #98); Python's names are
-unchanged (D3). Moves only (D5): both golden runs bit-identical on pyramidon and jebel, and the
-tier 1 `epoch_op_profile` A/B on jebel held (three conv forward rows +1.0% to +1.9%, placement: the same instructions in both builds). Its two leftovers were done after (crate #99): batch norm's private activation enum gave way to
-`num::activation`'s, which gained `Sigmoid` (`from_name` doesn't name it, so the hidden layers'
-ops and Python are unchanged), and `nn/recurrent/mod.rs`'s comment now says its `exp` is the
-correctly rounded one.
+- **K17:** SVE or AVX-512 kernels (`exp`, the transpose, the products), in the canonical order
+  (the aarch64 plan's D5), when a machine with them is in hand. Not on the Pi 5's Cortex-A76.
+- **K18:** a bits-changing kernel (fused or reassociated arithmetic, in the window program too:
+  the window program plan's D3 (b)); it needs the owner's approval and a re-recorded golden run
+  (measurement.md, §8).
+- **K19:** musl's golden run. CI builds and tests the crate on musl (Alpine, both architectures),
+  not the committed reference; a check to add if musl becomes a target.
+- **K20:** numpy's expressions (the reference path's own speed).
+- **K22:** checkpointing the window's forward (the window program plan's D5 (c)): keep every
+  `r`-th window's forward pass and recompute the rest, if a study trains windows long enough to
+  pass the memory budget (2.9 MiB at E2b''s cell, 21.7 MiB at the fork probe's, against 2 GiB).
+- **K13:** a batched decode step: Rust's batched decode runs `attention_step` once a row, each
+  row's cache its current paragraph's keys (the segments workplan, D8 (b)); a crate step over an
+  `(N, c)` cache with the keys' segments, numpy's form (D8 (a)), would batch it and give the two
+  one cache form. No epoch reaches it: on `jebel` (2026-11-04) Rust reads 20,173 characters a
+  second at batch 8 and 20,806 at 32, flat, against numpy's 7,770 and 13,652.
+- **The next crates.io and PyPI release is 0.2.0** (below, From the release).
 
 ## From cross-attention (retired 2026-11-03)
 
-Done: the parallel dataset (indrajala-datasets-perseus-parallel, tag `v2026-11-03.2`: the
-histories and Plutarch's *Lives*) and its loader of packed pairs (D4, D11, D13);
-`CrossAttention` and `EncoderDecoder` specs and format 2's `"encoder_decoder"` shape (D14); the
-encoder-decoder in numpy, Rust and pure Python, the crate's `cross_attention_*` ops (crate #95,
-#96), seeded draws numpy's by bits and training within rounding (D2, D3); decoding with the
-source encoded once and each `CrossAttention`'s keys and values cached (D7, D15-D17); chrF and
-the translation evaluation (D6); fixtures and golden entries (D8).
+The encoder-decoder stays the translation model, decided from the literature (README,
+Cross-attention and the encoder-decoder, "When to use it"). Left:
 
-**The study (D9) was decided from the literature (D18), not run** (the owner, 2026-11-03, as for
-grouped-query attention). The encoder-decoder stays the translation model:
-- Raffel et al. 2020 (T5, §3.2): at equal parameters and compute, the shared encoder-decoder beats
-  the prefix LM (En-De BLEU 26.72 against 26.43; the unshared 2P one 26.98).
-- Zhang et al. 2022 (MT): the architectures differ most at small scale, with EncDec ahead, and
-  "small on-device models should continue using EncDec"; a prefix LM with full visibility of the
-  source approaches EncDec as models grow.
-- Gao et al. 2022: a concatenated translation LM matches it when tuned, but decodes through the
-  whole network over a longer sequence.
-- Fu et al. 2023: a decoder-only model's attention to the source fades as generation proceeds.
-
-Sources (indrajala-literature): `raffel-2020-exploring-limits-transfer-t5`,
-`zhang-2022-scaling-transfer-lm-architectures-mt`, `gao-2022-encoder-decoder-redundant-nmt`,
-`fu-2023-decoder-only-or-encoder-decoder`. Left:
-
-- **The encoder-decoder's first training runs: abandoned** (the translation probe, #1242,
-  2026-11-04, the owner's call; `scripts/studies/translation_probe.py`'s docstring has the
-  findings): d 128, 2 + 2 blocks, the Lives, 23 epochs on stone. English bits per character fell
-  from 3.33 to 1.81, but the source ablation's gap (another window's Greek against the window's
-  own) reached only 0.027 bits, growing about 0.001 an epoch, and the greedy outputs ignore the
-  Greek (chrF 20.6). The encoder-decoder has not yet learned to read its source; no translation
-  claim rests on it.
+- **An encoder-decoder that reads its source.** The translation probe (#1242, 2026-11-04;
+  `scripts/studies/translation_probe.py`'s docstring) was abandoned by the owner: d 128, 2 + 2
+  blocks, the Lives, 23 epochs on stone; English bits per character fell from 3.33 to 1.81, but the
+  source ablation's gap (another window's Greek against the window's own) reached only 0.027 bits,
+  growing about 0.001 an epoch, and the greedy outputs ignore the Greek (chrF 20.6). No translation
+  claim rests on the model until a run learns to use its source.
 - **A decoder-only translation model (D18 (c)):** the Greek as a prefix, the loss on the English
   only (counted targets by position, not only "not a pad"), when a question needs the comparison.
 - **D10's out-of-scope items:** pretraining the encoder on Greek alone, a BPE tokenizer over both
@@ -216,129 +92,52 @@ Sources (indrajala-literature): `raffel-2020-exploring-limits-transfer-t5`,
   on Rust and in pure Python, as step 9's do.
 - **No benchmark times cross-attention:** `attention_timing` times self-attention only; a change to
   the `cross_attention_*` ops has nothing to A/B against until one is added (measurement.md).
-- **A build alone moves single Rust `attention_timing` rows by about 2%** (measurement.md §7; the
-  probe crate `probe-cross-layout` in indrajala-math-rust is that note's reference).
 
 ## From the audit remedies (retired 2026-11-03)
 
-Done: the implementation audit's two supported changes and four optional ones
-([nn-implementation-analysis.md](nn-implementation-analysis.md) §16), each in all three
-implementations, off by default, with golden entries (161 locally, 53 in the Rust reference; no
-earlier entry moved):
-- **The explicit output loss** (D2, #1204): `Dense.loss` is named on the output layer and `None`
-  on a hidden one; the presets name `"squared"`.
-- **The k-means codes** (D3, #1205): `model/codes.py`'s `factor_states`, `fit_codes`,
-  `initialise_codes`, the harness's `kmeans` by bits; indrajala-studies calls them (studies #15).
-- **Re-seeding dead codes** (D4, #1206): `codes.reseed_dead_codes`, the optimizers' `reset_rows`.
-- **The codebook's rate** (D5, #1207): the optimizer's `learning_rate_scales`, set by
-  `set_code_learning_rate_scale`; indrajala-studies' `FactorRates` wrapper replaced by it.
-- **SimVQ's codes** (D6, #1208): `Codes(parameterisation="linear")`, `E = Q W`, `W` stepped.
-- **The selection set** (D7, #1209): the trainer's `selection=`, recorded in `RunCheckpoint`.
-- **He initialisation** (D8, #1210): `init="he"` on `Dense` and `Conv`.
-- **The FiLM state input** (D9, crate #94, #1212): `StateInput(scale=True)`, `x_t * (1 + G c) + P c`.
-- **MRI** (D10, #1211): the linear classifier adapts every unit the output needs.
-
-Three departures from the plan's text, each in its stage's *Built* note: D5's scales live in the
-optimizer, keyed by layer index, not on each part; D4 is a function beside the k-means one, not a
-network method; and D6's `set_codes` resets `W` to the identity (a re-seed solves `Q`'s row), so a
-k-means or re-seeded code lands on the state, not at `x W`. The tier 1 A/Bs on `jebel` held: #1207
-and #1209 (`prepared_dataset_timing`), #1212 (the window program; one row's +4.0% after ONNO was
-within noise at ONNONOON). Left:
-
-- **The studies (D11):** each codebook primitive is a candidate in indrajala-research's
-  state-formation workplan (research #139), judged only by a registered study there, on
-  fresh-seed certified rates against the failure kind it targets. Nothing here adopts one.
+- **The studies (D11):** each codebook primitive the plan built (k-means codes, re-seeding dead
+  codes, the codebook's rate, SimVQ's codes, the selection set, He initialisation, the FiLM state
+  input, MRI) is a candidate in indrajala-research's state-formation workplan (research #139),
+  judged only by a registered study there, on fresh-seed certified rates against the failure kind
+  it targets. Nothing here adopts one.
 - **`window_study_timing.py`'s default is the long test alone:** a crate change to the window
-  program also needs `window_recurrent_timing.py`'s learn and forward cases (#1212's second A/B);
-  in #1212's first, the numpy `matmul 256` control moved -22.9%, which nothing in the crate
-  reaches (unexplained).
-- **`jebel`'s `ab.py archive` can't open its PR** (`gh` unauthenticated there): each archive PR is
-  opened from `pyramidon` (working-notes).
+  program also needs `window_recurrent_timing.py`'s learn and forward cases (#1212's second A/B).
+  Adding them to the default would make one A/B enough. In #1212's first, the numpy `matmul 256`
+  control moved -22.9%, which nothing in the crate reaches (unexplained).
 
 ## From grouped-query attention (retired 2026-11-03)
 
-Done: `Attention(key_value_heads=g)` in all three implementations and the crate (D1-D4, D9;
-crate #93), the decoder's caches at `g` heads, the window program unchanged (D10); `to_grouped`
-(D5); `generation_timing.py`'s `--heads`, `--key-value-heads`, `--context`, `--batch` (D11); golden
-entries and fixtures at `g` 2 and 1 (D6). The study (D7, D13) was registered (#1197) and
-**abandoned by the owner on 2026-11-03** before any run ended (stone ran it 4 minutes); the
-owner asked for a literature review to decide instead.
-
-**The decision, from the literature (D14):** the README's "When to use it" (Layer norm and
-attention) gives the evidence. Options:
-- (a) *Chosen.* Multi-head stays the default (`key_value_heads=None`); GQA is documented as the
-  decoder's option when the cache binds, at about 4 query heads a key/value head, not
-  multi-query. Pros: no model moves; it follows the evidence: grouping costs little where
-  uptrained (Ainslie et al.) or at 4:1 at 125M-350M (MobileLLM), but measurably from scratch at
-  7B (DeepSeek-V2), and multi-query is last in every comparison; nothing here is cache-bound (the
-  sequence models' cache is 2,048 bytes a token). Cons: unlike most production decoders, which
-  group by default.
-- (b) Grouped by default for decoding models (production's 8 key/value heads, or `h / 4`). Pros:
-  production's practice (Llama 3, Mistral, Qwen2.5, Gemma 2). Cons: our models have 4 heads, so
-  `h / 4` is multi-query; a quality cost in DeepSeek-V2's from-scratch ablation for a saving
-  nothing here needs; every preset model would move.
-- (c) Multi-query by default. Cons: last in every comparison (Ainslie et al., DeepSeek-V2,
-  MobileLLM's single-head rows).
-
-Sources (indrajala-literature): `ainslie-2023-gqa-grouped-query-attention`,
-`shazeer-2019-one-write-head-fast-decoding`, `deepseek-2024-deepseek-v2-moe`,
-`liu-2024-mobilellm-sub-billion`, `chen-2025-cost-optimal-gqa-long-context`,
-`grattafiori-2024-llama-3-herd`, `jiang-2023-mistral-7b`, `qwen-2024-qwen2-5-technical-report`,
-`gemma-2024-gemma-2-practical-size`, `olmo-2024-2-olmo-2-furious`; SmolLM2-135M from its
-`config.json`. Left:
+Multi-head stays the default, decided from the literature (README, Layer norm and attention, "When
+to use it"; the options weighed are the plan's D14). Left:
 
 - **Not measured here:** GQA's quality at this library's sizes, an uptrained model against one
   trained from scratch (the study's U1; Ainslie et al. didn't compare them either), and the decode
-  rate at each `g` (`generation_timing.py` measures it in minutes when a question needs it).
+  rate at each `g` (`generation_timing.py` measures it in minutes when a question needs it). The
+  registered study's code (`indrajala_ml/studies/gqa_study.py`, its script and tests) stays, never
+  run.
 - **Out of scope (D8):** multi-head latent attention (DeepSeek-V2: above multi-head at 14% and 4%
   of its cache, its Table 9) and cache quantization, each its own step if a cache ever binds.
 - **Reinvesting the saved parameters** (MobileLLM widened the embedding: +0.4 and +0.7 points at
   125M and 350M) is a model-design choice, not planned.
-- **The study's code stays** (`indrajala_ml/studies/gqa_study.py`, its script and tests), never run.
 
 ## From FFN activations (retired 2026-11-03)
 
-Done: `erf` (fdlibm's) in all three implementations and the crate (D2); `"gelu"`, `"gelu_tanh"`
-and `"silu"` as `Dense` activations, the crate's dense ops one activation-parameterised family
-(D1, D5, D9; crate #90); `GatedDense`, the gated FFN (SwiGLU, GEGLU), at equal parameters with a
-ReLU FFN (D3, D4; crate #92); golden entries and fixtures (D6). The study (D7, D11) was registered
-(#1187) and **abandoned by the owner on 2026-11-03 after 24 of its 80 runs**: its claims F1-F3 are
-not tested, and the 24 runs are kept but not analysed (no conclusions from a registered study's
-partial data). So, by the registration's own rule, ReLU stays the sequence models' FFN; the GQA
-study's SwiGLU (its D13) came from the literature, not from this study. Left:
+The study (D7, D11) was abandoned by the owner after 24 of its 80 runs, so ReLU stays the sequence
+models' FFN (`scripts/studies/ffn_activation_study.py`'s docstring). Not planned:
 
-- **The partial runs:** Tiny Shakespeare's 20 and 4 of Herodotus's contiguous GELU, in pyramidon's
-  `data/studies/ffn-activations/sweep/` (gitignored, with a manifest), from main `dcedf28`, crate
-  `070e61d`.
-- **8 workers on `stone` buy nothing:** stone's i7-1255U is a 15 W part; with 8 jobs every core
-  ran at 0.9-1.1 GHz (its power cap, 72 C), a Herodotus epoch took 640-690 s against 76 s for one
-  job alone, so 8 workers did about one lone job's work. The registration's "8 workers run 1.34
-  times one job's time" doesn't hold on stone, and its estimate (7-10 h for the 80 runs) was about
-  2 to 2.5 days. A budget sized on stone needs its throughput measured at the worker count it will run.
-- **The crate's ReLU names are gone** (`layer_relu_*`, `array_relu_mask` became the activation
-  family): a breaking change for its next PyPI release.
-- **The single-example ReLU `hidden_delta` at 30 x 784 on Rust is +6.5%** (about 0.2 us a call,
-  #1183), accepted as D9's cost on the legacy single-example path.
-- **Not planned:** the study itself, if a later model needs the FFN decided by measurement.
+- **The study itself,** if a later model needs the FFN decided by measurement. Its 24 partial runs
+  (Tiny Shakespeare's 20 and 4 of Herodotus's contiguous GELU, from main `dcedf28`, crate `070e61d`)
+  are in pyramidon's `data/studies/ffn-activations/sweep/` (gitignored, with a manifest), kept but
+  not analysed: no conclusions from a registered study's partial data. A budget for it is sized on
+  the machine's throughput at the worker count it will run (working-notes, `stone`'s throughput).
 
 ## From context length (retired 2026-11-02)
 
-Done: the end-of-paragraph token's target counted (D11); tiled attention with an online softmax in
-all three implementations and the crate, memory linear in `T`, masked blocks skipped (D3, D12;
-crate #88); the attention benchmark (D7); windows cut anew every epoch and the token budget (D4,
-D5); `Attention(document_mask)`; the study (D8), its findings in
-`scripts/studies/context_length_study.py`'s docstring: 256 below 64 (C2) and 1,024 below 64 (C1)
-hold, 1,024 below 256 is refuted (C3), the document mask is lower at 1,024 (C5) and undecided at
-256 (C4). So later sequence work on the long-form corpora uses windows of 256, and the document
-mask stays the packed default. Left:
+Later sequence work on the long-form corpora uses windows of 256, the document mask the packed
+default (`scripts/studies/context_length_study.py`'s docstring). Left:
 
 - **Per-segment (varlen) tiling** if bitwise position independence is ever needed (D3's
   refinement: global blocks agree within rounding across a segment's placements).
-- **numpy's backward at `T = 64` is 43-47% slower than the untiled one** (#1171: the recompute plus
-  the dropout redraw); numpy is the reference, not the speed path.
-- **Two unexplained tier 1 rows:** #1174's loader +2.3%, #1175's numpy causal forward +2.5% (the
-  crate performance workplan's K4 rereads them with its placement pin).
-- **A run file doesn't record `clip_norm`.**
 - **Out of scope (D10):** mixed precision, sequence parallelism, sparse or sliding-window
   attention: each its own step when a context past 1,024 or a larger model needs it.
 - **The study's readings, not planned** (the owner, 2026-11-02: no follow-ups): C3 holds only at
@@ -346,115 +145,41 @@ mask stays the packed default. Left:
   at the token budget the 1,024 arm trains on 2 windows a step; Euclid's contiguous split overfits
   by epoch 30 in every arm.
 
-## From segments (retired 2026-11-01)
-
-Done: special tokens and packed windows of paragraphs (D2, D7); the forward context through every
-layer's passes (D3); the segment mask in attention, positions per segment and the loss over counted
-targets in all three implementations and the crate (D4-D6, D9); padded batch decoding (D8); packed
-golden entries (D10). Left:
-
-- **The document-mask study is step 12's** (D11): at `T = 64` too few windows cross a paragraph
-  boundary; the context-length study has the masked and unmasked arms at 256 and 1,024.
-- **Skipping wholly masked blocks** (the varlen kernels' gain, D9): done in step 12's tiled
-  attention, where a block above the diagonal or across segments is skipped whole.
-- **The forward context's cost:** stage 2's keyword context costs Rust's dense B=32 epoch 1.1%
-  (D10, accepted); a call path that passes it without the keyword is the place to look if a later
-  A/B needs it back.
-- The decoder's follow-ups (a batched crate step) are in From generation; a paragraph's first
-  token, drawn from an untrained row, is trained since the context-length workplan's D11.
-
 ## From the training recipe (retired 2026-11-01)
 
-Done: learning-rate schedules as data (`lr_schedule.py`), recorded and checked in run files; the
-step split and clipping by the global norm; AdamW; golden entries; the study (findings in
-`scripts/studies/lr_schedule_study.py`: cosine below constant on 36 of 40 pairs, C1 holds; the
-recipe below cosine on 40 of 40, C2 differs). Left:
-
-- **Which half of the recipe gains.** C2 compared cosine against cosine with AdamW 0.1 and
-  clipping at 1.0 together; an arm with each alone would say which (or both) gives the 0.021 bits.
-  *Decided from the literature, not measured (the owner, 2026-11-03):* most likely AdamW's.
-  Decoupled weight decay is the documented generalisation gain (Loshchilov & Hutter 2019), while
-  clipping at the global norm guards against loss spikes (Pascanu et al. 2013), which rarely show
-  at this scale. A reading, not a finding: both halves stay in the recipe, and no ablation is
-  planned.
-- **The cosine's peak** stayed the constant rate's tuned one (D8 (a)); a decay usually tolerates a
-  higher peak, untested here.
-
-- **indrajala-studies' `FactorRates`** had no `step()`, which every network's batch step calls
-  since #1152. *Done* (studies #15): the wrapper is gone, and `factor_rates` sets the optimizer's
-  `learning_rate_scales` (the audit remedies' D5) for the block.
 - **A run file doesn't record `clip_norm`**, so a resumed run under another clip isn't refused as
   one under another schedule is. Record it beside the schedule (run file version 3) when a resumed
   clipped run needs it.
+- **The cosine's peak** stayed the constant rate's tuned one (D8 (a)); a decay usually tolerates a
+  higher peak, untested here.
+- **Which half of the recipe gains, not planned.** C2 compared cosine against cosine with AdamW 0.1
+  and clipping at 1.0 together; an arm with each alone would say which gives the 0.021 bits. The
+  owner (2026-11-03) took it from the literature instead: most likely AdamW's (Loshchilov & Hutter
+  2019; clipping guards against loss spikes, Pascanu et al. 2013, which rarely show at this
+  scale). Both halves stay in the recipe.
 - **Corpora to add** (the owner, 2026-10-31: both in the long run): Newton's *Principia* (Motte's
   1729 English translation, public domain), long uniform prose like Euclid's; and Whitehead and
   Russell's *Principia Mathematica* (public domain in the US), whose notation survives plain text
   only if transcribed, so a source with its symbols is needed before it can be a character corpus.
   Check each source's licence for the exact edition held (the literature rule).
 
+## From the research separation (retired 2026-10-31)
 
-Done: every piece of the window-recurrent research is in
-[indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies): the harness and its
-modules, the batch runner, `addition_data` and `modular_data`, the family probe, the 26 configs and
-`window_study_timing.py` (studies #5, from d126315; ml's copies deleted in #1138; 569 tests moved,
-studies' suite 637 in 4 CI shards). Its data moved with it on `pyramidon` (D8: 73,854 files,
-103,333,232,109 bytes, renamed on one disk, counted before and after; `paper_tables.py check` from
-studies with the default `--data` all the same). ml keeps the library and its guards: the window
-builders are the library's presets (`indrajala_ml/model/specs/window_presets.py`, #1135, every
-builder's specs checked equal), and the network test and `window_recurrent_timing.py` build the
-studies' cells from them (#1137). Checked on `jebel` before ml's copies went: a family-probe run
-from both trees gave identical output trees; a one-attempt batch from a studies worktree ran,
-matched its commit and crate, and was pulled; `ab.py` ran `window_study_timing.py` by absolute
-path. `ab.py --script-from each` (#1136) times a benchmark script's own change. Read it with
-`git show bbe51b4:docs/workplans/infrastructure/research-separation-workplan.md`. Left open:
-
-- **`learn linear k1 s16 m16 B64 W19` reads 4.2% slower since #1137** with byte-identical work (the
-  benchmark no longer imports the study modules): archived rows of that case before it aren't
-  comparable; the cause is unmeasured (measurement.md, Gotchas).
-- **Done 2026-10-31: the reference batch on `klip` and `stone`** (studies #7, 57eb97b), untagged on the
-  default paths: four short s3 attempts all ended and were pulled, with each worker's commit and crate
-  matched. It found three faults, fixed in #7: each host's `wt-batch` is an ml worktree (the runner's
-  is now `wt-studies`), stone's `~/labour/bundles` was gone, and klip has no GitHub ssh key (studies
-  is cloned over https). The old ml worktrees (`~/code/wt-batch` on `klip` and `jebel`,
-  `~/labour/code/wt-batch` on `stone`) were removed the same day.
 - **The runner's hosts keep ml's venvs** (`/home/david/code/indrajala-ml/.venv`, stone's
   `wt-branches/.venv`): they hold the same dependencies; a studies-only dependency would need them
-  rebuilt from studies.
-
-## From the studies repo (retired 2026-10-31)
-
-Done: [indrajala-studies](https://github.com/davidbarkhuizen/indrajala-studies) (public, MIT) holds
-`addition_study` and `window_drift`, paper 1's scripts (`scripts/paper/`), the addition and
-window-recurrent study scripts, `window_program_check.py`, `profile_page.py`, the addition configs
-and `migrate_factored_state.py`, with their tests (67), ml as its submodule at `ml/`. The moved
-tests passed there before ml's copies were deleted; `paper_tables.py check` from studies reports
-the manuscript all the same; a tiny window-recurrent run from both trees gave the same network
-bytes on `jebel`. Three gaps in the stage 1 survey were found and settled in the moves: the
-window-recurrent configs stay (D10, ml's harness test reads them), `chow` and `window_replay` stay
-(D11, the family probe and the certificate guard's test import them), and the certificate test's
-`CarryMachine` and `TaskMachine` are copied (D5). Read it with
-`git show 6475d18:docs/workplans/infrastructure/studies-repo-workplan.md`. Left open:
-
-- **The rest of the window-recurrent research code** followed (the research-separation plan, below).
-- **indrajala-ml on PyPI** (the release plan's D1) is no longer waiting on this move.
+  rebuilt from indrajala-studies.
 
 ## From the release (retired 2026-10-31)
 
-Done: 0.1.0 published 2026-10-31, [`indrajala-math`](https://crates.io/crates/indrajala-math)
-(crates.io, docs.rs) and [`indrajala-math-rust`](https://pypi.org/project/indrajala-math-rust/)
-(PyPI: 16 wheels, CPython 3.14 and 3.15 on 8 targets, and the sdist), with the GitHub Release;
-both indexes' copies installed and tested on every shipped platform by the release run, and
-indrajala-ml's tests passing on the PyPI wheel (`tests/` and `rust/tests/`: 12,891 passed, 10 skipped). The workspace split (the core `indrajala-math`, the
-bindings over it), one wheel per interpreter (no abi3), CI building and testing every wheel on each
-PR, and the release workflow with a TestPyPI rehearsal. Both indexes take uploads by trusted
-publishing; no token is stored (crate #84). Later releases follow the crate README's Releasing
-section. Read it with `git show 995f0bd:docs/workplans/infrastructure/release-workplan.md`. Left
-open:
+Later releases follow the crate README's Releasing section.
 
+- **0.2.0, the next release,** is a breaking one: the crate structure's renames with no aliases (its
+  D4; the map is in the crate's `pypi-pre-release-notes.md`), the ReLU ops gone into the activation
+  family (`layer_relu_*`, `array_relu_mask`), and the crate performance work.
 - **A rehearsal tag is never moved.** A failed rehearsal is re-run when its fix is outside the
   workflow; a fix to `release.yml` itself needs a new tag, and the verify job only accepts
   `testpypi-v<version>`. Accept a suffix (`testpypi-v0.1.1-2`) if that recurs.
-- **crates.io's trusted publishing is first exercised by 0.1.1.**
+- **crates.io's trusted publishing** is first exercised by the next release.
 - **Free-threaded wheels** (3.14t): `gil_used = false` and extra wheels (abi3 doesn't cover them),
   after a thread-safety review of `Array`'s interior mutability.
 - **ndarray interop** in the core (`From` conversions behind a feature), if a Rust user asks.
@@ -464,63 +189,27 @@ open:
 
 ## From the crate kernels (retired 2026-10-29)
 
-Done: the vector `exp` (D1, D2), every call site through it; conv `accumulate_gradient`'s slowdown
-explained (rustc's codegen units) and fixed by one unit (D6); x86 branches kept off 32-byte
-boundaries (D7, the JCC erratum), so a jebel A/B moves only the rows whose code changed; what a
-threaded call costs, measured for the multithreading work (D3). Read it with `git show
-7046c98:docs/workplans/infrastructure/crate-kernels-workplan.md`. Left open:
-
 - **A transpose for x86 that doesn't lose to 4K aliasing** (stage 1, closed): the AVX2 kernel lost
   up to 52% where the output's rows lie a multiple of 4 KB apart (512 rows). One that gathers a
   block into a contiguous buffer before writing it out, never interleaving loads with stores to
   aliasing rows, is the candidate; the measured kernels are on the crate's `avx2-transpose` branch.
-- **The crate performance workplan** takes stage 3's findings: a thread costs about 10 µs on jebel and 19
-  on `litshe` per call; a pool would open the threading threshold (8M flops) to the b32 products.
-- **The one-thread kernel's 16-18% gap to OpenBLAS on `litshe`: backend stalls.** `perf stat`
-  (2026-10-30; `perf` installed, `perf_event_paranoid` 1), `(32, 30) @ (30, 784)` 20,500 times on one
-  thread: crate 6.41G cycles, 13.39G instructions (IPC 2.09), 2.02G backend-stall cycles, 29M cache
-  misses; numpy 5.62G, 13.17G (IPC 2.34), 1.21G, 126M. The same instructions and fewer misses: the
-  whole gap (+0.79G cycles) is backend stalls (+0.82G), the kernel waiting on its own FMA chains
-  (each output a serial chain over `k` = 30, the bit-identical order). Narrowing it keeps the order
-  and puts more independent outputs in flight per tile (the old plan timed seven tile shapes at
-  b32, none faster; at narrow `k` a wider tile is the candidate). The crate performance workplan's
-  K10.
-- **`litshe`'s placement isn't pinned** (D7): aligning loops and functions held its kernels still but
-  cost short loops 7-16%, so its A/Bs are read with `scripts/measurement/kernel_code_diff.py` (a row
-  whose function's instructions didn't change moved with placement). A cheaper pin (loops at 32
-  bytes, functions only) is untried.
-- An SVE or AVX-512 `exp` and transpose follow D1 and D4 when a machine with them is in hand.
 - **x86 placement still moves a row through the uop cache** (the release workplan's stage 2b,
-  2026-10-30): moving conv's forward into the core left its instructions as they were (874 against
-  883, the same `memcpy` site) and made it 3-4.5% slower on jebel: `perf stat` showed instructions
-  +0.45%, cycles +2.6-3.5%, the uops from the legacy decoder +12% and the uops not delivered +42%,
-  resource stalls unchanged. D7's JCC padding keeps branches off 32-byte boundaries but not a hot
-  loop's place in the uop cache's 32-byte windows. A layout that holds it (loops aligned to 32 bytes
-  on x86, `-C llvm-args=-align-loops=32`, timed as a full baseline) is the candidate.
+  2026-10-30; the multi-head attention plan's stage 5 saw the same, up to 14% on `jebel` with the
+  same instructions): moving conv's forward into the core left its instructions as they were and
+  made it 3-4.5% slower on jebel, with uops from the legacy decoder +12% and uops not delivered
+  +42%. D7's JCC padding keeps branches off 32-byte boundaries but not a hot loop's place in the
+  uop cache's 32-byte windows. The candidate layout (loops aligned to 32 bytes) is the parked
+  plan's P8; until it holds, a crate A/B's few-percent rows on the i7 may be placement.
 
 ## From aarch64 (retired 2026-10-29)
 
-Every stage done: the crate gives the same bits on x86_64 and aarch64 (its own correctly rounded
-`exp`, D6's rules for relu, softmax's maximum and `powi`), checked on every PR by the committed Rust
-reference (`data/refactoring/golden_run_rust.json`) on both architectures' CI runners; `litshe` has
-its timing setup, and its NEON kernels (the matrix and dot products, the transpose) are in. Four
-kernel loose ends had their own plan, the crate kernels (retired, above): a vector `exp`, the
-narrow-`k` gap to numpy, conv `accumulate_gradient`'s unexplained slowdown, an AVX2 transpose. Left
-open here:
-
-- **musl's golden run:** CI builds and tests the crate on musl (Alpine, both architectures), not
-  the committed reference. A check to add if musl becomes a target.
-- **All-core work on `litshe`:** four cores at 2.4 GHz pass 65 C in about 2.5 minutes in its
-  passive case, so its passes are single-threaded. Sustained all-core work within the limits (65 C
-  ideal, 70 C hard) needs an active cooler: the owner's decision.
 - Other aarch64 machines (Graviton, Apple silicon) are checked by the committed reference alone.
-- SVE (not on the Pi 5's Cortex-A76) and AVX-512 kernels follow the canonical order (D5).
 - numpy's cross-machine behaviour stays unclaimed (D1); if ever wanted, a question about OpenBLAS.
 
 ## From the batch runner and the snap wall (retired 2026-10-29)
 
-The runner is built and in use (paper 1's batches); its hosts, ledger and gotchas are in
-[working-notes.md](working-notes.md), The batch runner. Its known limits, still open:
+The runner's known limits (its hosts, ledger and gotchas are in [working-notes.md](working-notes.md),
+The batch runner):
 
 - **Find mode's verifier** (the programme audit's F7): restarts are optimal for Las Vegas runs,
   right whenever they stop. The certificate makes a run so only with the target known. In discovery
@@ -532,23 +221,20 @@ The runner is built and in use (paper 1's batches); its hosts, ledger and gotcha
 - A cut attempt keeps its last step's networks, but a certificate that would have come after the
   cutoff is lost by design (the reheat's late recoveries are the case).
 - A ledger from before stage 5 (the stage-4 checks) holds summaries without `epochs`; `runs_of`
-  leaves them out. `stone`'s wifi makes its pulls the likeliest to fail; a pull is retried.
+  leaves them out.
 
-The snap wall: P1 refuted C1 (a wall on the snap's margin lost the proof in 8 of 10 replays, 9 of 10
-without), and the registered margins didn't set the collapsing seed apart (the wall aimed at the
-wrong quantity). Paused by the owner (2026-10-16), then overtaken by the state formation plan; its
-stages 3-5 were conditional on C1. To resume from: the candidate read after the data (the
-collapsing seed snaps its 3 minimised states to 8 codes, the others to 3-5; spare codes beside each
-other could swap or merge under an update), which a registered probe on networks with many codes in
-use would test; and the guard, which took up its follow-up (`git show
-ed0e378:docs/guard-training-workplan.md`). The wall acts only on states training visits; the
-certificate stays the proof.
+**The snap wall,** paused by the owner (2026-10-16), then overtaken by the state formation plan (P1
+refuted C1: a wall on the snap's margin lost the proof in 8 of 10 replays, 9 of 10 without). To
+resume from: the candidate read after the data (the collapsing seed snaps its 3 minimised states to
+8 codes, the others to 3-5; spare codes beside each other could swap or merge under an update),
+which a registered probe on networks with many codes in use would test. The wall acts only on states
+training visits; the certificate stays the proof.
 
 ## From the programme audit (2026-10-23; the workplan retired the same day)
 
-Four dated reviews in indrajala-research: the programme's evolution, its reasoning
-(inconsistencies, gaps, assumptions), 33 findings (F1-F33) and the earlier reviews re-assessed.
-Its S3/S4 corrections are merged (indrajala-research #50, #954). Left, the owner's calls (S1/S2):
+Four dated reviews in indrajala-research (`docs/reviews/review-2026-10-23-*.md`): the programme's
+evolution, its reasoning, 33 findings (F1-F33) and the earlier reviews re-assessed. Left, the
+owner's calls (S1/S2):
 
 - **F1:** the fresh-seed rate's (D64) registered verdict (7 of 12) against the deadline's
   completion (D67) standing in for its cut runs.
@@ -556,7 +242,7 @@ Its S3/S4 corrections are merged (indrajala-research #50, #954). Left, the owner
   E2b''s reused arm; stopping at the proof; the 0 of 160 baseline) and whether they wait for stage A.
 - **F5:** retire the panel's gate (D1, D12, D40) or run its affordable form as the runner's first batch.
 - **F6, F32:** the slack bound read offline on the D54-D64 step networks; Chow's test set built.
-- **F7:** the batch runner's find mode needs a stated verifier.
+- **F7:** the batch runner's find mode needs a stated verifier (above).
 - **F9, F10, F24:** the protocol's sidedness and mid-run moves; a table of the method's constants.
 - **F13-F18:** contribution.md brought up to the fresh-seed evidence; the class line narrowed; the
   120-against-121 confound; the method's scope; an approximation beside S3 (D39 (i)).
@@ -564,25 +250,20 @@ Its S3/S4 corrections are merged (indrajala-research #50, #954). Left, the owner
 
 ## From the commitment, one-code-one-state, consolidation and population plans (retired 2026-10-20)
 
-The owner abandoned these plans' remaining claims on 2026-10-20 and set
-[state-formation-workplan.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/state-formation-workplan.md) in their place (the night's results are in
-the probe script's findings). Built and kept as options: `--commitment-from`, `--thermostat`
-(retired as a remedy), `--anneal` (as built it merges codes: the new plan's option 1 rebuilds its
-start), `--keep-machine` and `--counterexamples` (R3/R4: C2 worked, 5 of 12), `--answer-branch` (R1,
-shelved: harm on division at 32). Left open, none planned:
+The owner abandoned these plans' remaining claims on 2026-10-20 for
+[state-formation-workplan.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/state-formation-workplan.md).
+Their options stay built (`--commitment-from`, `--thermostat`, `--anneal`, `--keep-machine`,
+`--counterexamples`, `--answer-branch`). Left open, none planned:
 
 - **C2 at 6 seeds with R3/R4 on every backdrop**, and R3/R4 against R4 alone (which did the work).
 - **The population plan's level 2** (selection among runs by their machines).
 - **Division `p` 17 at width 32**, for whether width's cure holds as the machine grows.
-- **The guard's softening** (arming only on a step that passes both verdicts).
+- **The guard's softening** (arming only on a step that passes both verdicts; below, Beyond
+  arithmetic).
 
 ## From the window branches (2026-10-19; the workplan retired the same day)
 
-The branches (`--branches`: a two-block trunk, a single-head block a factor and one for the answers)
-were built and not adopted: B1 and B2 worked in one seed a cell, W2 (width alone, at B1's size)
-did better on division, and B3 showed harm on S4 (the probe script's findings, stage 6). They stay
-an option. The answers' own branch with the factors on a shared state branch is R1, in
-`git show df1dcac:docs/one-code-one-state-workplan.md`. Left open, none planned:
+The branches (`--branches`) were built and not adopted; they stay an option. Left open, none planned:
 
 - **A stop-gradient between the answer branch and the trunk** (the plan's D4): the trunk is still
   shaped by the answers' loss.
@@ -593,30 +274,13 @@ an option. The answers' own branch with the factors on a shared state branch is 
 
 ## From the window program (2026-10-17)
 
-The window-recurrent network's window loop runs in the crate on Rust, inference and training, by
-bits the per-layer path's (`per_layer_windows`, `per_layer_gradients`, `per_layer_path`;
-indrajala-studies' `scripts/studies/window_program_check.py` checks saved networks). Before and after on `jebel` (stage 6,
-from before stage 1 to the end, tier 2): a real study run (a `p` 5 family probe run, 40 epochs) 32.9%
-faster (139 s to 93 s), the family long test 46.6% (21.1 s to 11.3 s), the training steps 43.9% (E2b''s
-linear window) and 34.1% (the `p` 7 family). Left:
-
-- **Threads in the program (D8 (b)):** split the examples across threads inside one call; rows are
-  independent, so the bits hold. Measure the crate's per-call thread spawn first; it competes with
-  the studies' and long tests' own processes.
-- **Checkpointing (D5 (c)):** keep every `r`-th window's forward pass and recompute the rest, if a
-  study trains windows long enough to pass the memory budget (2.9 MiB at E2b''s cell, 21.7 MiB at
-  the fork probe's, against 2 GiB).
-- **A bits-changing kernel (D3 (b)):** fused or reassociated arithmetic in the program; needs the
-  owner's approval and a re-recorded golden run (measurement.md, section 8).
-- **The attention window gains least** (14% forward, 31% training): its crate share is larger, so the
-  next gain is in the attention kernels, not the loop.
+- Threads in the program (D8 (b)) are the parked plan's P4.
+- **The attention window gains least** from the program (14% forward, 31% training): its crate
+  share is larger, so the next gain is in the attention kernels, not the loop.
+- Checkpointing (D5 (c)) and a bits-changing kernel (D3 (b)) are K22 and K18 (From the crate
+  performance workplan).
 
 ## From the window-recurrent claims (2026-10-17)
-
-Every claim decided ([window-recurrent-report.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/window-recurrent-report.md)): C0, C2, C2b, C3
-(working, not certified), C4 (after Holm) and C8 hold; C1 refuted for the sampled "works" and
-restated on the certificate; C6 not supported; C7 and C7' refuted (division learned later, with a
-factored state and a cover). Left:
 
 - **E3's dropped cells (D34):** `m` 32 and every `k` 1 cell; the curriculum against all at once at
   more cells, if the curriculum's role is asked again (C4 holds, all at once leaning higher on far
@@ -627,64 +291,40 @@ factored state and a cover). Left:
 
 ## From the division work (2026-10-15; the division, modular-family and factored-state workplans retired 2026-10-18)
 
-Decided with the owner, each to become a workplan or a stage:
-
-- **The collapse fix first** (before larger `p`): the collapse is abrupt (the probe script's
-  findings, "the collapse, traced"). **Done: snapshot and fork on collapse** (the owner's
-  choice; the collapse-fork workplan, retired 2026-10-16: `git show 89cf3a3:docs/collapse-fork-workplan.md`).
-  **Its probe works as registered** (`p` 7, two factors of 32, 4 seeds an arm, the probe script's
-  findings): 3 of 4 certified with the fork against 2 of 4 without, no fork run ending collapsed;
-  the arms are paired (the same run until the first fork), and the one seed the fork rescued (3)
-  lost everything without it. A screen, not a rate. Left open: **the fork in the harness**
-  (`window_recurrent_study`; D5 built it in the probe tool only); **the cause** (the loss and the
-  gradient's norm per batch around a collapse, the probe below); and the rest stay candidates. Candidates, cheapest first: log the loss and the gradient's
-  norm per batch around a collapse (a probe, to confirm the cause); clip the gradient's global
-  norm (none today); a rate that warms up at each curriculum step and decays; rollback and cool
-  (restore the step's best network and halve the rate on a sharp fall of the training answers);
-  an exponential moving average of the weights, certified in place of the raw weights; then the
-  codebook's own remedies (code restarts, an EMA codebook) and, last, the commitment controls
-  (`git show df1dcac:docs/commitment-control-workplan.md`). Each probed on replays of
-  `p` 7 seeds 0, 1 and 3. **Division stage 5's runs** (the probe script's findings) sharpen it:
-  large drops are common (24 in 14 of 40 runs, in successes too) and 17 of 24 recovered, so a
-  failure is a drop not recovered from; the curriculum moves on after a plateau whatever the
-  accuracy (10 epochs without beating the step's peak), so an unrecovered drop meets longer lengths
-  broken; and the fork's trigger (the mean screen score below 0.6 of the peak) misses about half the
-  drops, seed 101's among them. Two candidates from this: **a step ends only when its peak is
-  recovered** (or the step's best network is restored before moving on), and **a drop threshold on
-  the worst answer**. Most of the room above the 65% at `p` 5 looks like retention, not search.
-- **Division at `p` 11 (121 states)**, **done with the collapse trigger in the p11-trigger
-  workplan** (retired 2026-10-17: `git show 28894cf:docs/p11-trigger-workplan.md`): the largest run for `jebel`, **the fork on** (its probe's
-  registered next step): `p` 7 with two factors of 32 is done (the fork probe: 5 certified 49-state
-  networks in 8 runs, each passing every long-test case), and **`p` 11 works** (2026-10-16: 4 of 6
-  certified 121-state networks at 32 a factor, each passing every long-test case; the probe's
-  findings). `k` stays 1: the certificate's cost is codes x 9 tokens there. The plan's stage 4 (the
-  alternate trigger) waits for the beyond-arithmetic targets below, where a trigger can be tuned
-  across machine classes, not to division; today's trigger stays the default (its stage 5's
-  decision).
-  The certificate guard joins the fork, not replaces it, tested as the fork alone against the
-  fork plus the guard.
+- **The collapse fork's leftovers** (the collapse-fork workplan, `git show
+  89cf3a3:docs/collapse-fork-workplan.md`; its probe worked as registered): **the fork in the
+  harness** (`window_recurrent_study`; D5 built it in the probe tool only), and **the cause** of a
+  collapse. Candidates, cheapest first: log the loss and the gradient's norm per batch around a
+  collapse (a probe, to confirm the cause); clip the gradient's global norm; a rate that warms up
+  at each curriculum step and decays; rollback and cool (restore the step's best network and halve
+  the rate on a sharp fall of the training answers); an exponential moving average of the weights,
+  certified in place of the raw weights; then the codebook's own remedies (code restarts, an EMA
+  codebook) and, last, the commitment controls (`git show
+  df1dcac:docs/commitment-control-workplan.md`). Each probed on replays of `p` 7 seeds 0, 1 and 3.
+  **Division stage 5's runs** (the probe script's findings) sharpen it: large drops are common (24
+  in 14 of 40 runs, in successes too) and 17 of 24 recovered, so a failure is a drop not recovered
+  from; the curriculum moves on after a plateau whatever the accuracy (10 epochs without beating
+  the step's peak), so an unrecovered drop meets longer lengths broken; and the fork's trigger (the
+  mean screen score below 0.6 of the peak) misses about half the drops, seed 101's among them. Two
+  candidates from this: **a step ends only when its peak is recovered** (or the step's best network
+  is restored before moving on), and **a drop threshold on the worst answer**. Most of the room
+  above the 65% at `p` 5 looks like retention, not search.
+- **The fork with the certificate guard:** the guard joins the fork, not replaces it, tested as the
+  fork alone against the fork plus the guard (below, Beyond arithmetic).
 - **A second composite task: the running affine map mod `p`** (`x' = a x + b`, `a != 0`; the
   group AGL(1, p), `p (p - 1)` states when the output is the composed map). Its Krohn-Rhodes
   decomposition is a cascade, not a direct product: the multipliers' running product is its one
   approximation (a homomorphic image), the translations the dependent part, so no cover by
   approximations exists: the test of whether one approximation helps where no cover does. Later,
   `a = 0` adds resets.
-- **The approximation claim: done, A1-A3 hold** (2026-10-17; the workplan retired:
-  `git show c201622:docs/approximation-claim-workplan.md`; findings in indrajala-studies' `scripts/studies/modular_family_probe.py`'s docstring).
-  The sum alone certifies 10 of 20 against the quotient alone's 1 and the product's 0: the sum, an
-  approximation, helps where an equally distinguishing non-approximation, which the network doesn't
-  learn, doesn't. Whether it helps *because* it is an approximation needs a learnable
-  non-approximation control (the programme audit's F3): the paper's T1
-  (retired: `git show 0d1aaef:docs/workplans/paper-workplan.md` (indrajala-research)). Open: whether any approximation helps (one control,
-  the product, at one machine), and at larger `p`; the affine map above tests one
-  approximation where no cover exists.
-- **Terms** (settled with the owner, the division paper): target machine and its output function;
-  approximation (homomorphic image); cover (emulation); coordinates; k-distinguishable (Chow). Not
-  "family" (the code's arm name only), "basis", "ideal" (a semigroup term), "model". "Characteristic
-  sample" (grammatical inference) is verified (de la Higuera 1997, Definition 1, after Gold; in the
-  literature repository): a sample, polynomial in the target's size, such that **a given algorithm**
-  returns the target whenever its data contains the sample. The term is relative to the algorithm
-  (RPNI's, OSTIA's), so it is used only with one named; Oncina & García 1992 (RPNI) is still unread.
+- **The approximation claim's open questions** (A1-A3 hold: `git show
+  c201622:docs/approximation-claim-workplan.md`): whether the sum helps *because* it is an
+  approximation needs a learnable non-approximation control (the programme audit's F3); whether
+  any approximation helps (one control, the product, at one machine), and at larger `p`; the affine
+  map above tests one approximation where no cover exists.
+- **"Characteristic sample"** is used only with a named algorithm (de la Higuera 1997, Definition
+  1, after Gold: relative to the algorithm, RPNI's or OSTIA's); Oncina & García 1992 (RPNI) is
+  still to read.
 - **Factored readouts** (the division workplan's stage 6, its D9; the modular family's stage 2):
   every certified division network spreads its state over both codebooks, no factor a residue or
   any `xA + yB`. To make factors carry residues again, the factored-state workplan's D10 reopens:
@@ -700,65 +340,65 @@ Decided with the owner, each to become a workplan or a stage:
 - **The commitment controls** (option 1, the usage thermostat) stay deferred in
   `git show df1dcac:docs/commitment-control-workplan.md`, for a probe that must train
   past a solution or shows factors collapsing.
-- **Division's edge between `p` 11 and 13: explained by W1** (the window branches workplan,
-  2026-10-19): neither the budget (L2) nor the factors' width (L3), but the window's: at 32 wide
-  instead of 16, 5 of 6 certified at 169 states against 0 of 6. The round-2 algebras' failures at
-  120 states are other failure kinds (formation or conversion, extra codes): the kinds are mapped in
-  [failure-kinds.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/research-notes/failure-kinds.md), each with its plan and next step.
 
 ## Beyond arithmetic: other finite-state targets (the owner and Claude, 2026-10-17)
 
-The owner asked which domains to examine once the papers' work is wrapped up. Every target so far
-is an arithmetic transducer (the carry automaton, modular sums, division), the weakness
-`~/code/indrajala-research/contribution.md` names under "Breadth": the next targets should test
-whether the method needs that structure. Every one below is an explicit machine, so the
-certificate applies unchanged; only the tasks are new. Each cell keeps the feasibility rules
-(codes at least the minimal states; training to the exclusion bound `m + q - 1`), which for
-random machines with many states means long training lengths: the bound decides which sizes are
-worth running. In the order recommended, after one item that runs across them:
+Every target so far is an arithmetic transducer (the carry automaton, modular sums, division), the
+weakness indrajala-research's `contribution.md` names under "Breadth": the next targets should test
+whether the method needs that structure. Every one below is an explicit machine, so the certificate
+applies unchanged; only the tasks are new. Each cell keeps the feasibility rules (codes at least the
+minimal states; training to the exclusion bound `m + q - 1`), which for random machines with many
+states means long training lengths: the bound decides which sizes are worth running.
+
+Item 1 and the two items before it were taken up by
+[general-algebras-workplan.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/general-algebras-workplan.md)
+(S_n, move-to-front and random machines at 6, 24 and 120 states, then the trigger and the guard
+tuned across them; its stages 5-7), **paused since 2026-10-20**. Their detail stays here until that
+plan resumes:
 
 - **The certificate guard, softened and tested across these machine classes** (the guard
   workplan, retired 2026-10-17: `git show ed0e378:docs/guard-training-workplan.md`; deferred by
-  the owner with the trigger, "fine tune when we can use genuinely divergent tasks"). Built and kept: `certificate_guard.py` (the read by levels,
-  `Guard`), `train_epoch(..., guard)`, the family's `--guard off|on|both` with its stop rule for a
-  frozen run, and `guard-epoch` (one epoch from a saved network, unguarded and guarded). Its
-  registered test, G1 (division at `p` 11, the fork alone against the fork plus the guard), was
-  never run: the plan's budget probe found that from 7 right `p` 11 networks one further epoch
-  lost the right machine in 7 of 7, and the guard held each only by undoing 66-100% of the updates
-  (98-100% where not yet certified in both verdicts), freezing learning. Before a test, softenings
-  to compare with `guard-epoch`: judge a flip only after N batches (stage 2c's flips often repaired
-  themselves); scale a flipping update down instead of undoing it; restore the last right machine
-  once an epoch (the fork with a correctness trigger); undo only updates that add wrong pairs;
-  guard only the states training visits; calm the optimizer once right (cap the update, reset
-  Adam's moments); shrink the codebook to the minimised machine once right. First the cause
-  probe: whether the undone flips land on rarely visited codes (`p` 11 reaches 210-456 codes for
-  121 states; stage 2d's network 8 for 3). **Seen again in the consolidation plan's P1 (2026-10-19):** armed on a
-  perfect screen, the guard froze two move-to-front 4 networks that were right at snap 1.0 but had
-  6-8 near ties at 1.05, undoing 96-100% of the updates until the stall rule, where unguarded
-  they certified within 1-3 steps. The first softening to try is arming only on a step that passes
-  both verdicts.
+  the owner with the trigger, "fine tune when we can use genuinely divergent tasks"). Built and
+  kept: `certificate_guard.py` (the read by levels, `Guard`), `train_epoch(..., guard)`, the
+  family's `--guard off|on|both` with its stop rule for a frozen run, and `guard-epoch` (one epoch
+  from a saved network, unguarded and guarded). Its registered test, G1 (division at `p` 11, the
+  fork alone against the fork plus the guard), was never run: the plan's budget probe found that
+  from 7 right `p` 11 networks one further epoch lost the right machine in 7 of 7, and the guard
+  held each only by undoing 66-100% of the updates (98-100% where not yet certified in both
+  verdicts), freezing learning. Before a test, softenings to compare with `guard-epoch`: judge a
+  flip only after N batches (stage 2c's flips often repaired themselves); scale a flipping update
+  down instead of undoing it; restore the last right machine once an epoch (the fork with a
+  correctness trigger); undo only updates that add wrong pairs; guard only the states training
+  visits; calm the optimizer once right (cap the update, reset Adam's moments); shrink the codebook
+  to the minimised machine once right. First the cause probe: whether the undone flips land on
+  rarely visited codes (`p` 11 reaches 210-456 codes for 121 states; stage 2d's network 8 for 3).
+  **Seen again in the consolidation plan's P1 (2026-10-19):** armed on a perfect screen, the guard
+  froze two move-to-front 4 networks that were right at snap 1.0 but had 6-8 near ties at 1.05,
+  undoing 96-100% of the updates until the stall rule, where unguarded they certified within 1-3
+  steps. The first softening to try is arming only on a step that passes both verdicts.
 - **The fork's trigger, tuned across these machine classes**, not on division alone (the
-  p11-trigger workplan's stage 4, deferred; the owner, 2026-10-17: the trigger "would need to be
-  either target machine agnostic, or we need a way to tune it in general"). The tools exist:
-  `collapse.Trigger` (signal, rule, threshold, floor; today's, pooled below 0.6 of the peak, the
-  default), every screen's per-kind shares in the logs, and `modular_family_probe.py drops`,
-  which scores a trigger offline against any logs. The plan's candidate from division's logs: the
-  mean over answer kinds more than 0.2 below the step's peak, floor 0.8 (the worst kind, 0.3
-  below, floor 0.9, had no false alarms there). The test as the plan set it: a trigger chosen with
-  `drops` over every class's logs, registered, then paired replays (the same seeds, only the
-  trigger changed); **better** if it certifies more seeds, or as many with fewer epochs, losing
-  none today's trigger certified.
+  p11-trigger workplan's stage 4, deferred: `git show 28894cf:docs/p11-trigger-workplan.md`; the
+  owner, 2026-10-17: the trigger "would need to be either target machine agnostic, or we need a way
+  to tune it in general"). The tools exist: `collapse.Trigger` (signal, rule, threshold, floor;
+  today's, pooled below 0.6 of the peak, the default), every screen's per-kind shares in the logs,
+  and `modular_family_probe.py drops`, which scores a trigger offline against any logs. The plan's
+  candidate from division's logs: the mean over answer kinds more than 0.2 below the step's peak,
+  floor 0.8 (the worst kind, 0.3 below, floor 0.9, had no false alarms there). The test as the plan
+  set it: a trigger chosen with `drops` over every class's logs, registered, then paired replays
+  (the same seeds, only the trigger changed); **better** if it certifies more seeds, or as many
+  with fewer epochs, losing none today's trigger certified.
 
+The targets, in the order recommended:
 
-1. **Machines with no arithmetic reading, split by their algebra (first).** Random Mealy machines
-   over a range of state counts and alphabets are the plain generality test. Splitting them by
-   Krohn-Rhodes makes it a study rather than a demonstration: pure permutation (group) machines,
-   the word problems of S3, A5 and S5, against aperiodic (reset, flip-flop) machines, the two
-   extremes of the decomposition. Does the snapped recurrence learn one kind more easily? It
-   extends the cover result: P2's terms are already Krohn-Rhodes's (Egri-Nagy's covering lemma:
-   approximation, cover, coordinates), and the general claim is that **training on the coordinates
-   of a machine's holonomy decomposition helps**, not only for division; that would make P2's
-   training signal a method. It meets the literature: Liu et al. 2023 ("Transformers learn
+1. **Machines with no arithmetic reading, split by their algebra (first; the general algebras
+   plan).** Random Mealy machines over a range of state counts and alphabets are the plain
+   generality test. Splitting them by Krohn-Rhodes makes it a study rather than a demonstration:
+   pure permutation (group) machines, the word problems of S3, A5 and S5, against aperiodic (reset,
+   flip-flop) machines, the two extremes of the decomposition. Does the snapped recurrence learn one
+   kind more easily? It extends the cover result: P2's terms are already Krohn-Rhodes's (Egri-Nagy's
+   covering lemma: approximation, cover, coordinates), and the general claim is that **training on
+   the coordinates of a machine's holonomy decomposition helps**, not only for division; that would
+   make P2's training signal a method. It meets the literature: Liu et al. 2023 ("Transformers learn
    shortcuts to automata") and Merrill's circuit-complexity results make S5 the hard case for
    transformers, so a certified recurrence exact on S5 at every length is a sharp contrast. The
    running affine map (above) is the cascade case within arithmetic, a bridge to this.
@@ -773,14 +413,6 @@ worth running. In the order recommended, after one item that runs across them:
    LFSRs and CRCs, the last linear over GF(2): arithmetic again, in another algebra).
 4. **Later, beyond finite state:** counters and pushdown languages (unbounded Dyck). Nothing excludes
    them; the certificate as it stands wouldn't apply.
-
-**Recommended first:** item 1, a random-machine study split into group and aperiodic machines,
-with the S5 word problem: it turns "arithmetic only" into a finding and tests whether the cover
-result generalises. When it is taken up: a workplan with a feasibility table per cell (states,
-alphabet, codes, the exclusion bound against the curriculum's cap).
-**Taken up (2026-10-17)** by [general-algebras-workplan.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/general-algebras-workplan.md): S_n, move-to-front
-and random machines over the same states at 6, 24 and 120, then the trigger and the guard tuned
-across them (the two items above).
 
 **A measurement gap: the components' kind (2026-10-21).** `approximations` reads a learned machine's
 decomposition two ways: a parallel cover (the factors' approximations' meet separates every state) and
@@ -811,8 +443,8 @@ decomposition: a reading of each component's monoid, its groups and its prime lo
 - **Still refused by the specs:** dropout on a ReLU layer (the dropout op is fused with the
   sigmoid), a conv or pool layer after a dense one (the fused hidden delta reads the next layer's
   `W`), and one rule per layer.
-- **Weight decay with momentum or Adam** needs a published form chosen and cited first (README,
-  Update rules). For Adam it is chosen: AdamW (Loshchilov & Hutter 2019), roadmap step 10.
+- **Weight decay with momentum** needs a published form chosen and cited first (README, Update
+  rules); for Adam it is AdamW (roadmap step 10).
 - **Ensembles over the new one-output presets** (the presets workplan). The ensembles fix their
   sub-network class (`classifier_cls`); a choice of sub-network is its own change.
 - **Demos for the new conv presets** (the presets workplan's D4), each with its own tuned,
@@ -821,8 +453,8 @@ decomposition: a reading of each component's monoid, its groups and its prime lo
 Not planned yet (none of it is excluded; any later workplan may take it up):
 
 - Separate activation layers, which would add a crossing per layer on Rust. Activations stay fused.
-- Parameter groups and per-layer learning rates. (Schedulers beyond today's `lr_schedule.py` were
-  lifted out of scope on 2026-10-10: roadmap step 10.)
+- Parameter groups and per-layer learning rates (the optimizer's `learning_rate_scales` covers the
+  codebook's rate only).
 - Deleting or renaming any network class (the workplan's D1).
 
 ## From batch norm
@@ -860,9 +492,9 @@ The old conv plan's timing and demo stages were for a rule that holds, and stay 
 
 ## From the A/B harness
 
-- **Count the savings.** After the first two real A/Bs through `scripts/measurement/ab.py`, count the agent
-  turns and characters read per A/B from the session transcripts, against the numbers before the
-  harness: 20-30 checks and 40-130K characters of raw output per A/B. Record the result here.
+- **Count the savings.** Count the agent turns and characters read per A/B from the session
+  transcripts, against the numbers before the harness: 20-30 checks and 40-130K characters of raw
+  output per A/B. Record the result here.
 - **Waiting on CI** (`gh pr checks --watch` loops) is worth a similar treatment.
 - **A `perf_region.py` adapter.** Its counters need `sudo` and a driver marking regions, so the
   harness has none yet.
@@ -879,53 +511,33 @@ Not planned yet:
 - **Rerun the audit after each new primitive**, so new copies are caught while they are small:
   `.venv/bin/python scripts/measurement/duplicates.py` (the clone scan, over the package, the
   scripts, both test suites and `cli`, at 8 lines, and `--lines 10`), a search for function names
-  defined in more than one module, and the twin classes read side by side. The third pass
-  (2026-10-30; retired, in the table above) made the
-  scan a repo tool; its baseline, at d38f8b6, at 8 lines: package 3.4%, scripts 1.8%, tests 4.2%,
-  crate tests 2.0%; at 10: 2.2%, 1.4%, 2.7%, 1.2%. After it (#1101-#1108), at 8 lines: package
-  2.2%, scripts 1.8%, tests 3.1%, crate tests 2.0%; at 10: 1.3%, 1.4%, 1.6%, 1.2% (the scripts' and
-  the crate tests' copies left are under the scan's 8 lines, or not copies: below). Earlier passes
-  used `symilar` (pylint's
-  duplicate finder, `-i --ignore-docstrings --ignore-imports --ignore-signatures`), whose
-  percentages below count differently. The 2026-10-01 audit
-  found 0.29% duplicated at 8 lines or more in the package, and 0.91% at 10 lines or more in the
-  tests.
-  The rerun of 2026-10-02 (the DRY rerun workplan, #550-#557) found 0.20% at 8 lines or more in
-  the package and 0.16% at 10 lines or more in the tests, the copies left having come in with
-  residual connections, layer norm and attention.
-  The rerun of 2026-10-09, after multi-head attention, found 0.16% at 8 lines or more in the
-  package, 0.14% at 10 lines or more in the tests and 0.00% in the scripts, and removed what it
-  found in one PR: `AttentionProjections` took the attention layers' shared setup (`_set_up`), the
-  gradients' order (`_set_gradients`) and `reset_gradient_accum`, and `tests/helpers.py` took
-  `batches` and `learn_in_step` (the 50-step parity loop, 11 copies), `assert_snapshots_close` (5)
-  and `assert_learn_and_a_batch_of_one_agree` (3), `test_checkpoint` the restored-checkpoint
-  scenario (3) and `test_layer_specs` the README's patch model (2).
-- **Shared homes for the next layer kind.** The conv and pool argument checks and output size are
-  in `model/specs/window_geometry.py`, one shape walk (`spec_shapes.spec_shapes`) feeds both builders,
-  the optimizers share `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors
-  are `WeightAndBias`, `GammaAndBeta` or `AttentionProjections` (`array_parameters.py`). A hidden
-  layer takes its output-delta refusals, its downstream-as-delta methods and its no-op gradient
-  accumulation from `model/specs/hidden_layers.py` (`Hidden`, `DeltaIsDownstream`, `ParameterFree`,
-  and `BatchOnly` for a layer that trains on batches only); a network its spec and rule hooks from
+  defined in more than one module, and the twin classes read side by side. The last pass (the
+  third, 2026-10-30) left, at 8 lines: package 2.2%, scripts 1.8%, tests 3.1%, crate tests 2.0%;
+  at 10: 1.3%, 1.4%, 1.6%, 1.2%: the baseline a rerun compares against.
+- **Shared homes for the next layer kind.** A new layer kind extends these rather than adding a
+  copy. The conv and pool argument checks and output size are in `model/specs/window_geometry.py`,
+  one shape walk (`spec_shapes.spec_shapes`) feeds both builders, the optimizers share
+  `OptimizerBase` and `ArrayOptimizerBase`, and a layer's optimizer accessors are `WeightAndBias`,
+  `GammaAndBeta` or `AttentionProjections` (`array_parameters.py`). A hidden layer takes its
+  output-delta refusals, its downstream-as-delta methods and its no-op gradient accumulation from
+  `model/specs/hidden_layers.py` (`Hidden`, `DeltaIsDownstream`, `ParameterFree`, and `BatchOnly`
+  for a layer that trains on batches only); a network its spec and rule hooks from
   `model/specs/spec_hooks.py` (`SpecHooks`; a rule preset `RulePreset`, which derives its
   hyperparameters from the rule's fields; a network given its rule `GivenRule`); a token-wise
   output its predictions from `TokenWiseOutput` and a conv preset its argument checks from
   `ConvArguments` (`specs/array_network_shapes.py`); a recurrence layer its schedule's setters from
-  `RecurrenceSchedule` (`specs/window_recurrence.py`); a
-  pure-Python gamma-and-beta row from `GammaAsWeights`; a token shape from
-  `spec_shapes.token_shape`. Tests share `bits`, `split`, `max_relative_gap`, `patching`,
-  `randomized`, `learn_in_step` and the `assert_*` scenarios (`tests/helpers.py`, the checkpoint
-  resume among them), the study tests `CarryTable` and `TINY` (`tests/studies/helpers.py`), the
-  crate's op tests `bits`, `to_numpy` and `to_array` (`rust/tests/array_helpers.py`), and a
-  scenario every implementation runs takes conftest's `implementation` fixture
-  (`tests/model/networks/test_{attention,residual,layer_norm,sequence}_network.py`). A new layer
-  kind extends these rather than adding a copy. A study takes its cached MNIST
-  loading, mean ± sd cells and Markdown tables from `indrajala_ml/studies/common.py`.
+  `RecurrenceSchedule` (`specs/window_recurrence.py`); a pure-Python gamma-and-beta row from
+  `GammaAsWeights`; a token shape from `spec_shapes.token_shape`. Tests share `bits`, `split`,
+  `max_relative_gap`, `patching`, `randomized`, `learn_in_step` and the `assert_*` scenarios
+  (`tests/helpers.py`, the checkpoint resume among them), the crate's op tests `bits`, `to_numpy`
+  and `to_array` (`rust/tests/array_helpers.py`), and a scenario every implementation runs takes
+  conftest's `implementation` fixture
+  (`tests/model/networks/test_{attention,residual,layer_norm,sequence}_network.py`). A study takes
+  its cached MNIST loading, mean ± sd cells and Markdown tables from `indrajala_ml/studies/common.py`.
 - **The builders' wiring loop** (the rerun's D6). The fork, add and body-first loop is the same in
   `python_layer_builder.py` and `array_layer_builder.py`; sharing it needs callbacks for the fork
   and the add, more indirection than its 12 lines are worth. Revisit if another layer kind that
   links layers arrives.
-
 - **The third pass's leftovers** (its rerun at stage 8, the 8-line scan):
   - *The presets' typed `__init__`s* (its D3): each preset keeps its own signature, which differs
     by implementation (the numpy one-output presets take `input_bounds` optional and their
@@ -938,9 +550,9 @@ Not planned yet:
     file, when it is next touched.
   - *The pure-Python recurrence layer's set-up* (14 lines, the numpy one's first lines): shared
     when the pure-Python layer gains the schedule's setters.
-  - *Not copies:* `modular_family_probe.py`'s flag blocks (different flags, the same shape);
-    `tests/test_pcg64.py` against `rust/tests/test_random_pcg64_parity.py` (each suite's own,
-    standalone); `ab.py`'s and the archive's `_git` (different errors, which their callers read).
+  - *Not copies:* `tests/test_pcg64.py` against `rust/tests/test_random_pcg64_parity.py` (each
+    suite's own, standalone); `ab.py`'s and the archive's `_git` (different errors, which their
+    callers read).
 
 Not planned yet:
 
@@ -983,10 +595,6 @@ Not planned yet:
 
 ## From the RNG draw order
 
-From one seed, every pure-Python network with an array twin now builds numpy's weights and draws
-numpy's dropout masks by bits ([rng-audit.md](rng-audit.md)), and the parity tests seed both
-sides. Left over:
-
 - **The bounds-width networks' draws** (D1 (c)): `BackpropClassifierNetwork`'s presets and
   `LinearClassifierNetwork` scale each node's weights by the input bounds, which no array network
   draws, so there is no order to match. Out of scope unless they gain an array twin.
@@ -1000,9 +608,6 @@ sides. Left over:
   is cited as current.
 
 ## From layer norm and attention
-
-Multi-head attention and a key size were roadmap step 5, now done; masking and dropout in attention
-moved to From multi-head attention. Besides those:
 
 - **Layer norm against batch norm on the dense networks** (the workplan's D11 (b)): the residual
   depth study's batch-norm cells rerun with a flat `LayerNorm` in place of `BatchNorm`.
@@ -1032,42 +637,20 @@ Not planned yet:
 
 ## From multi-head attention
 
-The workplan settled `Attention(heads, key_size)`, the parameters packed with heads as row blocks
-(D2), and every implementation and the crate in three blocks per pass: project, attend, combine
-(D4). The patch study's open margin is answered: at 5 seeds attention then FFN beats FFN alone by
-0.40 +- 0.30 points, on 4 of 5 seeds (`scripts/studies/multi_head_attention_study.py`).
-
-- **The extension points** (the workplan's D6, D7), each a field with a default, added by the work
-  that uses it:
+- **The extension points left** (the workplan's D6, D7), each a field with a default, added by the
+  work that uses it:
 
   | later work | where it goes | what it adds |
   | --- | --- | --- |
-  | padding masks (causal is done: `Attention(causal=True)`, the sequence task) | attend, forward: an additive mask on `S[i]` before the max shift, as the causal mask's `-inf` | a mask input; backward unchanged (`P_ij = 0` zeroes `dS_ij`) |
-  | dropout on the weights (done: `Attention(dropout=p)`, roadmap step 7) | attend: an inverted mask on `P[i]` before `H[i] = P[i] V[i]`, kept for backward | a `dropout` field, the mask drawn by the layer from the network's generator |
-  | dropout after the projection (done: `Dropout(p)`, roadmap step 7) | after combine | a token-wise dropout layer, outside attention |
+  | padding masks beyond segments (causal is `Attention(causal=True)`; packed and padded segments are `segments`) | attend, forward: an additive mask on `S[i]` before the max shift, as the causal mask's `-inf` | a mask input; backward unchanged (`P_ij = 0` zeroes `dS_ij`) |
   | a separate value width | project and combine: `Wv` `(h·d_v, d)`, `Wo` `(d, h·d_v)` | a `value_size` field defaulting to `key_size` |
-  | grouped- or multi-query attention (done: `Attention(key_value_heads=g)`, roadmap step 14) | project: `Wk`, `Wv` with `g` row blocks; attend: head `i` reads key/value block `i // (h / g)` | a `key_value_heads` field defaulting to `heads` |
-  | cross-attention | project: `K`, `V` from a second input | a second input to the layer, which `Sequential` doesn't have: its own design |
 
-- **GELU** (D5 (c)), ViT's FFN activation, an activation for `Dense`: it needs `erf`, which stable
-  Rust lacks (the `tanh` form is a different function), in all three implementations and the crate.
-  Done with SwiGLU in roadmap step 13 (README, Activations; next-steps, From FFN activations).
-- **The study's other arms** (D8 (b), (c)): run on 2026-10-09 (`scripts/studies/patch_geometry_study.py`,
-  findings in its docstring). Patch 4 (`T = 49`) costs every arm 0.4 to 1.2 points at 5 epochs;
-  the low-rank bound still doesn't measurably bind (+0.42 +- 0.83 for `key_size=32`); heads start
-  to help with more or wider tokens (+0.6 over one head at `T = 49` and at `d = 64`); and `d = 64`
-  adds 0.13 points to the best model at 3.7 times the parameters. Patch 7 and `d = 32` stay the
-  MNIST patch models' trade; the gap to conv (0.9 points) is for the sequence task to revisit, not
-  more MNIST geometry.
-- **The numpy attention backward's 10% from stage 3.** #606's tier 1 A/B reported the numpy rows
-  within noise, but before #610 both sides imported the new tree's package. Rerun on 2026-10-09
-  with the fixed script (`ab.py run --script-from`, #616; report on #616), stage 3 made
-  `hidden_delta_batch` 10.2% slower (243 to 268 us per call, the stage-1 attention case at batch
-  32, consistent over 6 passes); `forward_batch` and `accumulate_gradient_batch` stayed within
-  noise. Main's numpy backward is still stage 3's. The cost came with the three-block structure
-  (D10), likely in the backward's (N, h, T, d_k) views or its stacked `np.matmul`s. The sequence
-  task's mask touched the numpy layer's forward only and left this as it was. Still worth a look:
-  a fix must keep the blocks and their bits.
+- **The numpy attention backward's 10% from stage 3.** Rerun on 2026-10-09 with the fixed script
+  (`ab.py run --script-from`, #616; report on #616), stage 3 made `hidden_delta_batch` 10.2% slower
+  (243 to 268 us per call, the stage-1 attention case at batch 32, consistent over 6 passes);
+  `forward_batch` and `accumulate_gradient_batch` stayed within noise. The cost came with the
+  three-block structure (D10), likely in the backward's (N, h, T, d_k) views or its stacked
+  `np.matmul`s. Still worth a look: a fix must keep the blocks and their bits.
 
 Not planned yet:
 
@@ -1075,38 +658,10 @@ Not planned yet:
   again; a spec would freeze pre-LN against post-LN, the activation and where dropout goes.
 - A class token, relative position biases, and head pruning or per-head analysis (Michel et al.
   2019, "Are Sixteen Heads Really Better than One?").
-- A faster multi-head kernel: a crate-tuning item (From the benchmark machine baseline), with its
-  own A/B.
+- A faster multi-head kernel: a crate-tuning item, with its own A/B.
 
 ## From the sequence task
 
-The workplan settled `Embedding(vocabulary, size)` over token ids (D5), a token-wise softmax output
-with the mean of the `T` cross-entropies as the `"sequence"` network shape (D6), and
-`Attention(causal=True)`, `-inf` on the future scores before the max shift (D7), in all three
-implementations and the crate; four corpora, each in its own dataset repository (D2, D3); fixed
-non-overlapping windows of 65 characters, the last 10% held out (D4). The study
-(`scripts/studies/sequence_study.py`, D9) found every arm where D9 expected it (README, The sequence task).
-
-- **Generation** (D11 (b)): done by roadmap step 9 (From generation, below), with a key/value cache
-  rather than a full pass per character.
-- **Longer training.** Neither transformer had converged at 10 epochs: their held-out losses
-  still fell by 0.01 to 0.05 bits per character over the last three. More epochs, with a decaying
-  rate once the curve flattens (`lr_schedule.py` has linear warmup only), would show where the
-  2-layer models stop; the 5-seed sweep took about 2.5 h on `jebel` at 6 workers.
-- **Euclid's train/held-out gap.** On Euclid the 2-layer model is 0.49 bits per character lower on
-  training windows than held out (1.01 against 1.50), the widest of the four corpora (Herodotus:
-  none), and the gap grows with the model (ffn 0.17, 1-layer 0.44). The held-out part is the
-  text's last 10%, from Book XII's similar pyramids (XII.8) through Book XIII, and even the
-  counted bigram is 0.16 bits worse there, so the gap mixes overfitting with a shift in the text.
-  Answered by the attention-dropout study (#666): on a split from across the text (each of 100
-  blocks' last tenth held out) the 2-layer model's gap is 0.04 (1.05 against 1.02), so about 93%
-  of it is the shift and little is overfitting; Tiny Shakespeare's 0.30 falls to 0.07 the same way.
-- **Windows at random offsets** (D4 (b)): every position of every character a target, the usual
-  language-model sampler. It needs a sampler in the trainer (an epoch no longer a permutation of
-  fixed rows) and its state in run checkpoints. Overlapping fixed windows at stride `T / 2`
-  (D4 (c)) are the cheaper middle step, with correlated examples.
-- **Padding masks and variable-length windows** (D1 (b)): nothing pads while windows are fixed;
-  the mask's place is From multi-head attention's table.
 - **A synthetic sequence task** (D2 (b)), copying or reversal from a seed: a known optimal loss,
   and a task only attention over earlier tokens solves. The study's leak arm and the mask's own
   test (a future token can't change an earlier output) already cover what it would test.
@@ -1121,23 +676,12 @@ Not planned yet:
 
 ## From attention dropout
 
-The workplan settled both of the literature's mechanisms (D1): `Attention(dropout=p)`, inverted
-dropout on `P` (D3), one `(N, h, T, T)` mask a batch drawn row-major (D4), and a token-wise
-`Dropout(p)` after `Position` and ending a block's body (D2); the crate's attention ops take
-`dropout`, `training` and `rng` keywords (D5); all three implementations, their masks by bits (D6);
-format 2 entries and three golden entries (D7, D9). The study (D8, #666;
-`scripts/studies/attention_dropout_study.py`'s docstring) found the sequence study's gaps mostly the text's
-shift (on a split from across the text Euclid's 0.49 bits per character falls to 0.04, Tiny
-Shakespeare's 0.30 to 0.07), and dropout narrowing every gap by raising the training loss, at a
-cost of 0.01 to 0.35 bits held out; the one gain is attention dropout 0.1 on Euclid's contiguous
-split (0.023 lower, every seed), which the spread split doesn't repeat.
-
 - **Two crate shifts for the next baseline to measure against.** After crate #54 (#656's tier 1
   A/B, 6 passes), Rust `hidden_delta_batch` at batch 32 was 3.5% slower with dropout off, though its
   products are unchanged, while in the same run the unchanged `accumulate_gradient_batch` at batch
   32 moved 7.6% faster: read as a codegen or layout shift, as #627's (the sequence task's crate
   bump, +1.5% to +5.5% on some batch ops). On `jebel` such rows may be code placement (From the
-  benchmark machine baseline). Beside the numpy backward's 10% (From multi-head attention).
+  crate kernels).
 - **`Dropout(0.0)` draws its mask; `Attention(dropout=0.0)` draws nothing.** The token layer
   follows the dense dropout layer, which draws at 0 too; the attention keeps a model without
   dropout on its old bits. A `Dropout(0.0)` could be refused by validation, or skipped at 0, which
@@ -1159,55 +703,24 @@ Not planned yet:
 
 ## From generation
 
-The workplan (roadmap step 9) built incremental decoding in all three implementations and the
-crate: a network's `decoder()`, each token layer's `prefill` and `step` (D2), attention's cache of
-rotated keys and values sliding past the window (D3), the crate's `attention_step` (D8); a chain of
-sampling filters and one seeded draw (D4); a tokenizer file beside a model (D5);
-`scripts/generation/sample_text.py` (D6); and the README's samples (D9, README, Generation).
-Within the window a decode is its implementation's full pass by bits in pure Python and on Rust,
-within rounding on numpy (D7).
-
-- **D9's samples were replaced** by the training-recipe study's 30-epoch recipe models (2.304 and
-  1.420 bits per character held out, against 10 epochs' 2.410 and 1.438).
 - **numpy's cached step is overhead-bound:** 5.1x uncached against Rust's 12.1x (jebel, the
   2-layer model). A step is a dozen small numpy calls per layer; a fused step would make it
   arithmetic-bound, but nothing needs numpy's decode fast yet.
-- **Batches of decodes** came with step 11 (the segments workplan, D8): `prefill_batch` and
-  `step_batch`, left-padded. Beams build on them.
-- **A batched crate step.** Rust's batched decode runs `attention_step` once a row, each row's
-  cache its current paragraph's keys (the segments workplan, D8 (b)); a crate step over an
-  `(N, c)` cache with the keys' segments, numpy's form (D8 (a)), would batch it and give the two
-  one cache form. On jebel (2026-11-04) Rust reads 20,173 characters a second at batch 8 and 20,806 at
-  32, flat, against numpy's 7,770 and 13,652. The crate performance workplan left it out (K13): no epoch reaches it.
-- **A paragraph's first token is drawn from an untrained row.** Training counts no target whose
-  input is a separator (the segments workplan, D6), so after a separator a decode samples from a
-  distribution no loss shaped. The owner chose an end-of-paragraph token (2026-11-01): the
-  separator's target counts (the context-length workplan, D11, its stage 2).
+- **A batched crate step** is K13 (From the crate performance workplan).
 - **A prompt longer than `T`** is prefilled up to `T` and then stepped token by token. A
   band-masked prefill in chunks of `T` would be one pass per chunk, and is exact.
 - **A learned `Position` past `T`** falls back to a full pass per token (D3 (a)), which is exact
   but uncached. Rotary models, the default, slide.
-- **Not planned yet:** beam search, repetition penalties, stop sequences, and a BPE tokenizer
-  (the tokenizer file's `kind`).
+- **Not planned yet:** beam search (on `prefill_batch` and `step_batch`), repetition penalties,
+  stop sequences, and a BPE tokenizer (the tokenizer file's `kind`).
 
 ## From rotary positions
 
-The workplan built rotary position embedding as an attention option, `Attention(positions="rotary",
-rotary_base=10000.0)` (D2), rotating half (feature `j` with `j + d_k / 2`, D3), its angles one
-table per layer from Python's `math` so all three implementations rotate by the same bits (D4), the
-crate's attention ops taking `cos` and `sin` (D5), and one position scheme per token part (D6).
-The study (D8; `scripts/studies/rotary_study.py`'s docstring) found rotary lower held out than learned
-positions on every corpus and arm, 0.024 to 0.062 bits per character at epoch 10 (39 of 40 seeds),
-at +3.5% an epoch alone; so new sequence models default to rotary (D9, the README's sequence
-example).
-
-- **D9's other half, done:** step 9's `train` builds rotary models by default.
 - **#678's unexplained Rust gain.** The tier 1 A/B of the crate bump (rotation off) came out 7 to
   18% faster on five Rust rows, unexplained and not claimed: a codegen or layout shift, as #627's,
   for the next baseline to measure against.
-- **The study's open questions.** `rotary_base` wasn't tuned (10,000 everywhere); every arm ran
-  at the learned arm's tuned rate, and rotary may prefer another; nothing had converged at 10 epochs; and rotary's gain at a longer
-  context, where generation's sliding window will run, is untested (the context-length workplan).
+- **The study's open questions.** `rotary_base` wasn't tuned (10,000 everywhere); every arm ran at
+  the learned arm's tuned rate, and rotary may prefer another; nothing had converged at 10 epochs.
 
 Not planned yet:
 
@@ -1219,22 +732,10 @@ Not planned yet:
 
 ## From the benchmark machine baseline
 
-- **Crate tuning for the gaps it found.** Where Rust lags numpy on the i7, or lost ground from
-  the laptop, and what to investigate for each, ordered by payoff:
-  the crate performance workplan, retired below, one plan (D7), a speedup claimed on `jebel` with the laptops as guards
-  (D12); what's left is [parked](workplans/infrastructure/jebel-parked-workplan.md).
-- **Code placement on the i7** (multi-head attention, stage 5, #609). The multi-head crate's
-  attention ops ran up to 14% slower per call on `jebel` with the same instructions per call
-  (within 0.3%): in the new build, forward's µops from the legacy decoder (`idq.mite_uops`) tripled
-  as uop-cache delivery fell, a placement effect on Coffee Lake (the JCC erratum's 32-byte
-  windows), and ops whose code didn't change moved by up to 13% between builds. `pyramidon` showed
-  no change. To investigate: `perf record` the hot loop's addresses in both builds, and whether
-  `-C llvm-args=-x86-branches-within-32B-boundaries` (or function and loop alignment) makes crate
-  A/Bs on the i7 stable; until then, a crate A/B's few-percent rows there may be placement.
 - **Rerunning the baseline** after a change that could move every number (kernel, BIOS,
   numpy/OpenBLAS, rustc, the frequency policy): rerun the workplan's stages 4-5 at the same
   tags, then at `main`, and replace [machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md)'s
-  tables, with the reason, in one PR.
+  tables, with the reason, in one PR. The parked plan's closing baseline is one.
 - **The laptop's columns** need rerunning only after a software change on the laptop (numpy,
   OpenBLAS, rustc, its kernel). The two machines run the same stack today, and their golden runs
   are byte-identical (D5). A crate change for the i7 is A/B'd on the laptop too, preferably on one
@@ -1254,8 +755,6 @@ Not planned yet:
   allows it; reviewing untrusted submissions needs its own plan.
 - **A run queue on `jebel`** (several A/Bs queued from `pyramidon`, run back to back), if one run
   at a time under the run lock turns out to be the bottleneck.
-- **Crate tuning on CPU attributes** (the crate performance workplan, retired below,
-  D5, D11) uses the archive's profiles and runs from each machine.
 
 Not planned yet:
 
@@ -1299,31 +798,18 @@ those three (#673); the rest waits here until a planned piece of work needs it.
 
 ## From length generalisation (terminated)
 
-The owner terminated the plan (2026-10-12) after its reading (stage 2), for the window-recurrent
-design (`git show e45944e:docs/window-recurrent-adder-workplan.md`, Why this design):
-a fixed-depth network that finds a carry's deciding column in one long hop needs position codes that
-stay distinguishable at any distance, which bounded codes can't give.
+The owner terminated the plan (2026-10-12) for the window-recurrent design; its literature section
+stands (`git show c3d619b:docs/length-generalisation-workplan.md`, What the literature found).
 
-- **Its literature section stands** (`git show c3d619b:docs/length-generalisation-workplan.md`,
-  What the literature found), and the window-recurrent plan builds on it.
 - **Length-free token networks (its P1) are parked.** Stage 3 (P1a: `(None,)` token ids in the
   shape walk, `AnyInputShape`, format 2's `{"dimension": null}`) was built and passed (tests and
   the golden run) but never opened as a PR: the local branch `length-free-shapes` (`bd13b16`).
-  A window has a fixed `T`, so the window-recurrent plan doesn't need it; generation (step 9) or
-  a later length study may.
+  A window has a fixed `T`, so the window-recurrent plan doesn't need it; a later length study may.
 - **For any later fixed-depth length study:** rotary and no positions fail at long range by
   construction (resolution and dilution); an additive distance bias (ALiBi, P2) is the scheme that
   doesn't, and D12's start token is what a no-positions control needs.
-- **The result's `crate` field** hashed `indrajala_math_rust/__init__.py`, not the extension
-  module, so the addition sweep's results all show `639a07d4bc7d`; fixed by the window-recurrent
-  plan's stage 8 (`studies.common.crate_hash`), for later results only.
 
 ## From the demo split
-
-The demos, the matplotlib plotting and the tkinter capture are in
-[indrajala-demos](https://github.com/davidbarkhuizen/indrajala-demos), which uses this repository
-as a submodule; the measurement tools they lived beside are in `indrajala_ml/measurement/` and
-`indrajala_ml/studies/` (`git show 9c50fe6:docs/demos-split-workplan.md`).
 
 - **At 1.0, indrajala-demos depends on the published package** (the plan's D2): until then a
   "Bump indrajala-ml/" PR there carries each library change to the demos, and its CI runs their
@@ -1331,15 +817,14 @@ as a submodule; the measurement tools they lived beside are in `indrajala_ml/mea
 
 ## From the addition study
 
-The catalogue, the eight candidates and the unattended harness are in the README (The addition
-study); the sweep's findings are in indrajala-studies' `scripts/studies/addition_study.py`'s docstring. The first three entries
-were recorded while the sweep ran (2026-10-11); the rest are the workplan's leftovers: its
-decisions' unchosen options and its Excluded for missing infrastructure (`git show 8990f74:docs/addition-study-workplan.md`).
+The workplan's leftovers: its decisions' unchosen options and its Excluded for missing
+infrastructure (`git show 8990f74:docs/addition-study-workplan.md`; the sweep's findings are in
+indrajala-studies' `scripts/studies/addition_study.py`'s docstring).
 
 - **The adders' threshold as a check for each new primitive.** The column transformers sit on a
   sharp edge (at `n = 4`, d 4 fails at every candidate and shape, d 6 passes from 2 layers), and a
   run near it takes a few epochs. Whether a change moves that edge is a cheap, quantitative check:
-  one harness config per question, no new study design. First uses:
+  one harness config per question, no new study design. Not yet run for the primitives built since:
   - step 8's rotary positions, and no positions, against the learned `Position`;
   - step 10's recipe (schedule, AdamW, clipping), including whether it smooths the non-monotone
     ladders, where a size succeeds and the next one up doesn't (column-unordered, 1 layer, 2
@@ -1354,11 +839,10 @@ decisions' unchosen options and its Excluded for missing infrastructure (`git sh
 - **Probes of the passing adders.** Probing the smallest passing 2-layer networks against
   near-misses one width below (d 4 at `n = 4`) could locate the carry lookahead: which layer
   finds the deciding column below, and which head propagates the carry. This needs the accessor
-  for a layer's activations on a batch (below). The
-  probes don't need the sweep's exact files. When this is planned, it retrains the passing and
-  near-miss networks it needs (minutes for a few seeds), on the code of the day. Only the passing
-  models at each threshold and the width above are archived (the model archive, after the sweep).
-
+  for a layer's activations on a batch (below). The probes don't need the sweep's exact files:
+  when this is planned, it retrains the passing and near-miss networks it needs (minutes for a few
+  seeds), on the code of the day. Only the passing models at each threshold and the width above are
+  archived (the model archive, after the sweep).
 - **Thresholds for candidates 4-8** (D12): the sweep searched only the column transformers, the
   calibration's passes. The string format (5), the FFN-only control (4), the dense networks per
   sum digit (6) and the regressions (7, 8) failed at one middle size and the budget of 200 epochs,
@@ -1370,21 +854,18 @@ decisions' unchosen options and its Excluded for missing infrastructure (`git sh
   `d` 6 from 2 layers at 4, from 3 at 6). Its `7^8` carry patterns (5.8 M) are sampled, not
   exhaustive, and its runs are the costliest.
 - **An FFN-width knob** (D5): every ladder held the FFN at `2d`. Wanted if a threshold turns out to
-  be the FFN's rather than attention's; the probes below would say.
+  be the FFN's rather than attention's; the probes would say.
 - **Sample efficiency** (D7 (b)): one fixed training set instead of a fresh one each epoch, for a
   curve of examples against passing. It mixes overfitting into the size question, so it is its own
   study.
-- **Candidates the framework couldn't build** (the workplan's Excluded for missing
-  infrastructure), each a new candidate entry and a catalogue run once its piece exists:
-  - a recurrent adder (one column a step, the carry as state): the window-recurrent adder,
-    `git show e45944e:docs/window-recurrent-adder-workplan.md`;
+- **Candidates the framework couldn't build then** (the workplan's Excluded for missing
+  infrastructure), each a new candidate entry and a catalogue run:
+  - now buildable, not yet run as candidates: the string format's loss on answer tokens only
+    (step 11's counted targets) and variable-length answers decoded autoregressively (step 9);
+    schedules, AdamW and clipping, in case a "too small" verdict is the optimiser's (step 10);
   - length generalisation (train at `n`, test at `n + k`): rotary positions exist (step 8), but
     loading trained weights into a network of another `T` doesn't (the parked `length-free-shapes`
-    branch, From length generalisation); the window-recurrent adder sidesteps it with a fixed
-    window;
-  - the string format's loss on answer tokens only, and variable-length answers decoded
-    autoregressively: steps 11 (counted targets) and 9 (generation);
-  - schedules, AdamW and clipping, in case a "too small" verdict is the optimiser's: step 10;
+    branch, From length generalisation);
   - not planned yet: a weight-tied (looped) transformer, whose depth grows with `n` by iterating
     one block (blocks sharing weights, a variable iteration count); one dense network for every
     sum digit (several independent softmaxes on one flat network); supervised carries (auxiliary

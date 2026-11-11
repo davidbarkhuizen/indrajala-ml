@@ -1,8 +1,8 @@
 # Workplans
 
 The open workplans, grouped. A workplan is retired (deleted) once every stage and decision is
-resolved; its leftovers then move to [next-steps.md](../next-steps.md), whose "Retired workplans"
-table says how to read each retired one from git history.
+resolved; its leftovers then move to [next-steps.md](../next-steps.md), and its row to
+[retired.md](retired.md), which says how to read each retired one from git history.
 
 ## The research workplans: in indrajala-research
 
@@ -16,7 +16,7 @@ indrajala-ml, which it bloats for reuse). Their names in this repository's code 
 The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 1) and not yet built.
 
 None open: steps 1-15 are done, and so is the array window (the machine-policy plan's M1), their
-workplans retired (next-steps.md).
+workplans retired ([retired.md](retired.md)).
 
 ## `infrastructure/`: machines, release and repositories
 
@@ -24,4 +24,4 @@ workplans retired (next-steps.md).
 | --- | --- |
 | [jebel-parked-workplan.md](infrastructure/jebel-parked-workplan.md) | **parked, 2026-11-05:** what's left of the crate performance plan, waiting for a healthy claim machine: the threshold re-sweep, the column split, new threaded sites and the closing baseline |
 
-Retired plans are listed in [next-steps.md](../next-steps.md).
+Retired plans are listed in [retired.md](retired.md).

@@ -341,8 +341,11 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
 - **`stone`'s throughput:** at 8 workers it matches `jebel` at 6 (the ladder's `p` 13 cell, 30
   epochs, seeds bit-identical with `jebel`'s round 2, screens equal at every matched epoch). A run
   takes 0.89x `jebel`'s time at 4 workers, 1.34x at 8 and 1.93x at 12, so 12 adds about 4% over 8:
-  use 8. Measured only on early steps and 3.5-minute bursts; a long run's sustained clocks may be
-  lower on a 15 W laptop.
+  use 8. Measured only on early steps and 3.5-minute bursts; a long run's sustained clocks are
+  lower on a 15 W laptop: the FFN activations study's 8 Herodotus jobs (2026-11-03) ran every core
+  at 0.9-1.1 GHz (its power cap, 72 C), an epoch 640-690 s against 76 s for one job alone, so 8
+  workers did about one lone job's work. Size a long study's budget on its throughput measured at
+  the worker count it will run.
 - **`klip`, the fourth machine: studies, and the Ryzen's timing guard** (the crate performance workplan, D12; `ab.py` there is local, under its thermal guard, with `AB_CRATE_REPO` unset: `~/code/indrajala-math-rust` is its clone). `ssh klip` (192.168.1.104); Ryzen 7 3700U laptop
   (4 cores, 8 threads), 5 GB, so about 3 small runs at once. Always on, all cores; the owner's
   limit (2026-10-21): <= 85 C, ideally <= 80 C. **CPU boost is off** (`cpu-boost-off.service`;
