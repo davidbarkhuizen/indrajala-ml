@@ -16,9 +16,11 @@ dependencies = [
     "numpy>=1.20",  # numpy.lib.stride_tricks.sliding_window_view (conv_array_layer.py)
 ]
 
-# the export-and-hub workplan's extras (D7): format 3's directories and the Hub (hub)
+# the export-and-hub workplan's extras (D7): format 3's directories and the Hub (hub), ONNX export
+# (onnx); onnxruntime, which checks an export, is in requirements.in for the tests only
 [project.optional-dependencies]
 hub = ["safetensors>=0.8", "huggingface_hub>=2.4"]
+onnx = ["onnx>=1.23"]
 
 [tool.setuptools.packages.find]
 include = ["indrajala_ml*"]
@@ -47,4 +49,4 @@ extend-exclude = ["rust"]  # the crate's own repo (submodule)
 [tool.pyright]
 include = ["indrajala_ml", "tests", "scripts"]
 typeCheckingMode = "strict"
-executionEnvironments = [{ root = "tests", extraPaths = [".", "scripts/generation", "scripts/measurement", "scripts/studies", "scripts/data"], reportPrivateUsage = false }]
+executionEnvironments = [{ root = "tests", extraPaths = [".", "scripts/generation", "scripts/measurement", "scripts/studies", "scripts/data", "scripts/export"], reportPrivateUsage = false }]
