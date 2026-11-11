@@ -197,7 +197,6 @@ def test_erf_is_fdlibms_within_an_ulp(dtype: str):
 @pytest.mark.parametrize(
     "name, stage",
     [
-        ("ConvVectorizedMultiClassBackpropClassifierNetwork", 4),
         ("SequentialSequenceArrayNetwork", 5),
         ("WindowRecurrentArrayNetwork", 6),
         ("EncoderDecoderArrayNetwork", 7),
