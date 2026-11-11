@@ -1,5 +1,5 @@
 """
-The DRY audit's clone scan (docs/next-steps.md, "From the DRY audit"; the DRY third pass workplan,
+The DRY audit's clone scan (docs/next-steps.md, "Kept up as the code changes"; the DRY third pass workplan,
 stage 1): copies of `--lines` or more statement lines between or within Python files, and each
 tree's share of lines inside one.
 

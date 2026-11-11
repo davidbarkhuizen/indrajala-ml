@@ -12,7 +12,7 @@ workplan's registered claims.
 
 Findings: none. The study was abandoned by the owner on 2026-11-03 after 24 of its 80 runs, on
 stone at 8 workers far slower than its registered estimate; F1-F3 are untested and the partial runs
-not analysed (next-steps.md, From FFN activations). The code stays: the GQA study builds its model
+not analysed (next-steps.md, Sequence models and language). The code stays: the GQA study builds its model
 from arm_specs("swiglu").
 """
 
