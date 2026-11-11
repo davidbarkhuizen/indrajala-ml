@@ -60,6 +60,24 @@ Stage 6 (the window-recurrent step) done 2026-11-11:
   windows; one, two and three factors; crossed; continuous; linear codes; FiLM; poolings before the
   state; branches) passes on numpy and Rust, under both evaluators, at about 1e-16.
 
+Stage 7 (encoder-decoder) done 2026-11-11:
+- **Three models,** saved side by side (`<stem>.onnx`, `<stem>_encoder.onnx`,
+  `<stem>_decoder_step.onnx`): the full forward (source, target ids → probabilities); the encoder
+  (source → memory and memory_segments); the decode step, one token a row with its segment and
+  position (the host's, as the Decoder's context), its column (rotary's, computed in the graph by
+  Cos and Sin), the past segments and each self-attention's past keys and values, to its
+  probabilities and the present cache, the last T kept. Cross-attention's keys and values are
+  computed from the memory each step (a cache for them is a later speed-up).
+- **Cross-attention masks by segment alone;** a pad's query, with no key, weighs nothing (H = 0,
+  as `tiled_forward`), its row's scores masked with 0, not -inf, so its softmax stays finite.
+- **The check decodes:** the full forward against our numpy network, then every target token
+  through the encoder and decode step, teacher-forced from an empty cache, each step's
+  probabilities the full forward's at that token. The fixtures and decoders with learned
+  positions, rotary self-attention and grouped heads in both attentions pass in both dtypes under
+  both evaluators. The cache's window (dropping the oldest past T) is the graph's, as
+  `AttentionCache.append`, but the check decodes within the window only.
+- **Every expanded spec kind and every shape now exports;** the stage refusals are gone.
+
 ## The short answers
 
 - **Hugging Face has no single universal model format to extend.** A Hub model is a git repository

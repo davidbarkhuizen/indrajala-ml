@@ -28,7 +28,7 @@ import numpy as np
 
 from indrajala_ml.model.export.onnx.functions import activate
 from indrajala_ml.model.export.onnx.graph import Graph
-from indrajala_ml.model.specs.layer_specs import Attention, Dense, Embedding, GatedDense, LayerNorm
+from indrajala_ml.model.specs.layer_specs import Attention, CrossAttention, Dense, Embedding, GatedDense, LayerNorm
 from indrajala_ml.model.specs.rotary_table import rotary_table
 
 
@@ -79,6 +79,7 @@ def segments(g: Graph, ids: str, spec: Embedding, tokens: int) -> Segments:
 
 
 _INT64 = 7  # onnx.TensorProto.INT64
+_BOOL = 9  # onnx.TensorProto.BOOL
 
 
 def embedding(g: Graph, ids: str, name: str, table: Any) -> str:
@@ -169,6 +170,82 @@ def allowed_scores(g: Graph, tokens: int, causal: bool, context: Segments | None
     return g.op("Unsqueeze", [allowed, g.int64([-3])])
 
 
+def _project(
+    g: Graph, x: str, names: Sequence[str], weights: Sequence[Any], tokens: int, heads: int, key_size: int
+) -> str:
+    # x (N, T, d) through one of Q's, K's or V's (W, b) as (N, T, n, d_k)
+    return _heads(g, _affine(g, x, names, weights), tokens, heads, key_size)
+
+
+def _attend(
+    g: Graph,
+    queries: str,
+    keys: str,
+    values: str,
+    heads: int,
+    kv_heads: int,
+    key_size: int,
+    key_count: int | None,
+    allowed: str | None,
+    empty_rows: bool = False,
+) -> str:
+    """
+    Attention's softmax over (N, h, T_q, d_k) queries and (N, g, T_k, d_k) keys and values: each
+    head's softmax((Q K^T) / sqrt(d_k)) over its allowed keys times V, its key/value head
+    i // (h / g); (N, h, T_q, d_k). key_count None when the keys' count is the graph's to find
+    (a decode's cache). empty_rows: a query with no allowed key (cross-attention's pad) gives 0, as
+    tiled_forward's H = 0, not softmax's NaN.
+    """
+    if kv_heads != heads:
+        shared = heads // kv_heads
+        keys, values = (
+            g.op(
+                "Reshape",
+                [
+                    g.op("Expand", [g.op("Unsqueeze", [t, g.int64([2])]), g.int64([1, kv_heads, shared, 1, 1])]),
+                    g.int64([0, heads, -1, key_size]),
+                ],
+            )
+            for t in (keys, values)
+        )
+    products = g.op("MatMul", [queries, g.op("Transpose", [keys], perm=[0, 1, 3, 2])])
+    # divided by sqrt(d_k) as a vector, one per key: the same bits as the scalar, but onnxruntime's
+    # MatMulScaleFusion folds a scalar into FusedMatMul's alpha, a float32 attribute, which costs a
+    # float64 graph 3e-8 of every score
+    root = float(np.sqrt(key_size))
+    if key_count is None:
+        count = g.op("Slice", [g.op("Shape", [keys]), g.int64([2]), g.int64([3]), g.int64([0])])
+        scale = g.op("Expand", [g.constant(root, "root_key_size"), count])
+    else:
+        scale = g.constant(np.full(key_count, root), "scale")
+    scores = g.op("Div", [products, scale])
+    masked = g.constant(-np.inf, "minus_infinity")
+    if empty_rows and allowed is not None:
+        # a row with no allowed key masks with 0, not -inf, so its softmax is finite, then weighs 0
+        reached = g.op(
+            "Cast", [g.op("ReduceMax", [g.op("Cast", [allowed], to=_INT64), g.int64([-1])], keepdims=1)], to=_BOOL
+        )
+        masked = g.op("Where", [reached, masked, g.constant(0.0, "zero_score")])
+    if allowed is not None:
+        scores = g.op("Where", [allowed, scores, masked])
+    weights = g.op("Softmax", [scores], axis=-1)
+    if empty_rows and allowed is not None:
+        weights = g.op("Where", [allowed, weights, g.constant(0.0, "zero_weight")])
+    return g.op("MatMul", [weights, values])
+
+
+def _combine(g: Graph, weighted: str, tokens: int, width: int, names: Sequence[str], weights: Sequence[Any]) -> str:
+    # (N, h, T, d_k) side by side, (N, T, h d_k), through Wo
+    side_by_side = g.op("Reshape", [g.op("Transpose", [weighted], perm=[0, 2, 1, 3]), g.int64([-1, tokens, width])])
+    return _affine(g, side_by_side, names, weights)
+
+
+def _split_parameters(names: Sequence[str], weights: Sequence[Any]) -> list[tuple[tuple[str, str], tuple[Any, Any]]]:
+    # attention's eight parameters as (Wq, bq), (Wk, bk), (Wv, bv), (Wo, bo) pairs of names and arrays
+    pairs = list(zip(names, weights, strict=True))
+    return [((pairs[i][0], pairs[i + 1][0]), (pairs[i][1], pairs[i + 1][1])) for i in range(0, 8, 2)]
+
+
 def attention(
     g: Graph,
     spec: Attention,
@@ -188,10 +265,10 @@ def attention(
     heads = spec.heads
     key_size = spec.head_size(features)
     kv_heads = spec.key_value_heads or heads
-    Wq, bq, Wk, bk, Wv, bv, Wo, bo = zip(names, weights, strict=True)
-    queries = _heads(g, _affine(g, x, (Wq[0], bq[0]), (Wq[1], bq[1])), tokens, heads, key_size)
-    keys = _heads(g, _affine(g, x, (Wk[0], bk[0]), (Wk[1], bk[1])), tokens, kv_heads, key_size)
-    values = _heads(g, _affine(g, x, (Wv[0], bv[0]), (Wv[1], bv[1])), tokens, kv_heads, key_size)
+    q, k, v, o = _split_parameters(names, weights)
+    queries = _project(g, x, *q, tokens, heads, key_size)
+    keys = _project(g, x, *k, tokens, kv_heads, key_size)
+    values = _project(g, x, *v, tokens, kv_heads, key_size)
     if spec.positions == "rotary":
         cos_table, sin_table = rotary_table(tokens, key_size, spec.rotary_base)
         cos = g.constant(np.array(cos_table)[:, np.newaxis, :], "rotary_cos")
@@ -199,32 +276,142 @@ def attention(
         queries, keys = _rotated(g, queries, cos, sin, key_size // 2), _rotated(g, keys, cos, sin, key_size // 2)
     # (N, n, T, d_k)
     queries, keys, values = (g.op("Transpose", [t], perm=[0, 2, 1, 3]) for t in (queries, keys, values))
-    if kv_heads != heads:
-        shared = heads // kv_heads
-        expanded = [-1, kv_heads, shared, tokens, key_size]
-        keys, values = (
-            g.op(
-                "Reshape",
-                [
-                    g.op(
-                        "Expand",
-                        [g.op("Unsqueeze", [t, g.int64([2])]), g.int64([1, kv_heads, shared, tokens, key_size])],
-                    ),
-                    g.int64([expanded[0], heads, tokens, key_size]),
-                ],
-            )
-            for t in (keys, values)
-        )
-    # divided by sqrt(d_k) as a (T,) vector, one per key: the same bits as the scalar, but
-    # onnxruntime's MatMulScaleFusion folds a scalar into FusedMatMul's alpha, a float32
-    # attribute, which costs a float64 graph 3e-8 of every score
-    scale = g.constant(np.full(tokens, np.sqrt(key_size)), "scale")
-    scores = g.op("Div", [g.op("MatMul", [queries, g.op("Transpose", [keys], perm=[0, 1, 3, 2])]), scale])
     allowed = allowed_scores(g, tokens, spec.causal, context, spec.document_mask)
-    if allowed is not None:
-        scores = g.op("Where", [allowed, scores, g.constant(-np.inf, "minus_infinity")])
-    weighted = g.op("MatMul", [g.op("Softmax", [scores], axis=-1), values])
-    side_by_side = g.op(
-        "Reshape", [g.op("Transpose", [weighted], perm=[0, 2, 1, 3]), g.int64([-1, tokens, heads * key_size])]
+    weighted = _attend(g, queries, keys, values, heads, kv_heads, key_size, tokens, allowed)
+    return _combine(g, weighted, tokens, heads * key_size, *o)
+
+
+def cross_attention(
+    g: Graph,
+    spec: CrossAttention,
+    x: str,
+    tokens: int,
+    features: int,
+    memory: str,
+    memory_tokens: int,
+    names: Sequence[str],
+    weights: Sequence[Any],
+    query_segments: str | None,
+    memory_segments: str | None,
+) -> str:
+    """
+    A decoder's attention to the encoder's output, CrossAttentionArrayLayer's forward: Q from x, K
+    and V from the memory (N, S, d_m); masked by segment alone, a query reading its own segment's
+    keys but a pad's, never its own column; a query with no key (a pad's) gives H = 0, so bo.
+    Never causal or rotary.
+    """
+    heads = spec.heads
+    key_size = spec.head_size(features)
+    kv_heads = spec.key_value_heads or heads
+    q, k, v, o = _split_parameters(names, weights)
+    queries = g.op("Transpose", [_project(g, x, *q, tokens, heads, key_size)], perm=[0, 2, 1, 3])
+    keys = g.op("Transpose", [_project(g, memory, *k, memory_tokens, kv_heads, key_size)], perm=[0, 2, 1, 3])
+    values = g.op("Transpose", [_project(g, memory, *v, memory_tokens, kv_heads, key_size)], perm=[0, 2, 1, 3])
+    allowed = None
+    if query_segments is not None and memory_segments is not None:
+        same = g.op(
+            "And",
+            [
+                g.op(
+                    "Equal",
+                    [
+                        g.op("Unsqueeze", [query_segments, g.int64([2])]),
+                        g.op("Unsqueeze", [memory_segments, g.int64([1])]),
+                    ],
+                ),
+                g.op("Not", [g.op("Equal", [g.op("Unsqueeze", [memory_segments, g.int64([1])]), g.int64(0, "zero")])]),
+            ],
+        )
+        allowed = g.op("Unsqueeze", [same, g.int64([-3])])
+    weighted = _attend(g, queries, keys, values, heads, kv_heads, key_size, memory_tokens, allowed, empty_rows=True)
+    return _combine(g, weighted, tokens, heads * key_size, *o)
+
+
+@dataclass(frozen=True)
+class StepCache:
+    """
+    A decode step's inputs for one self-attention layer, and its outputs: the past keys and values
+    (N, g, L, d_k), rotated keys for a rotary layer, and their names in the graph's outputs.
+    """
+
+    past_keys: str
+    past_values: str
+    present_keys: str
+    present_values: str
+
+
+@dataclass(frozen=True)
+class StepContext:
+    """
+    A decode step's own: the token's segment and position (N, 1) int64, its absolute column
+    (a (1,) int64, rotary's), the past tokens' segments (N, L), and the cache's window, T.
+    """
+
+    segments: str
+    positions: str
+    column: str
+    past_segments: str
+    window: int
+
+
+def attention_step(
+    g: Graph,
+    spec: Attention,
+    x: str,
+    features: int,
+    names: Sequence[str],
+    weights: Sequence[Any],
+    cache: StepCache,
+    step: StepContext,
+) -> str:
+    """
+    One token a row, (N, 1, d), attending to its row's cache and itself (AttentionArrayLayer.step):
+    its key and value appended, the oldest dropped past the window, the query masking another
+    segment's keys and a pad's but its own, rotary by its column. The present keys and values are
+    graph outputs, the next step's past.
+    """
+    heads = spec.heads
+    key_size = spec.head_size(features)
+    kv_heads = spec.key_value_heads or heads
+    q, k, v, o = _split_parameters(names, weights)
+    queries = _project(g, x, *q, 1, heads, key_size)
+    keys = _project(g, x, *k, 1, kv_heads, key_size)
+    values = _project(g, x, *v, 1, kv_heads, key_size)
+    if spec.positions == "rotary":
+        half = key_size // 2
+        thetas = np.array([spec.rotary_base ** (-2 * j / key_size) for j in range(half)])
+        angles = g.op("Mul", [g.op("Cast", [step.column], to=g.tensor_type), g.constant(thetas, "thetas")])
+        cos = g.op("Reshape", [g.op("Cos", [angles]), g.int64([1, 1, half])])
+        sin = g.op("Reshape", [g.op("Sin", [angles]), g.int64([1, 1, half])])
+        queries, keys = _rotated(g, queries, cos, sin, half), _rotated(g, keys, cos, sin, half)
+    queries, keys, values = (g.op("Transpose", [t], perm=[0, 2, 1, 3]) for t in (queries, keys, values))
+    window = [g.int64([-step.window]), g.int64([2**62]), g.int64([2])]
+    present_keys = g.op("Slice", [g.op("Concat", [cache.past_keys, keys], axis=2), *window])
+    present_values = g.op("Slice", [g.op("Concat", [cache.past_values, values], axis=2), *window])
+    g.rename(present_keys, cache.present_keys)
+    g.rename(present_values, cache.present_values)
+    segments = step.segments
+    past = step.past_segments
+    if not spec.document_mask:
+        segments, past = (
+            g.op("Cast", [g.op("Not", [g.op("Equal", [t, g.int64(0, "zero")])])], to=_INT64) for t in (segments, past)
+        )
+    key_segments = g.op(
+        "Slice", [g.op("Concat", [past, segments], axis=1), g.int64([-step.window]), g.int64([2**62]), g.int64([1])]
     )
-    return _affine(g, side_by_side, (Wo[0], bo[0]), (Wo[1], bo[1]))
+    # (N, 1, 1, c): its own segment's keys but a pad's, and its own column, the cache's last
+    same = g.op(
+        "And",
+        [g.op("Equal", [key_segments, segments]), g.op("Not", [g.op("Equal", [key_segments, g.int64(0, "zero")])])],
+    )
+    count = g.op("Shape", [key_segments], start=1, end=2)
+    last = g.op(
+        "Equal",
+        [
+            g.op("Range", [g.int64(0, "zero"), g.op("Squeeze", [count]), g.int64(1, "one")]),
+            g.op("Sub", [g.op("Squeeze", [count]), g.int64(1, "one")]),
+        ],
+    )
+    allowed = g.op("Unsqueeze", [g.op("Or", [same, last]), g.int64([1, 2])])
+    weighted = _attend(g, queries, cache.present_keys, cache.present_values, heads, kv_heads, key_size, None, allowed)
+    return _combine(g, weighted, 1, heads * key_size, *o)
