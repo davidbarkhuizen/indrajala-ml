@@ -8,7 +8,15 @@ local file. In future it must also:
 
 This plan settles how, in stages. Its decisions are D1-D14 and the owner's calls O1-O3.
 
-**Progress:** stage 1 (format 3) done 2026-11-11. Stage 2 (the Hub functions) built and tested offline
+**Progress (2026-11-11): every stage built, merged and checked but the two live Hub steps, which
+wait for O1.** What is left, all of it the owner's to unblock:
+- stage 2's acceptance: one tiny network pushed to a private repository and pulled back by
+  revision, bits checked (`tests/model/test_hub.py::test_the_live_hub_round_trip`, run with
+  `HF_TOKEN` and `INDRAJALA_HUB_TEST_REPO` set);
+- stage 8's live `push_to_hub(..., onnx=True)`, the same with the export;
+- then retire the plan. O2 (which models, their licence) and O3 (the Hub library) come after.
+
+Stage 1 (format 3) done 2026-11-11. Stage 2 (the Hub functions) built and tested offline
 2026-11-11; its live acceptance (a push to a private repository and back by revision) waits for O1.
 Stage 3 (the exporter's core) done 2026-11-11. What stage 3 found:
 - **onnxruntime has no float64 `Erf` or exact `Gelu`** either, so exact GELU goes through
@@ -77,6 +85,21 @@ Stage 7 (encoder-decoder) done 2026-11-11:
   both evaluators. The cache's window (dropping the oldest past T) is the graph's, as
   `AttentionCache.append`, but the check decodes within the window only.
 - **Every expanded spec kind and every shape now exports;** the stage refusals are gone.
+
+Stage 8, all but the live push, done 2026-11-11:
+- **`onnx=True`** on `save_pretrained` and `push_to_hub` adds the checked export as `model.onnx`
+  (an encoder-decoder's other two beside it), tags the card `onnx`, and a save or push without it
+  deletes a stale export. Tested offline; the live push waits for O1.
+- **aarch64 (`litshe`, D13 5):** the export, format-3 and hub tests, Rust networks included,
+  675 passed (the live Hub test skipped) on onnxruntime 1.31.1's arm64 wheel, every export within
+  the same tolerances of our numpy forward and every window step's codes equal (2026-11-11, 52 C
+  at most). `litshe`'s checkout went to `main` and its crate was rebuilt for it first: its
+  installed crate predated `WindowProgram`'s current signature.
+- **The README** has "Directories and the Hugging Face Hub" and "ONNX export" under "Saving and
+  loading".
+- **Later, each when wanted** (not in this plan): the fused `Attention` op in place of the
+  decomposition, once the decomposition is the reference; cross-attention's keys and values cached
+  in the decode step; a check that decodes past the cache's window.
 
 ## The short answers
 

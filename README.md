@@ -293,6 +293,74 @@ result = train_backprop_network_mini_batch(network, data, 32, epochs=20, resume_
 batch size, learning rate and reference classifier, it ends where an uninterrupted 20-epoch run
 ends (`tests/training/test_run_checkpoint.py`). A run file holds one network's run, not an ensemble's.
 
+### Directories and the Hugging Face Hub
+
+A numpy or Rust network or ensemble also saves as a directory, format 3
+(`indrajala_ml/model/persistence/format3.py`; the export-and-hub workplan in `docs/workplans/library/`).
+`config.json` holds format 2's document without its arrays. `model.safetensors` holds the weights,
+float64, named by layer and parameter (`layers.3.Wq`, `recurrence.0.codes.E`).
+- With `training_state=True`, the optimizer's state and the generator's are saved too
+  (`optimizer.safetensors`, `training_state.json`), and a loaded directory trains on by bits.
+- A tokenizer goes inside as `indrajala_tokenizer.json`.
+- `load_network`, and each class's `load`, read a directory as they read a file.
+- `network.save` still writes format 2. Pure-Python networks stay format 2.
+
+The Hub functions (`indrajala_ml/model/hub.py`, the `[hub]` extra) use the same directory:
+
+```python
+from indrajala_ml.model.hub import from_pretrained, push_to_hub, save_pretrained
+
+save_pretrained(network, "model", training_state=True)  # the directory and its model card
+revision = push_to_hub(network, "user/model")  # one commit to a private repository
+network = from_pretrained("user/model", revision=revision)  # built from its specs, as load_network
+```
+
+- The model card records `library_name: indrajala-ml`, the shape, the parameter count, and the ml
+  and crate commits.
+- A pushed repository is created private, and every push is outward-facing.
+- `from_pretrained` downloads the training state only when asked.
+- `onnx=True` adds the network's checked ONNX export as `model.onnx`, tagged `onnx`, so the
+  repository is usable without this library.
+
+### ONNX export
+
+`export_onnx` (`indrajala_ml/model/export/onnx/`, the `[onnx]` extra) writes a network's inference
+graph, opset 23 at IR version 10:
+
+```python
+from indrajala_ml.model.export.onnx.exporter import export_onnx
+
+export_onnx(network, "model.onnx")  # or a format-2 file's or a format-3 directory's path
+```
+
+It builds the graph from the network's saved description, never the live objects, so a numpy
+network, a Rust one, a file and a Hub download export alike (`scripts/export/export_onnx.py PATH OUT`
+for a saved one).
+
+- **The classifiers:** `x` (N, d), or an image's (N, C, H, W), gives `probabilities`.
+- **A sequence model:** int64 `ids` (N, T) give each token's probabilities. The graph derives
+  segments from the ids, as the network does.
+- **A window-recurrent network** exports as its step, the transducer's transition: `state` and a
+  `window` give `outputs`, `next_state`, each factor's `codes`, and the `initial_state`. The host
+  loops it over a sequence.
+- **An encoder-decoder** exports three models: the full forward, the encoder, and a decode step
+  with its key/value cache.
+
+Precision:
+- Every shape exports float32 by default, and float64 on request (`dtype="float64"`).
+- **A window-recurrent network exports float64 only:** float32 can snap a state to another code and
+  change the machine. Its metadata and model card say so; OpenVINO, TFLite and other converters
+  downcast silently.
+- Where onnxruntime has no float64 kernel, the graph decomposes the op, so a float64 export runs on
+  its CPU provider: conv as im2col, exact GELU through fdlibm's erf, attention and rotary.
+
+**Every export is checked** (`check=True`): onnx's checker and strict shape inference, then our
+numpy forward's outputs within 1e-12 (float64) or 1e-5 (float32), under onnx's reference evaluator
+and onnxruntime.
+- A window-recurrent step is looped over runs of windows from its own states, every code index the
+  network's at every step.
+- An encoder-decoder's decode step is run token by token against the full forward.
+
 ## Update rules
 
 Every update rule follows a published form, with the source's arithmetic grouping, in all three
