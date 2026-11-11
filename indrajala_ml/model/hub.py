@@ -10,6 +10,9 @@ API, writing and reading format-3 directories (persistence/format3.py).
   class named in a downloaded file). revision pins the exact weights, as a DOI does.
 - download_pretrained: the local directory from_pretrained reads, for its tokenizer
   (generation/tokenizer.tokenizer_path) or for export.
+- onnx=True (save_pretrained, push_to_hub) adds the network's checked ONNX export, model.onnx,
+  and tags the card onnx (stage 8): the repository is usable without this library. A download
+  for our library leaves it behind; it is the file for every other runtime.
 
 No ModelHubMixin: it overrides __new__ and writes config.json from constructor arguments, neither
 of which fits our networks (D5). The model card carries library_name: indrajala-ml, the network's
@@ -26,7 +29,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from indrajala_ml.model.export.onnx.exporter import FLOAT64_WARNING
+from indrajala_ml.model.export.onnx.exporter import FLOAT64_WARNING, export_onnx
+from indrajala_ml.model.export.onnx.graph import Dtype
 from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT
 from indrajala_ml.model.persistence.format3 import (
     CONFIG_FILE,
@@ -44,6 +48,9 @@ LIBRARY_NAME = "indrajala-ml"
 CARD_FILE = "README.md"
 _HUB_EXTRA = "pip install 'indrajala-ml[hub]'"
 # what an inference download takes; a resumable one adds the training state (D4)
+# a repository's ONNX export (stage 8): the model, and an encoder-decoder's other two beside it
+ONNX_FILE = "model.onnx"
+ONNX_FILES = (ONNX_FILE, "model_encoder.onnx", "model_decoder_step.onnx")
 INFERENCE_FILES = (CONFIG_FILE, TENSORS_FILE, TOKENIZER_FILE, CARD_FILE)
 TRAINING_FILES = (OPTIMIZER_FILE, TRAINING_STATE_FILE)
 
@@ -101,6 +108,7 @@ def model_card(
     description: str = "",
     tags: tuple[str, ...] = (),
     made_by: Mapping[str, str] | None = None,
+    onnx: bool = False,
 ) -> Any:
     """
     network's model card (huggingface_hub.ModelCard): its metadata (library_name, license, tags)
@@ -115,7 +123,7 @@ def model_card(
     data = hub.ModelCardData(
         library_name=LIBRARY_NAME,
         license=license,
-        tags=[LIBRARY_NAME, shape.replace("_", "-"), *tags],
+        tags=[LIBRARY_NAME, shape.replace("_", "-"), *(["onnx"] if onnx else []), *tags],
     )
     lines = [
         "---",
@@ -160,13 +168,22 @@ def save_pretrained(
     training_state: bool = False,
     tokenizer: Tokenizer | None = None,
     card: Any = None,
+    onnx: bool = False,
+    onnx_dtype: Dtype | None = None,
 ) -> Path:
     """
     network as a format-3 directory (format3.save_directory) with its model card, README.md: card,
-    or model_card(network)'s.
+    or model_card(network)'s. With onnx, also its checked ONNX export (export_onnx, onnx_dtype's
+    precision) as model.onnx, an encoder-decoder's encoder and decode step beside it, and the card
+    tagged onnx (the export-and-hub workplan, stage 8): the repository is then usable without
+    this library. Without it, a model.onnx already there is removed.
     """
     directory = save_directory(network, directory, training_state=training_state, tokenizer=tokenizer)
-    (card if card is not None else model_card(network)).save(str(directory / CARD_FILE))
+    for name in ONNX_FILES:
+        (directory / name).unlink(missing_ok=True)
+    if onnx:
+        export_onnx(network, directory / ONNX_FILE, dtype=onnx_dtype)
+    (card if card is not None else model_card(network, onnx=onnx)).save(str(directory / CARD_FILE))
     return directory
 
 
@@ -179,19 +196,30 @@ def push_to_hub(
     card: Any = None,
     commit_message: str = "Upload an indrajala-ml network",
     token: str | None = None,
+    onnx: bool = False,
+    onnx_dtype: Dtype | None = None,
 ) -> str:
     """
-    network's directory (save_pretrained's) uploaded to repo_id as one commit, the repository
-    created private if it doesn't exist; returns the commit's id, from_pretrained's revision.
-    Files of ours the directory no longer holds (a training state, a tokenizer) are deleted.
+    network's directory (save_pretrained's, with its ONNX export when onnx) uploaded to repo_id as
+    one commit, the repository created private if it doesn't exist; returns the commit's id,
+    from_pretrained's revision. Files of ours the directory no longer holds (a training state, a
+    tokenizer, an export) are deleted.
     """
     hub = _hub()
     api = hub.HfApi(token=token)
     api.create_repo(repo_id, private=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as folder:
-        save_pretrained(network, folder, training_state=training_state, tokenizer=tokenizer, card=card)
+        save_pretrained(
+            network,
+            folder,
+            training_state=training_state,
+            tokenizer=tokenizer,
+            card=card,
+            onnx=onnx,
+            onnx_dtype=onnx_dtype,
+        )
         held = {path.name for path in Path(folder).iterdir()}
-        stale = [name for name in (*TRAINING_FILES, TOKENIZER_FILE) if name not in held]
+        stale = [name for name in (*TRAINING_FILES, TOKENIZER_FILE, *ONNX_FILES) if name not in held]
         commit = api.upload_folder(
             repo_id=repo_id, folder_path=folder, commit_message=commit_message, delete_patterns=stale or None
         )

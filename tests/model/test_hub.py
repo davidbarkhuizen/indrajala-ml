@@ -210,3 +210,37 @@ def test_a_window_networks_card_warns_against_float32():
     assert "**Float64 required: a conversion to float32" in text
     assert "may change the machine.**" in text
     assert "float64 required" not in str(model_card(_trained("SequentialSequenceArrayNetwork"))).lower()
+
+
+def test_save_pretrained_with_onnx_adds_the_checked_export_and_tags_it(tmp_path: Path):
+    network = _trained(NAME)
+    save_pretrained(network, tmp_path / "model", onnx=True)
+
+    assert sorted(path.name for path in (tmp_path / "model").iterdir()) == [
+        CARD_FILE,
+        CONFIG_FILE,
+        "model.onnx",
+        TENSORS_FILE,
+    ]
+    data = huggingface_hub.ModelCard.load(tmp_path / "model" / CARD_FILE).data.to_dict()
+    assert "onnx" in data["tags"]
+    save_pretrained(network, tmp_path / "model")
+    assert "model.onnx" not in {path.name for path in (tmp_path / "model").iterdir()}
+
+
+def test_an_encoder_decoders_onnx_export_is_three_files(tmp_path: Path):
+    save_pretrained(_trained("EncoderDecoderArrayNetwork"), tmp_path / "model", onnx=True)
+
+    assert {"model.onnx", "model_encoder.onnx", "model_decoder_step.onnx"} <= {
+        path.name for path in (tmp_path / "model").iterdir()
+    }
+
+
+def test_a_push_with_onnx_then_without_deletes_the_export(fake_hub: FakeHub):
+    network = _trained("SequentialSequenceArrayNetwork")
+    push_to_hub(network, "someone/model", onnx=True)
+    assert "model.onnx" in {path.name for path in (fake_hub.root / fake_hub.commits[-1]).iterdir()}
+
+    push_to_hub(network, "someone/model")
+
+    assert "model.onnx" not in {path.name for path in (fake_hub.root / fake_hub.commits[-1]).iterdir()}
