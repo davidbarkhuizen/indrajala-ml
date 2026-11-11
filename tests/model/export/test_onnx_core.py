@@ -46,8 +46,7 @@ def _flat(name: str) -> bool:
     )
 
 
-# the LayerNorm fixtures' layer norm is stage 5's
-FLAT = sorted(name for name in FIXTURES if _flat(name) and not name.startswith("LayerNorm"))
+FLAT = sorted(name for name in FIXTURES if _flat(name))
 
 
 def _network(name: str) -> Any:
@@ -197,10 +196,8 @@ def test_erf_is_fdlibms_within_an_ulp(dtype: str):
 @pytest.mark.parametrize(
     "name, stage",
     [
-        ("SequentialSequenceArrayNetwork", 5),
         ("WindowRecurrentArrayNetwork", 6),
         ("EncoderDecoderArrayNetwork", 7),
-        ("LayerNormSequentialVectorizedMultiClassBackpropClassifierNetwork", 5),
     ],
 )
 def test_a_later_stages_network_is_refused_naming_its_stage(name: str, stage: int):

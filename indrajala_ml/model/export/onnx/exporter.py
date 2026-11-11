@@ -3,10 +3,13 @@ export_onnx (the export-and-hub workplan, D9-D14): a network's inference graph, 
 saved description, never from the live network's objects, so a numpy network, a Rust one, a
 format-2 file and a format-3 directory (a Hub download) export alike.
 
-The graphs (D12), stage 3's and 4's shapes:
+The graphs (D12), stages 3-5's shapes:
 - multiclass and single_output: x (N, d), or an image's (N, C, H, W) (our row's channel-major
   order), to "probabilities" (N, classes), or "outputs" for a linear (given-loss) output layer;
-- an ensemble (one-vs-rest): x (N, d) to each sub-network's probability, concatenated, (N, classes).
+- an ensemble (one-vs-rest): x (N, d) to each sub-network's probability, concatenated, (N, classes);
+- sequence: ids (N, T), int64, to each token's "probabilities" (N, T, classes); a network whose
+  first layer is an Embedding reads ids whatever its shape. Its segments come from the ids in the
+  graph, as the network derives them (D12 amended: no segments input).
 
 Precision (D10): float32 by default; float64 when asked. A window-recurrent network exports
 float64 always (stage 6). Every export is checked (D13, check.py) unless check=False.
@@ -20,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from indrajala_ml.model.export.onnx.check import CheckReport, check_export
+from indrajala_ml.model.export.onnx.dependencies import onnx
 from indrajala_ml.model.export.onnx.graph import Dtype, Graph
 from indrajala_ml.model.export.onnx.layers import Tensor, layers, onnx_dims
 from indrajala_ml.model.persistence.format2 import ENSEMBLE, WINDOW_RECURRENT, description_to_json, is_format2
@@ -35,7 +39,7 @@ from indrajala_ml.model.specs.layer_specs import Dense
 from indrajala_ml.model.specs.spec_shapes import InputShape
 
 # the shapes each stage exports, by the stage that adds them
-_LATER_SHAPES = {"sequence": 5, WINDOW_RECURRENT: 6, "encoder_decoder": 7}
+_LATER_SHAPES = {WINDOW_RECURRENT: 6, "encoder_decoder": 7}
 
 
 @dataclass(frozen=True)
@@ -117,20 +121,21 @@ def export_onnx(
     g = Graph(dtype)
     first = state["classifiers"][0] if state["shape"] == ENSEMBLE else state
     dims = onnx_dims(_input_shape(first))
-    x = Tensor("x", tuple(dims))
+    # a network that embeds reads token ids, int64; every other its row's floats
+    ids = bool(first["layers"]) and first["layers"][0]["kind"] == "embedding"
+    x = Tensor("ids" if ids else "x", tuple(dims))
     if state["shape"] == ENSEMBLE:
         classifiers = state["classifiers"]
         outputs = [_network(g, classifier, x, f"classifiers.{c}.").name for c, classifier in enumerate(classifiers)]
         output = g.rename(g.op("Concat", outputs, axis=1), "probabilities")
-        width = len(classifiers)
+        output_dims: tuple[int, ...] = (len(classifiers),)
     else:
-        output = g.rename(_network(g, state, x, "").name, _output_name(state))
-        last = layer_from_json(state["layers"][-1])
-        assert isinstance(last, Dense), f"a classifier ends in its Dense output layer; got {last}"
-        width = last.size
+        result = _network(g, state, x, "")
+        output = g.rename(result.name, _output_name(state))
+        output_dims = result.dims
     model = g.model(
-        [g.value_info("x", ["batch", *dims])],
-        [g.value_info(output, ["batch", width])],
+        [g.value_info(x.name, ["batch", *dims], onnx().TensorProto.INT64 if ids else None)],
+        [g.value_info(output, ["batch", *output_dims])],
         f"indrajala-ml {state['shape']}",
         {
             "library": "indrajala-ml",
