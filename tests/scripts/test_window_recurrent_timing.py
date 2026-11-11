@@ -1,6 +1,7 @@
 """
 scripts/measurement/window_recurrent_timing.py: the case names parse to the cells they name, the old names
-keep their meaning, and each kind's step runs and its breakdown accounts for the step. Nothing is timed.
+keep their meaning, each kind's step runs and its breakdown accounts for the step, and --settle reads the control
+before and after a case. Nothing is timed against a machine.
 """
 
 import sys
@@ -48,3 +49,15 @@ def test_each_kind_runs_and_its_breakdown_accounts_for_the_step(case: str) -> No
 def test_an_end_to_end_case_is_the_study_timings() -> None:
     with pytest.raises(AssertionError, match="window_study_timing.py"):
         timing.case_step("study-family-p5-f16-e2")
+
+
+def test_per_second_gives_a_median_each_whole_second() -> None:
+    assert len(timing.per_second(lambda: None, 2.0, loops=1000)) == 2
+    assert len(timing.per_second(lambda: None, 0.05, loops=1000)) == 1
+
+
+def test_settle_reads_the_control_cold_and_after_the_case() -> None:
+    cold, case, after = timing.settle("forward-family-p5-f16-n8-r4", 0.05)
+    assert cold.startswith("cold: ") and after.startswith("after it: ")
+    assert case.startswith("forward-family-p5-f16-n8-r4: one step, ")
+    assert all(float(v) > 0 for v in cold.split()[1:] + after.split()[2:])
