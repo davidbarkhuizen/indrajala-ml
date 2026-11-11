@@ -50,7 +50,7 @@ bits.
     training recipe).
 11. **Segments: packing, document masks and padding**: one segment id per token, for packed
     training windows and padded inference batches; done (2026-11-01), in all three
-    implementations and the crate (README, Segments; next-steps, From segments).
+    implementations and the crate (README, Segments).
 12. **Context length**: windows of 256 and 1,024 characters, with tiled attention; done
     (2026-11-02), in all three implementations and the crate; the study puts later sequence work on
     the long-form corpora at windows of 256, the document mask the packed default (next-steps, From

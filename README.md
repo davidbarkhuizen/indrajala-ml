@@ -787,7 +787,7 @@ adds `Wo bv` to every output, as `bo` can, since each row of every `P[i]` sums t
 Every implementation's attention layer, and the crate, is the same three blocks per pass, project,
 attend and combine, each tested on its own; the causal mask and dropout on `P` sit in attend (The sequence task,
 Dropout among the tokens), grouped key/value heads in project and attend (below), and padding
-masks have a named place among them (next-steps.md, From multi-head attention), and cross-attention
+padding masks beyond segments have a named place among them (next-steps.md, From multi-head attention), and cross-attention
 is attend over a second input's keys and values (Cross-attention and the encoder-decoder).
 On Rust each layer-norm and attention pass is still one crate call, the attention ops thin
 wrappers over the crate's blocks, and the token-wise dense layer is the existing dense ops on the
@@ -825,8 +825,8 @@ train for about 5% of the original steps ("uptraining"). `scripts/measurement/ge
 --heads H --key-value-heads G --context T --batch B` times a decode and reports the cache's bytes a
 token.
 
-**When to use it** (from the literature, not measured here; next-steps.md, From grouped-query
-attention). Keep multi-head unless the key/value cache bounds decoding (long contexts, large
+**When to use it** (from the literature, not measured here; the options weighed are the retired
+grouped-query attention workplan's D14, docs/workplans/retired.md). Keep multi-head unless the key/value cache bounds decoding (long contexts, large
 batches); then share heads at about 4 query heads a key/value head, and not down to one:
 - **Quality:** uptrained at 5%, T5-XXL's GQA-8 scores 47.1 against multi-head's 47.2 and
   multi-query's 46.6 (Ainslie et al., Table 1). Trained from scratch at 7B and 1.33T tokens,
@@ -1210,7 +1210,20 @@ network = EncoderDecoderRustArrayNetwork.randomized(spec, 1024, 1024, Adam(), se
   translations.
 - **When to use it:** for a task with a source to read and a target to write. The literature
   favours it over a decoder-only model that reads the source as a prefix, most at small scale
-  (next-steps.md, From cross-attention).
+  (the retired cross-attention workplan's D18; its open work in next-steps.md, From cross-attention):
+  - Raffel et al. 2020 (T5, §3.2): at equal parameters and compute, the shared encoder-decoder beats
+    the prefix LM (En-De BLEU 26.72 against 26.43; the unshared 2P one 26.98).
+  - Zhang et al. 2022 (MT): the architectures differ most at small scale, with EncDec ahead, and
+    "small on-device models should continue using EncDec"; a prefix LM with full visibility of the
+    source approaches EncDec as models grow.
+  - Gao et al. 2022: a concatenated translation LM matches it when tuned, but decodes through the
+    whole network over a longer sequence.
+  - Fu et al. 2023: a decoder-only model's attention to the source fades as generation proceeds.
+
+  Sources (indrajala-literature): `raffel-2020-exploring-limits-transfer-t5`,
+  `zhang-2022-scaling-transfer-lm-architectures-mt`, `gao-2022-encoder-decoder-redundant-nmt`,
+  `fu-2023-decoder-only-or-encoder-decoder`. The model has not yet learned to read its source here
+  (the translation probe, `scripts/studies/translation_probe.py`).
 
 ## Segments
 
@@ -1346,7 +1359,7 @@ test passing, and:
   noise and baseline (A/As of every benchmark, the per-op, conv demo and kernel tables), with the
   Ryzen laptop's numbers beside them.
 - [docs/workplans/infrastructure/jebel-parked-workplan.md](docs/workplans/infrastructure/jebel-parked-workplan.md):
-  the crate's parked speed work, and [docs/next-steps.md](docs/next-steps.md) for what the retired plan delivered.
+  the crate's parked speed work; the retired plan is in [docs/workplans/retired.md](docs/workplans/retired.md).
 - [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
   primitives: composable layers, batch norm, residual connections, layer norm and single-head
   attention, multi-head attention and a transformer block, and a sequence task with causal
@@ -1356,8 +1369,10 @@ test passing, and:
 - [scripts/README.md](scripts/README.md): the scripts' groups.
 - [docs/next-machine-recommendation.md](docs/next-machine-recommendation.md): a buying guide for
   the next benchmark machine (2026-10-08).
-- [docs/next-steps.md](docs/next-steps.md): the work left over from completed workplans, and how
-  to read those workplans in git history.
+- [docs/next-steps.md](docs/next-steps.md): the work to be done that no open workplan holds, most of it
+  left by retired workplans.
+- [docs/workplans/retired.md](docs/workplans/retired.md): the retired workplans, and how to read each
+  in git history.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's
   reproduces numpy's legacy `np.random` bit for bit, how to seed a run, and the open RNG work.
 

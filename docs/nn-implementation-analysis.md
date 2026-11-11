@@ -744,8 +744,8 @@ Verdicts:
    repository has is re-seeding dead codes, a codebook learning rate and SimVQ's
    reparameterisation. The owner reports codebook collapse as a recurring failure. The plan, the
    audit-remedies workplan, promoted the k-means codes into the library and built the other three,
-   as options a registered study judges (*done* 2026-11-02 and 03; retired, next-steps.md, From the
-   audit remedies).
+   as options a registered study judges (*done* 2026-11-02 and 03; retired: workplans/retired.md; its open work in next-steps.md, From
+   the audit remedies).
 
 ### 16.3 Divergent (benign), and optional changes
 
@@ -817,7 +817,7 @@ Verdicts:
 | A multiplicative state input (16.3.2) | optional | a variant to test |
 | MRI (16.3.5) | legacy | fix if used again |
 
-*Every recommendation done* (the audit-remedies workplan, 2026-11-02 and 03; retired, next-steps.md, From the
-audit remedies): the explicit output loss, the k-means codes, re-seeding, the codebook's rate and
+*Every recommendation done* (the audit-remedies workplan, 2026-11-02 and 03; retired: workplans/retired.md; its open work in
+next-steps.md, From the audit remedies): the explicit output loss, the k-means codes, re-seeding, the codebook's rate and
 SimVQ's codes, the selection set, He initialisation, the FiLM state input and MRI. Each is off by
 default; the codebook primitives are candidates for indrajala-research's state-formation workplan.

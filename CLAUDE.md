@@ -10,7 +10,9 @@
   its own PR, merged before the next. A stage that changes the crate lands in
   `indrajala-math-rust` first, then a "Bump rust/" PR here.
 - **Retire a workplan only when it is complete** (every stage and decision resolved); its leftover
-  work moves into [docs/next-steps.md](docs/next-steps.md).
+  work moves into [docs/next-steps.md](docs/next-steps.md), and its row (how to read it from git)
+  into [docs/workplans/retired.md](docs/workplans/retired.md). next-steps lists only work to be
+  done: delete an item there when it is done, rather than marking it.
 - **Gotchas live in [docs/working-notes.md](docs/working-notes.md)**: read it before working with
   worktrees, CI, studies or the machines; add a note there when you meet a new trap, not only in a
   session's handover.
