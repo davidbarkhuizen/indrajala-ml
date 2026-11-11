@@ -8,6 +8,7 @@ whose argmax differs is counted and reported, as a near tie.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -69,10 +70,11 @@ def check_export(model: Any, state: dict[str, Any], dtype: Dtype) -> CheckReport
         checker.shape_inference.infer_shapes(model, check_type=True, strict_mode=True)
     except Exception as error:  # onnx raises its own ValidationError and InferenceError
         raise ExportCheckError(f"the exported model fails onnx's checks: {error}") from error
-    dimension = model.graph.input[0].type.tensor_type.shape.dim[1].dim_value
-    x = inputs(dimension)
+    dims: list[int] = [dim.dim_value for dim in model.graph.input[0].type.tensor_type.shape.dim[1:]]
+    x = inputs(math.prod(dims))
     expected: np.ndarray[Any, np.dtype[np.float64]] = numpy_forward(state, x)
-    feed = {"x": x.astype(dtype)}
+    # our row, reshaped to the graph's input (an image's NCHW is our row's own order)
+    feed = {"x": x.reshape(len(x), *dims).astype(dtype)}
     runs: dict[str, Any] = {
         "reference": lambda: onnx_reference().ReferenceEvaluator(model).run(None, feed)[0],
     }

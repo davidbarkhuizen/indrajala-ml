@@ -19,6 +19,13 @@ Stage 3 (the exporter's core) done 2026-11-11. What stage 3 found:
   pool layers read our row channel-major (`X.reshape(n, C, H, W)`), not channels-last as D12's
   table assumed, so the graph needs no Transpose (stage 4).
 
+Stage 4 (conv, max pool, batch norm per channel, patches, the token mean) done 2026-11-11:
+- **An image's input is (N, C, H, W),** ONNX's own layout and a reshape of our row. Every layout
+  the graph holds (flat, NCHW, tokens (N, T, F)) is a reshape of our flat row, so the walk keeps
+  each spec's input shape (`spec_shapes`) and reshapes between them.
+- **Conv is im2col and a MatMul in both dtypes** (D10): a strided Slice per kernel offset,
+  stacked into W's column order. Max pool is ONNX's `MaxPool`, which onnxruntime runs in float64.
+
 ## The short answers
 
 - **Hugging Face has no single universal model format to extend.** A Hub model is a git repository
@@ -400,7 +407,7 @@ match ours on a case with grouped heads, causal and segments.
 
 | shape | graph(s) | inputs → outputs |
 |---|---|---|
-| `multiclass`, `single_output` | one | `x` (N, d), or (N, h, w, c) in our channels-last layout, with a Transpose inside where Conv needs NCHW → probabilities (or outputs) |
+| `multiclass`, `single_output` | one | `x` (N, d), or an image's (N, c, h, w), our row's own channel-major order (stage 4) → probabilities (or outputs) |
 | ensemble (one-vs-rest) | one | each sub-network's probability, concatenated, (N, classes) |
 | `sequence` | one | ids (N, T), optional segments (N, T) → per-token probabilities (N, T, V) |
 | `window_recurrent` | **the step** | state (N, Σ s_g), a window's tokens (N, k) or array → the window's outputs, the next state, and each factor's code index; the initial state as a graph constant output (`initial_state`) |

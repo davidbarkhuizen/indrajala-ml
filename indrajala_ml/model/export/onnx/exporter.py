@@ -3,9 +3,9 @@ export_onnx (the export-and-hub workplan, D9-D14): a network's inference graph, 
 saved description, never from the live network's objects, so a numpy network, a Rust one, a
 format-2 file and a format-3 directory (a Hub download) export alike.
 
-The graphs (D12), stage 3's shapes:
-- multiclass and single_output: x (N, d) to "probabilities" (N, classes), or "outputs" for a
-  linear (given-loss) output layer;
+The graphs (D12), stage 3's and 4's shapes:
+- multiclass and single_output: x (N, d), or an image's (N, C, H, W) (our row's channel-major
+  order), to "probabilities" (N, classes), or "outputs" for a linear (given-loss) output layer;
 - an ensemble (one-vs-rest): x (N, d) to each sub-network's probability, concatenated, (N, classes).
 
 Precision (D10): float32 by default; float64 when asked. A window-recurrent network exports
@@ -21,12 +21,18 @@ from typing import Any
 
 from indrajala_ml.model.export.onnx.check import CheckReport, check_export
 from indrajala_ml.model.export.onnx.graph import Dtype, Graph
-from indrajala_ml.model.export.onnx.layers import flat_layers
+from indrajala_ml.model.export.onnx.layers import Tensor, layers, onnx_dims
 from indrajala_ml.model.persistence.format2 import ENSEMBLE, WINDOW_RECURRENT, description_to_json, is_format2
-from indrajala_ml.model.persistence.format2_json import layer_from_json, layer_parameter_names, recurrence_from_json
+from indrajala_ml.model.persistence.format2_json import (
+    input_shape_from_json,
+    layer_from_json,
+    layer_parameter_names,
+    recurrence_from_json,
+)
 from indrajala_ml.model.persistence.format3 import float64_array, is_directory, read_directory, tensor_names
 from indrajala_ml.model.persistence.model_io import load_json
-from indrajala_ml.model.specs.layer_specs import Dense, expand_specs
+from indrajala_ml.model.specs.layer_specs import Dense
+from indrajala_ml.model.specs.spec_shapes import InputShape
 
 # the shapes each stage exports, by the stage that adds them
 _LATER_SHAPES = {"sequence": 5, WINDOW_RECURRENT: 6, "encoder_decoder": 7}
@@ -72,27 +78,24 @@ def document(source: Any) -> dict[str, Any]:
     return state
 
 
-def _input_dimension(state: dict[str, Any]) -> int:
+def _input_shape(state: dict[str, Any]) -> InputShape:
     if state["shape"] in _LATER_SHAPES:
         raise NotImplementedError(
             f"ONNX export of a {state['shape']} network comes in the export-and-hub workplan's stage "
             f"{_LATER_SHAPES[state['shape']]}"
         )
-    shape = state["input"]
-    if "dimension" not in shape:
-        raise NotImplementedError("ONNX export of an image input comes in the export-and-hub workplan's stage 4")
-    return int(shape["dimension"])
+    return input_shape_from_json(state["input"])
 
 
-def _network(g: Graph, state: dict[str, Any], x: str, prefix: str) -> str:
+def _network(g: Graph, state: dict[str, Any], x: Tensor, prefix: str) -> Tensor:
     # one flat network's graph over x, its initializers named by format 3's tensor names
     if state["implementation"] == "python":
         raise ValueError(
             "a pure-Python network holds its weights per node and doesn't export (D2): export its numpy twin"
         )
-    layers = [layer_from_json(spec) for spec in state["layers"]]
-    names = [[prefix + name for name in entry] for entry in tensor_names(layers, None)]
-    return flat_layers(g, expand_specs(layers), x, names, state["weights"])
+    specs = [layer_from_json(spec) for spec in state["layers"]]
+    names = [[prefix + name for name in entry] for entry in tensor_names(specs, None)]
+    return layers(g, specs, _input_shape(state), x, names, state["weights"])
 
 
 def _output_name(state: dict[str, Any]) -> str:
@@ -112,20 +115,21 @@ def export_onnx(
     state = document(source)
     dtype = dtype or "float32"
     g = Graph(dtype)
+    first = state["classifiers"][0] if state["shape"] == ENSEMBLE else state
+    dims = onnx_dims(_input_shape(first))
+    x = Tensor("x", tuple(dims))
     if state["shape"] == ENSEMBLE:
         classifiers = state["classifiers"]
-        dimension = _input_dimension(classifiers[0])
-        outputs = [_network(g, classifier, "x", f"classifiers.{c}.") for c, classifier in enumerate(classifiers)]
+        outputs = [_network(g, classifier, x, f"classifiers.{c}.").name for c, classifier in enumerate(classifiers)]
         output = g.rename(g.op("Concat", outputs, axis=1), "probabilities")
         width = len(classifiers)
     else:
-        dimension = _input_dimension(state)
-        output = g.rename(_network(g, state, "x", ""), _output_name(state))
+        output = g.rename(_network(g, state, x, "").name, _output_name(state))
         last = layer_from_json(state["layers"][-1])
         assert isinstance(last, Dense), f"a classifier ends in its Dense output layer; got {last}"
         width = last.size
     model = g.model(
-        [g.value_info("x", ["batch", dimension])],
+        [g.value_info("x", ["batch", *dims])],
         [g.value_info(output, ["batch", width])],
         f"indrajala-ml {state['shape']}",
         {
