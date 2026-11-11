@@ -109,7 +109,7 @@ language servers into `.venv/bin`. The crate lints its own Rust and Python tests
 | `data/` | UCI digits and Iris (committed); MNIST and the text corpora (fetched into `data/mnist/` and `data/<corpus>/`) |
 | `scripts/data/fetch_datasets.py` | checksum-verified fetch of MNIST and the four text corpora, each from its pinned `indrajala-datasets-*` repository |
 | `scripts/` (the rest) | grouped by purpose ([scripts/README.md](scripts/README.md)): `measurement/` (`ab.py`, the benchmarks, probes and the golden run; see `docs/measurement.md`), `runner/` (the batch runner), `studies/` (one script per study, `configs/`), `paper/` (paper 1's tables, datapack and Zenodo deposit) |
-| `docs/` | the measurement guide, working notes, next steps, the primitives roadmap, machine profiles; `docs/workplans/` the open library and infrastructure workplans, `docs/rng-audit.md` the RNG audit. The research notes, the research protocols (experiment design, feasibility checklist), the research workplans and the dated reviews are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) |
+| `docs/` | the measurement guide, working notes, next steps, machine profiles; `docs/workplans/` the open library and infrastructure workplans, `docs/rng-audit.md` the RNG audit. The research notes, the research protocols (experiment design, feasibility checklist), the research workplans and the dated reviews are in [indrajala-research](https://github.com/davidbarkhuizen/indrajala-research) |
 
 ## Models
 
@@ -209,8 +209,8 @@ Each preset changes one thing in its row's base network. The one empty cell is n
 array one-output networks already initialize fan-in-aware, so `ArrayBackpropClassifierNetwork` and
 `RustArrayBackpropClassifierNetwork` are its counterparts. Combinations of two or more changes
 (ReLU under `Adam`, dropout with a softmax output, ...) have no preset; the Sequential networks
-build them, and [docs/next-steps.md](docs/next-steps.md), From composable layers, lists them with
-those still out of reach. Batch norm, residual blocks, layer norm and patch models have no preset
+build them, and [docs/next-steps.md](docs/next-steps.md) (Infrastructure, presets for combinations)
+lists them with those still out of reach. Batch norm, residual blocks, layer norm and patch models have no preset
 either: the Sequential networks build them (Batch normalization, Residual connections, Layer norm
 and attention).
 
@@ -787,7 +787,7 @@ adds `Wo bv` to every output, as `bo` can, since each row of every `P[i]` sums t
 Every implementation's attention layer, and the crate, is the same three blocks per pass, project,
 attend and combine, each tested on its own; the causal mask and dropout on `P` sit in attend (The sequence task,
 Dropout among the tokens), grouped key/value heads in project and attend (below), and padding
-padding masks beyond segments have a named place among them (next-steps.md, From multi-head attention), and cross-attention
+padding masks beyond segments have a named place among them (next-steps.md, Infrastructure), and cross-attention
 is attend over a second input's keys and values (Cross-attention and the encoder-decoder).
 On Rust each layer-norm and attention pass is still one crate call, the attention ops thin
 wrappers over the crate's blocks, and the token-wise dense layer is the existing dense ops on the
@@ -1210,7 +1210,7 @@ network = EncoderDecoderRustArrayNetwork.randomized(spec, 1024, 1024, Adam(), se
   translations.
 - **When to use it:** for a task with a source to read and a target to write. The literature
   favours it over a decoder-only model that reads the source as a prefix, most at small scale
-  (the retired cross-attention workplan's D18; its open work in next-steps.md, From cross-attention):
+  (the retired cross-attention workplan's D18; its open work in next-steps.md, Sequence models and language):
   - Raffel et al. 2020 (T5, §3.2): at equal parameters and compute, the shared encoder-decoder beats
     the prefix LM (En-De BLEU 26.72 against 26.43; the unshared 2P one 26.98).
   - Zhang et al. 2022 (MT): the architectures differ most at small scale, with EncDec ahead, and
@@ -1360,15 +1360,14 @@ test passing, and:
   Ryzen laptop's numbers beside them.
 - [docs/workplans/infrastructure/jebel-parked-workplan.md](docs/workplans/infrastructure/jebel-parked-workplan.md):
   the crate's parked speed work; the retired plan is in [docs/workplans/retired.md](docs/workplans/retired.md).
-- [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the candidate next ML primitives, and
-  how the next one is chosen (steps 1-15 are built).
 - [docs/working-notes.md](docs/working-notes.md): the gotchas: worktrees, CI, studies, the
   machines and ssh.
 - [scripts/README.md](scripts/README.md): the scripts' groups.
 - [docs/next-machine-recommendation.md](docs/next-machine-recommendation.md): a buying guide for
   the next benchmark machine (2026-10-08).
-- [docs/next-steps.md](docs/next-steps.md): the work to be done that no open workplan holds, most of it
-  left by retired workplans.
+- [docs/next-steps.md](docs/next-steps.md): the work to be done that no open workplan holds: the
+  infrastructure (the common library code) in an order of implementation, then the topic work by
+  topic.
 - [docs/workplans/retired.md](docs/workplans/retired.md): the retired workplans, and how to read each
   in git history.
 - [docs/rng-audit.md](docs/rng-audit.md): the random number generators in use, how the crate's

@@ -8,7 +8,7 @@ The retired plan, with its decisions, findings and every stage's readings:
 `git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md`. Its stage 12
 close-out readings are in indrajala-benchmarks' `readings/2026-11-05-crate-threads/`
 ([retired.md](../retired.md)); its leftovers outside this plan in [next-steps.md](../../next-steps.md),
-"From the crate performance workplan".
+Infrastructure, "The crate's speed".
 
 ## To resume
 
