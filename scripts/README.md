@@ -11,6 +11,7 @@ directory is on `sys.path` when run); no script imports another group's.
 | `studies/` | one script per study and the modular family's probe; `configs/` holds the window-recurrent run configurations |
 | `generation/` | sampling text from a trained sequence model (`sample_text.py`: `train`, then `sample`) |
 | `data/` | datasets fetched and checked |
+| `export/` | a saved network's ONNX export (`export_onnx.py`, the export-and-hub workplan) |
 
 Grouped 2026-10-29. A commit before then has every script flat in `scripts/`; `ab.py` runs either
 layout's scripts, so an A/B against an older commit still works. Paper 1's tags (`paper1-v1`,

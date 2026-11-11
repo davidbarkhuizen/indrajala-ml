@@ -12,6 +12,7 @@ anyio==4.16.0
 attrs==26.1.0
 click==8.5.1
 filelock==4.2.10
+flatbuffers==25.12.19
 fsspec==2026.9.0
 h11==0.16.0
 hf-xet==1.8.0
@@ -22,9 +23,13 @@ idna==3.20
 iniconfig==2.3.0
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
+ml-dtypes==0.6.0
 numpy==2.5.3
+onnx==1.23.2
+onnxruntime==1.31.1
 packaging==26.3
 pluggy==1.6.0
+protobuf==7.36.2
 pyarrow==25.0.1
 pygments==2.21.0
 pytest==9.1.1

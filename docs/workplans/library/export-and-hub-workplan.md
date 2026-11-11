@@ -10,6 +10,14 @@ This plan settles how, in stages. Its decisions are D1-D14 and the owner's calls
 
 **Progress:** stage 1 (format 3) done 2026-11-11. Stage 2 (the Hub functions) built and tested offline
 2026-11-11; its live acceptance (a push to a private repository and back by revision) waits for O1.
+Stage 3 (the exporter's core) done 2026-11-11. What stage 3 found:
+- **onnxruntime has no float64 `Erf` or exact `Gelu`** either, so exact GELU goes through
+  fdlibm's erf decomposed (`functions.erf`, within an ulp of `erf.py`), in both dtypes (D10).
+- **onnx's reference `Gelu(approximate="tanh")` is 5e-10 from ours in float64**, so GPT-2's GELU
+  is written out with `Tanh` too.
+- **A flat network's input is our row, (N, d).** An image network's is (N, C, H, W): the conv and
+  pool layers read our row channel-major (`X.reshape(n, C, H, W)`), not channels-last as D12's
+  table assumed, so the graph needs no Transpose (stage 4).
 
 ## The short answers
 
