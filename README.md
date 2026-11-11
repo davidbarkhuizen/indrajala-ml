@@ -1360,10 +1360,8 @@ test passing, and:
   Ryzen laptop's numbers beside them.
 - [docs/workplans/infrastructure/jebel-parked-workplan.md](docs/workplans/infrastructure/jebel-parked-workplan.md):
   the crate's parked speed work; the retired plan is in [docs/workplans/retired.md](docs/workplans/retired.md).
-- [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the proposed order for the next ML
-  primitives: composable layers, batch norm, residual connections, layer norm and single-head
-  attention, multi-head attention and a transformer block, and a sequence task with causal
-  masking, all done.
+- [docs/primitives-roadmap.md](docs/primitives-roadmap.md): the candidate next ML primitives, and
+  how the next one is chosen (steps 1-15 are built).
 - [docs/working-notes.md](docs/working-notes.md): the gotchas: worktrees, CI, studies, the
   machines and ssh.
 - [scripts/README.md](scripts/README.md): the scripts' groups.

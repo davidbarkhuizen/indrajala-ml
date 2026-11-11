@@ -3,7 +3,8 @@
 A workplan is retired (deleted) once every stage and decision is resolved; what it left open moves
 to [next-steps.md](../next-steps.md). Each one is still in git history, with its decisions (D1, D2,
 ...), design and stages, and code and docs cite them by section. Read one with the `git show` in its
-row.
+row. The "roadmap step N" names are the [primitives roadmap](../primitives-roadmap.md)'s steps 1-15
+(`git show 989819a:docs/primitives-roadmap.md`).
 
 Until 2026-11-11, next-steps.md also carried a "Done" summary of each retired plan beside its
 leftovers; that text is `git show 2490bdf:docs/next-steps.md`.

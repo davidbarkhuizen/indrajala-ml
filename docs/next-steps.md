@@ -16,7 +16,7 @@ work), the research plans in indrajala-research's
 [workplans/README.md](https://github.com/davidbarkhuizen/indrajala-research/blob/main/docs/workplans/README.md).
 Of the research plans, the general algebras, the factorisation machine and the adders of any length
 have been paused since 2026-10-20; each waits for a decision to resume or retire (the programme
-audit's F29). The order of the next ML primitives is in [primitives-roadmap.md](primitives-roadmap.md).
+audit's F29). The candidate next ML primitives are gathered in [primitives-roadmap.md](primitives-roadmap.md).
 
 Sections are named for the plan that left the work ("From ..."), so citations of the form
 "next-steps, From X" find them.
