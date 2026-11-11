@@ -13,10 +13,11 @@ indrajala-ml, which it bloats for reuse). Their names in this repository's code 
 
 ## `library/`: the ML primitives
 
-The [primitives roadmap](../primitives-roadmap.md)'s steps, each planned (stage 1) and not yet built.
+Workplans for ML primitives, each planned (stage 1) and not yet built; the candidates are in the
+[primitives roadmap](../primitives-roadmap.md).
 
-None open: steps 1-15 are done, and so is the array window (the machine-policy plan's M1), their
-workplans retired ([retired.md](retired.md)).
+None open: the roadmap's steps 1-15 and the array window (the machine-policy plan's M1) are done,
+their workplans retired ([retired.md](retired.md)).
 
 ## `infrastructure/`: machines, release and repositories
 
