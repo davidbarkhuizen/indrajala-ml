@@ -96,6 +96,10 @@ where you meet a new trap; delete one that no longer holds.
 
 ## Tests and lint
 
+- **Regenerate the lock with `-o requirements.txt` itself, never a fresh file** (2026-11-11): `uv pip
+  compile` prefers the pins already in its output file, so adding a package leaves numpy and the
+  rest where they are. Compiled into an empty file it took the newest of everything (numpy 2.5.3 to
+  2.5.4, pyarrow 25 to 26), a tier-3 change by the back door. Restore the file's header after.
 - **A new network or layer class meets the registry walks, which enumerate every class:**
   `test_seeded_init_parity.py` (every array network has a Rust twin and parity),
   `test_prepared_dataset.py` (every array network has a constructor there),

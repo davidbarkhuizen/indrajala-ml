@@ -1,5 +1,5 @@
 """
-load_network(path): whatever a format-2 file (format2.py) describes, built from its specs and rule,
+load_network(path): whatever a format-2 file (format2.py) or a format-3 directory (format3.py) describes, built from its specs and rule,
 never from a class named in it (the composable-layers workplan, Format 2). A network is the
 Sequential network of the file's implementation and shape, bit-identical to the preset that may have
 saved it. An ensemble is its implementation's ensemble class, of such sub-networks.
@@ -10,6 +10,7 @@ pure-Python networks mustn't.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal
 
 from indrajala_ml.model.ensembles.ensemble_array_backprop_classifier_network import (
@@ -45,6 +46,7 @@ from indrajala_ml.model.persistence.format2 import (
     network_from_json,
     restore_file,
 )
+from indrajala_ml.model.persistence.format3 import is_directory, read_directory
 from indrajala_ml.model.persistence.model_io import load_json
 
 _ENSEMBLES: dict[str, Any] = {
@@ -68,9 +70,14 @@ _ARRAY_SHAPES: dict[str, Literal["multiclass", "single_output", "sequence"]] = {
 }
 
 
-def load_network(path: str) -> Any:
-    """The network or ensemble a format-2 file describes, with its weights and optimizer state."""
-    state = load_json(path)
+def load_network(path: str | Path) -> Any:
+    """
+    The network or ensemble a format-2 file or a format-3 directory (format3.py) describes, with its
+    weights and, if it holds them, its optimizer's and generator's state.
+    """
+    if is_directory(path):
+        return network_from_state(read_directory(path))
+    state = load_json(str(path))
     if not is_format2(state):
         raise ValueError(f"{path} isn't a format-2 file; a legacy file loads with its class's load()")
     return network_from_state(state)

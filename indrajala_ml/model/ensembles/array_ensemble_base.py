@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, ClassVar, Self, cast
 
 from indrajala_ml.model.ensembles.ensemble_base import EnsembleBase
 from indrajala_ml.model.persistence.format2 import ensemble_classifiers, ensemble_to_json, is_format2
+from indrajala_ml.model.persistence.format3 import is_directory, read_directory
 from indrajala_ml.model.persistence.model_io import load_json, save_json
 from indrajala_ml.model.specs.array_network_shapes import ArraySingleOutputShape
 
@@ -17,7 +19,7 @@ class ArrayEnsembleBase[ClassifierT: ArraySingleOutputShape[Any]](EnsembleBase[C
 
     class_count is the number of sub-networks. save() writes format 2 (format2.py), one format-2
     file per sub-network nested in the ensemble's. load() reads it or the legacy envelope, whose
-    snapshot nests one network's (W, b) list per classifier.
+    snapshot nests one network's (W, b) list per classifier, or a format-3 directory (format3.py).
     """
 
     # the single-output network load() builds, one per class; ClassifierT's class (a ClassVar
@@ -28,8 +30,9 @@ class ArrayEnsembleBase[ClassifierT: ArraySingleOutputShape[Any]](EnsembleBase[C
         save_json(path, ensemble_to_json(self.classifiers[0].implementation, self.classifiers))
 
     @classmethod
-    def load(cls, path: str) -> Self:
-        state = load_json(path)
+    def load(cls, path: str | Path) -> Self:
+        # a format-3 directory (format3.py) reads as the format-2 document it holds
+        state = read_directory(path) if is_directory(path) else load_json(str(path))
         if is_format2(state):
             # each sub-network as classifier_cls, which refuses one whose specs or rule aren't its
             # own; numpy and Rust files load into either
