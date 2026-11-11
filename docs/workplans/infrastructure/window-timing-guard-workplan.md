@@ -100,46 +100,76 @@ considered.
 **The order of the cases:** ml's six first, the long test last. The learn rows then run before any
 heavy case, as they do in ml's script. The control after the long test is D2's problem.
 
-### D2: the control's warm-up
+### D2: what to do about the control (decided at stage 3, from data)
 
-- **(a) Leave it.**
+**The first choice, (c) below, was withdrawn on 2026-11-11 before it merged.** The probe that
+supported it read the control at 200 loops after it had already run at 20, so it was already warm.
+Re-run with the warm-up as planned (0.5 s, then 200 loops), the control after the long test read
+750-905 µs against a cold 410-570. Then `--settle` (stage 2) timed it a second at a time on
+`pyramidon`, µs a step:
+
+| run | cold | after one long-test step |
+|---|---|---|
+| 1 (8 s) | 509 503 509 513 513 508 511 514 525 | 805 783 782 775 772 **529** 513 499 552 |
+| 1, a second long test | | 814 782 808 771 808 827 784 741 **516** |
+| 2 (10 s) | 521 520 516 527 551 565 523 523 536 559 | 808 790 771 765 792 768 765 786 786 772 |
+
+After the long test, the control runs 45-60% slow at a flat level. It drops back to the cold level
+all at once, after 5-7 s in one run and not within 10 s in another.
+- **Not OpenBLAS's spin:** that lasts milliseconds (measurement.md §7).
+- **The candidate on a laptop:** its clock or power budget, after 12-15 s of one boosted core.
+- **It doesn't explain #1212 on `jebel`:** there the side straight after the long test was faster,
+  not slower.
+
+A warm-up of any fixed length would be a guess at a machine's recovery time. The options, with
+stone's and klip's readings to choose between them:
+
+- **(a) Leave the control as it is.**
   - Pros:
-    - No change to any row.
+    - No change.
   - Cons:
-    - The combined default puts the control after the long test, where the probe shows it
-      misreads. Stage 1 alone would make a moved control likely in every window A/B.
-- **(b) The control alone: 200 loops, and a warm-up of the same.**
+    - In the combined default it runs straight after the long test, where it misreads on
+      `pyramidon`. A "CONTROL MOVED" there would say nothing about the crate.
+- **(b) Time the control first, before any case.**
   - Pros:
-    - The smallest change that the probe supports.
+    - It reads the machine before this pass's heavy work.
   - Cons:
-    - A special case: the learn cases keep a 20-loop warm-up (60 ms to 0.4 s, long enough there),
-      and the next short-step case would need the same care again.
-- **(c) One rule for every step: warm up for at least 0.5 s** (`loops` steps, then more until
-  0.5 s has passed), and time the control at 200 loops. **Chosen.**
+    - It follows the previous pass's long test, only a process start (a few seconds of imports)
+      later.
+    - It sees nothing that changes during the pass.
+- **(c) A warm-up of at least N seconds for every step.**
   - Pros:
-    - One rule covers the control and any later short step.
-    - Every case except the control is already past 0.5 s (a learn case's 20 steps and a
-      forward case's one step take 60 ms to 3.4 s), so their timed loops don't change. The learn
-      cases' warm-up grows only where it is under 0.5 s.
+    - One rule.
   - Cons:
-    - Each pass lasts a few seconds longer.
-    - In an A/B whose old side predates it under the studies script, the warm-ups differ by side,
-      because the timing module comes from each side's ml tree. That holds only for A/Bs that
-      straddle this PR.
-- **(d) Time the control twice, first and last** (two control rows).
+    - N is a guess unless the runners' recovery times are measured; on `pyramidon` it would have
+      to exceed 10 s.
+    - Withdrawn above.
+- **(d) Time the control first and last** (two control rows).
   - Pros:
-    - Every run would show a context effect directly.
+    - Every run shows a context effect directly, whatever its cause.
   - Cons:
     - A second row to read.
-    - The probe already shows the effect, and (c) removes its cause.
-  - **Not now.** If stage 3's A/A still moves the control, (d) is the next probe.
-- **(e) A single-threaded control.**
+    - The last row still misreads where (a) does. It flags the problem, not cures it.
+- **(e) Order the cases so the long test runs first,** then the learn and forward cases, then
+  the control.
   - Pros:
-    - Threading changes would no longer move it (working-notes).
+    - Several seconds of lighter work separate the long test from the control.
+  - Cons:
+    - The forward cases are heavy too, and the gap is shorter than what `pyramidon` needs.
+- **(f) A single-threaded control.**
+  - Pros:
+    - Threading changes no longer move it (working-notes).
   - Cons:
     - A different control from every archived window run.
-    - The context effect is not a threading effect.
-  - **Not now.** Kept with the working-notes entry.
+    - Not shown to avoid this effect: a clock state touches one core as much as eight.
+
+**How it is decided:** `--settle long-test-family-p7-f32-U1-n1024-c1023 --settle-seconds 30` on
+`stone` and on `klip` (stage 3, step 1).
+- The control recovers within a few seconds there, and the A/A's control is within noise: **(a)**,
+  and the effect is recorded as `pyramidon`'s.
+- It stays off for longer: **(b) with (d)'s last row,** a first and a last control. This is the
+  smallest change that both separates the control from the long test and still shows a drift
+  within a pass.
 
 ### D3: next-steps' numbering when item 1 goes
 
@@ -189,34 +219,38 @@ Each stage is one PR, merged before the next.
 - The README's Timing paragraph says the same.
 - **Tier 0:** a measurement script, no timed path. Tests and lint on `pyramidon`.
 
-### Stage 2: the control and the rule (indrajala-ml)
+### Stage 2: the guard's docs and the settle probe (indrajala-ml)
 
-- `window_recurrent_timing.py`: `timed` warms up for `loops` steps and on until 0.5 s has passed
-  (D2 (c)). The control is timed at 200 loops a repeat. A test checks both on a stub step, with
-  nothing timed against a machine.
-- `crate_perf/ab_all.sh`: `WINDOW` runs the studies script (each host's checkout path: `stone`
-  `~/labour/code/indrajala-studies`, `klip` `~/code/indrajala-studies`). Bundle the studies repo
-  to `stone` beside ml's.
+- `window_recurrent_timing.py --settle CASE [--settle-seconds S]`: the control's µs a step, a
+  second at a time, cold and then straight after one step of the case. It times no rows, and the
+  studies script has it too (it hands `main` its own `case_step`). This is the durable form of
+  D2's probe. Tests run it on a small case, with nothing timed against a machine.
+- `crate_perf/ab_all.sh`: `WINDOW` runs the studies script, from each host's checkout:
+  - `jebel` and `klip`: `~/code/indrajala-studies`, pulled first.
+  - `stone`: `~/labour/code/studies-main`, cloned or fast-forwarded from a bundle sent beside ml's.
+    stone's `~/labour/code/indrajala-studies` is an empty repository with 79 MB of objects, touched
+    on 2026-11-11, so it is left alone.
 - `measurement.md` §1, the tier-1 table: a row "the window program (its op, the window-recurrent
   networks' learn and classify paths, or their crate ops)" → indrajala-studies'
   `window_study_timing.py` through `--bench cmd`.
 - working-notes: the entry "A crate change to the window program needs ml's ... too" becomes
   "one A/B: the studies script's default covers learn, forward and the long test". Add a new note:
-  a control timed straight after a heavy case misreads without a warm-up of its own (this plan's
-  probe).
+  on `pyramidon` the control misreads for 5 to more than 10 s after the long test (D2).
 - next-steps: item 1 and its edge deleted, "needs 1" dropped from 40, 41, 44, 45 and 46 (D3).
 - **Tier 0.**
 
 ### Stage 3: the check, on `stone` and `klip` (after the SMB runs end, about 12:30)
 
-1. **A smoke run on `stone`:** the studies script at its new default, once, outside `ab.py`. It
-   checks that all seven cases and the control run, and gives a pass's length.
+1. **On `stone` and `klip`, outside `ab.py`:**
+   - `--settle long-test-family-p7-f32-U1-n1024-c1023 --settle-seconds 30`. This decides D2.
+   - The studies script at its new default, once. It checks that all seven cases and the control
+     run, and gives a pass's length.
+   - If D2 calls for a change to the control, it lands (ml) before the A/As.
 2. **An A/A on `stone`:** `ab.py run --old main --new main --order ONNO --bench cmd --
-   ~/labour/code/indrajala-studies/scripts/measurement/window_study_timing.py`.
+   /home/david/labour/code/studies-main/scripts/measurement/window_study_timing.py`.
    - **Passes if** the control is within noise and no row is consistent beyond the profile's noise
      rules.
-   - If the control still moves, try D2 (d) (a first-and-last control) as a probe before anything
-     else.
+   - If the control still moves, D2 is read again with this run's data.
 3. **The same A/A on `klip`,** under `ulimit -v 4500000` and the thermal guard (85 °C), as
    `ab_all.sh` runs it. Bring klip's studies checkout up to date first (https; its clone is at
    `db8db90`, 2026-10-31).
@@ -227,6 +261,6 @@ Each stage is one PR, merged before the next.
 ## Status
 
 - Workplan: this PR.
-- Stage 1: not started.
-- Stage 2: not started.
+- Stage 1: done (indrajala-studies #21).
+- Stage 2: this PR.
 - Stage 3: waits for `stone` and `klip` (about 12:30).

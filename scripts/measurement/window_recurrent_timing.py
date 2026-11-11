@@ -27,6 +27,7 @@ window-recurrent change touches.
 
     python scripts/measurement/window_recurrent_timing.py [--cases CASE ...] [--repeats 5] [--loops 20]
     python scripts/measurement/window_recurrent_timing.py --breakdown CASE [CASE ...]
+    python scripts/measurement/window_recurrent_timing.py --settle CASE [--settle-seconds 8]
 
 It prints the probe contract's lines (scripts/measurement/ab.py, `--bench cmd`), one JSON object per row:
 
@@ -39,6 +40,11 @@ loop's Python with each crate call's Python side, and, for a long test, the exam
 (`Encoding.example`, `column_tokens`), `prepare_dataset` and the checking (`evaluate` less
 `predict`'s chunks). cProfile charges Python calls more than crate calls, so the Python shares are
 overstated: an upper bound for the window-program workplan's D10 gate.
+
+`--settle` times no rows either: the control in blocks of `SETTLE_LOOPS` steps for `--settle-seconds`,
+cold, then again straight after one step of the case, printing each second's median µs a step. It
+shows how long what ran before still moves the control (the window-timing-guard workplan, D2): on
+`pyramidon` a long test left it 50-60% slow for 5-7 s, then it dropped back at once.
 
 ab.py runs this script from the new tree on both sides:
 
@@ -91,6 +97,7 @@ ADDITION_TOKENS, ADDITION_CLASSES = 27, 3
 FAMILY_TOKENS, FAMILY_WIDTH = 11, 3
 CHUNK_TOKENS = 1 << 20  # a long test's forward pass at most (indrajala-studies' window_recurrent_study.CHUNK_TOKENS)
 WINDOWS = {"transformer": wp.transformer_window, "linear": wp.linear_window}
+SETTLE_LOOPS = 200  # the control's steps a block in --settle (about 0.1 s)
 
 # pstats' table: a function (file, line, name) to its calls, primitive calls, own and cumulative time, callers
 Function = tuple[str, int, str]
@@ -191,6 +198,34 @@ def control_step() -> Callable[[], object]:
     return lambda: a @ b
 
 
+def per_second(step: Callable[[], object], seconds: float, loops: int = SETTLE_LOOPS) -> list[float]:
+    """Blocks of loops steps for seconds, each whole second's median block in µs a step (one median if under a second)."""
+    blocks: list[tuple[float, float]] = []  # (when the block ended, µs a step)
+    begun = time.perf_counter()
+    while (now := time.perf_counter()) - begun < seconds:
+        for _ in range(loops):
+            step()
+        blocks.append((time.perf_counter() - begun, (time.perf_counter() - now) / loops * 1e6))
+    by_second: dict[int, list[float]] = {}
+    for ended, value in blocks:
+        by_second.setdefault(min(int(ended), max(0, int(seconds) - 1)), []).append(value)
+    return [statistics.median(values) for _, values in sorted(by_second.items())]
+
+
+def settle(
+    case: str, seconds: float, steps: Callable[[str], tuple[Callable[[], object], bool]] = case_step
+) -> list[str]:
+    """The control's µs a step, a second at a time: cold, then straight after one step of the case (the docstring)."""
+    control = control_step()
+    lines = ["cold: " + " ".join(f"{v:.0f}" for v in per_second(control, seconds))]
+    step, _ = steps(case)
+    begun = time.perf_counter()
+    step()
+    lines.append(f"{case}: one step, {time.perf_counter() - begun:.2f} s")
+    lines.append("after it: " + " ".join(f"{v:.0f}" for v in per_second(control, seconds)))
+    return lines
+
+
 def breakdown(case: str, steps: Callable[[str], tuple[Callable[[], object], bool]] = case_step) -> list[str]:
     """A case's step (from steps) once unprofiled and once under cProfile, its components (the module docstring)."""
     step, _ = steps(case)
@@ -242,9 +277,14 @@ def main(
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--loops", type=int, default=20, help="a learn case's steps a repeat")
     parser.add_argument("--breakdown", nargs="+", metavar="CASE", help="profile these cases; no rows")
+    parser.add_argument("--settle", metavar="CASE", help="the control a second at a time, cold and after CASE; no rows")
+    parser.add_argument("--settle-seconds", type=float, default=8.0)
     parser.add_argument("--rust-threads", help="N:T, set_matmul_threading(N, T) before timing")
     arguments = parser.parse_args()
     set_rust_threads(arguments.rust_threads)
+    if arguments.settle:
+        print("\n".join(settle(arguments.settle, arguments.settle_seconds, steps)), flush=True)
+        return
     if arguments.breakdown:
         for case in arguments.breakdown:
             print("\n".join(breakdown(case, steps)), flush=True)

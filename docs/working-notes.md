@@ -274,10 +274,17 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
 - **`ab.py run` refuses a `jebel` checkout that isn't on `main`** ("the checkout ... isn't on
   main"): a study controller that checks out a pinned commit (the GQA controller, 2026-11-03) leaves
   it detached. Check `git status` there and `git switch main` before an A/B.
-- **A crate change to the window program needs ml's `window_recurrent_timing.py` cases too:**
-  indrajala-studies' `window_study_timing.py` defaults to the long test alone (forward only). #1212
-  ran both: `--bench cmd -- scripts/measurement/window_recurrent_timing.py` covers the learn
-  (backward) and forward cases.
+- **A crate change to the window program takes one A/B:** indrajala-studies'
+  `window_study_timing.py` through `--bench cmd`, by its absolute path. Its default is ml's
+  `window_recurrent_timing.py` learn and forward cases, then the long test (2026-11-11; #1212
+  needed two A/Bs). Its timing module is each side's ml tree's, so an A/B across a change to ml's
+  default cases measures some rows on one side only.
+- **A control timed straight after the long test can misread for seconds:** on `pyramidon`
+  (2026-11-11), `matmul 256` ran 45-60% slow after it, flat, and dropped back at once after 5-7 s,
+  or not within 10 s. Not OpenBLAS's spin; on a laptop likely its clock or power budget. Measure a
+  machine's own with `window_recurrent_timing.py --settle CASE` (the window-timing-guard workplan,
+  D2). A candidate for #1212's -22.9% "CONTROL MOVED" on `jebel`, not shown: there the side after
+  the long test was faster.
 - **`jebel` at or below 65 W.** After a reboot PL1 comes back at 95 W: `ssh jebel 'cd
   ~/code/indrajala-ml && .venv/bin/python scripts/measurement/ab.py check --apply-setup'`, then check
   `/sys/class/powercap/intel-rapl:0/constraint_0_power_limit_uw` is 65000000.

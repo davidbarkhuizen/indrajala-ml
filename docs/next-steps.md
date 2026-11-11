@@ -34,7 +34,6 @@ in order, by: guards and owner decisions that gate other work first; then what u
 later items; then what a current research plan is likely to need; then cost, cheapest first. The
 graph's edges:
 
-- the window program's timing guard (1) before any window-program crate change (40, 41, 44, 45, 46);
 - a cross-attention benchmark (2) before batched cross-attention steps (33);
 - the harness's worker shutdown (3) and the sweep's resume (4) before draining a study (5);
 - 0.2.0 (8) before `cargo semver-checks` (9); the presets' signatures (20) before 1.0 (52), and 1.0
@@ -53,11 +52,6 @@ graph's edges:
 
 ### Guards and owner decisions that gate later work
 
-1. **The window program's timing guard covers learn and forward.** `window_study_timing.py`'s
-   default is the long test alone, so a crate change to the window program also needs
-   `window_recurrent_timing.py`'s learn and forward cases (#1212's second A/B). Adding them to the
-   default makes one A/B enough. In #1212's first, the numpy `matmul 256` control moved -22.9%,
-   which nothing in the crate reaches (unexplained).
 2. **A benchmark for cross-attention.** `attention_timing` times self-attention only; a change to
    the `cross_attention_*` ops has nothing to A/B against until one is added (measurement.md).
 3. **Stopping a study stops its workers.** A study's forkserver workers don't hold the lock
@@ -210,7 +204,7 @@ graph's edges:
 39. **Golden entries for an array window,** when its bits must be watched across refactors (after
     M2's recipe settles); today its tests pin it (central differences on numpy, numpy against Rust
     within rounding, the program against the per-layer path by bits).
-40. **The program's ops for the other array layers** (D7; needs 1): a residual block, a LayerNorm,
+40. **The program's ops for the other array layers** (D7): a residual block, a LayerNorm,
     a sigmoid dense layer, a dense layer with dropout or a FiLM StateInput runs the per-layer path
     (correct, slower). Each gets an op, checked by bits against the per-layer path, when a window
     needs it.
@@ -219,7 +213,7 @@ graph's edges:
 
 41. **The [parked `jebel` plan](workplans/infrastructure/jebel-parked-workplan.md)** when `jebel`
     is healthy: the threshold re-sweep, the column split, new threaded sites (the window program
-    among them, P4; needs 1), placement (P8: loops aligned to 32 bytes on x86, `litshe`'s cheaper
+    among them, P4), placement (P8: loops aligned to 32 bytes on x86, `litshe`'s cheaper
     pin) and the closing baseline.
 42. **A transpose for x86 that doesn't lose to 4K aliasing:** the AVX2 kernel lost up to 52% where
     the output's rows lie a multiple of 4 KB apart (512 rows). One that gathers a block into a
@@ -228,13 +222,13 @@ graph's edges:
 43. **K19, musl's golden run:** CI builds and tests the crate on musl, not the committed reference;
     a check to add if musl becomes a target. **K20,** numpy's expressions (the reference path's own
     speed).
-44. **K22, checkpointing the window's forward** (needs 1; the window program's D5 (c)): keep every
+44. **K22, checkpointing the window's forward** (the window program's D5 (c)): keep every
     `r`-th window's forward and recompute the rest, if a study trains windows long enough to pass
     the memory budget (2.9 MiB at E2b''s cell, 21.7 MiB at the fork probe's, against 2 GiB).
 45. **The attention window's kernels:** the program gains least on it (14% forward, 31% training),
-    as its crate share is larger; the next gain is in the attention kernels, not the loop (needs 1).
-46. **K18, a bits-changing kernel** (fused or reassociated arithmetic, in the window program too;
-    needs 1): the owner's approval and a re-recorded golden run (measurement.md, §8).
+    as its crate share is larger; the next gain is in the attention kernels, not the loop.
+46. **K18, a bits-changing kernel** (fused or reassociated arithmetic, in the window program too):
+    the owner's approval and a re-recorded golden run (measurement.md, §8).
 47. **K17, SVE or AVX-512 kernels** (`exp`, the transpose, the products) in the canonical order
     (aarch64's D5), when a machine with them is in hand.
 

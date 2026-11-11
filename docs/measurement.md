@@ -32,6 +32,7 @@ timing PR and workplan relies on it, not only optimization work.
   | `classify_rows` or the accuracy passes | `accuracy_pass_timing` |
   | mini-batch paths of dense training | `batch_size_timing` |
   | attention's forward and backward at long `T` (time and peak memory) | `attention_timing` |
+  | the window program (its op, the window-recurrent networks' learn and classify paths, or their crate ops) | indrajala-studies' `window_study_timing.py` through `--bench cmd` by its absolute path: its default is the learn and forward cases and the long test |
 
 - **Why 4 passes are enough for tier 1, and what a flagged row means there.** Over passes 1-4
   (`report --passes 1-4`), the i7's six A/As flagged 43 of 591 rows consistent (7.3%, up to 9.5%),
