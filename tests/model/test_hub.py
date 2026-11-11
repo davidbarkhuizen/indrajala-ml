@@ -203,3 +203,10 @@ def test_the_live_hub_round_trip():
     loaded = from_pretrained(os.environ["INDRAJALA_HUB_TEST_REPO"], revision=revision, training_state=True)
 
     assert _state_bits(loaded) == _state_bits(network)
+
+
+def test_a_window_networks_card_warns_against_float32():
+    text = str(model_card(_trained(NAME), made_by={"ml": "a", "crate": "b"}))
+    assert "**Float64 required: a conversion to float32" in text
+    assert "may change the machine.**" in text
+    assert "float64 required" not in str(model_card(_trained("SequentialSequenceArrayNetwork"))).lower()

@@ -46,15 +46,11 @@ from indrajala_ml.model.specs.layer_specs import (
     TokenMean,
     expand_specs,
 )
-from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, spec_shapes
+from indrajala_ml.model.specs.spec_shapes import InputShape, Shape, spec_shapes, token_shape
 from indrajala_ml.model.specs.window_geometry import output_size
 
 # the kinds later stages export, by the stage that adds them
 _LATER: dict[type[Any], int] = {
-    StateInput: 6,
-    Split: 6,
-    Branch: 6,
-    Merge: 6,
     CrossAttention: 7,
 }
 
@@ -203,22 +199,64 @@ def layers(
     names: Sequence[Sequence[str]],
     weights: Sequence[Sequence[Any]],
 ) -> Tensor:
+    """The output of specs over x (walk's)."""
+    output, _inputs = walk(g, specs, input_shape, x, names, weights)
+    return output
+
+
+def walk(
+    g: Graph,
+    specs: Sequence[LayerSpec],
+    input_shape: InputShape,
+    x: Tensor,
+    names: Sequence[Sequence[str]],
+    weights: Sequence[Sequence[Any]],
+    state: str | None = None,
+) -> tuple[Tensor, list[Tensor]]:
     """
-    The output of specs over x: each expanded spec's emitter over x reshaped to the spec's input
-    shape (spec_shapes), a residual block's add over its fork's input in the add's shape.
+    The output of specs over x, and each expanded spec's input (a window's poolings read one): each
+    expanded spec's emitter over x reshaped to the spec's input shape (spec_shapes), a residual
+    block's add over its fork's input in the add's shape. state, (N, S), is a window's, which its
+    StateInputs add (stage 6); a split's branches each start from its input, a branch's end is kept,
+    and a merge sums the ends in branch order, its own input last (branch_layers.py).
     """
     forks: list[Tensor] = []
+    splits: list[tuple[Tensor, list[Tensor]]] = []
+    inputs: list[Tensor] = []
     context: Segments | None = None
     expanded = expand_specs(specs)
     shapes = spec_shapes(specs, input_shape)
     for spec, shape, entry_names, entry in zip(expanded, shapes, names, weights, strict=True):
-        # a dense layer reads an image as our flat row; every other kind its input shape
+        # a dense layer reads an image as our flat row; a state input its tokens (an array window's
+        # one); every other kind its input shape
         flat = isinstance(spec, Dense) and len(shape.input_shape) != 2
-        x = as_shape(g, x, (math.prod(shape.input_shape),) if flat else shape.input_shape)
+        if flat:
+            x = as_shape(g, x, (math.prod(shape.input_shape),))
+        elif isinstance(spec, StateInput):
+            x = as_shape(g, x, token_shape(shape.input_shape))
+        else:
+            x = as_shape(g, x, shape.input_shape)
+        inputs.append(x)
         if isinstance(spec, Fork):
             forks.append(x)
         elif isinstance(spec, Add):
             x = Tensor(g.op("Add", [x.name, as_shape(g, forks.pop(), shape.input_shape).name]), x.dims)
+        elif isinstance(spec, Split):
+            splits.append((x, []))
+        elif isinstance(spec, Branch):
+            split_input, ends = splits[-1]
+            ends.append(x)
+            x = split_input
+        elif isinstance(spec, Merge):
+            _split_input, ends = splits.pop()
+            total = ends[0].name
+            for end in ends[1:]:
+                total = g.op("Add", [total, as_shape(g, end, shape.input_shape).name])
+            x = Tensor(g.op("Add", [total, x.name]), x.dims)
+        elif isinstance(spec, StateInput):
+            if state is None:
+                raise ValueError("a StateInput reads a window's state: only a window-recurrent network has one")
+            x = Tensor(state_input(g, spec, x.name, state, entry_names, entry), x.dims)
         elif isinstance(spec, Dropout):
             continue
         elif isinstance(spec, Dense) and len(x.dims) == 1:
@@ -251,7 +289,23 @@ def layers(
             x = token_mean(g, x)
         else:
             raise NotImplementedError(unsupported(spec))
-    return x
+    return x, inputs
+
+
+def state_input(g: Graph, spec: StateInput, x: str, state: str, names: Sequence[str], weights: Sequence[Any]) -> str:
+    """
+    A window's state entering its tokens (StateInputArrayLayer): x_t + P c for every token; FiLM's
+    (scale, FilmStateInputArrayLayer) x_t * (1 + G c) + P c.
+    """
+    projected = g.op(
+        "Unsqueeze",
+        [g.op("MatMul", [state, g.op("Transpose", [g.weight(names[0], weights[0])], perm=[1, 0])]), g.int64([1])],
+    )
+    if not spec.scale:
+        return g.op("Add", [x, projected])
+    gain = g.op("MatMul", [state, g.op("Transpose", [g.weight(names[1], weights[1])], perm=[1, 0])])
+    gamma = g.op("Unsqueeze", [g.op("Add", [g.constant(1.0), gain]), g.int64([1])])
+    return g.op("Add", [g.op("Mul", [x, gamma]), projected])
 
 
 def unsupported(spec: object) -> str:

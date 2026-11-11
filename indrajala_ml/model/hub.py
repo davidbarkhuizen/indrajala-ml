@@ -26,6 +26,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from indrajala_ml.model.export.onnx.exporter import FLOAT64_WARNING
+from indrajala_ml.model.persistence.format2 import WINDOW_RECURRENT
 from indrajala_ml.model.persistence.format3 import (
     CONFIG_FILE,
     OPTIMIZER_FILE,
@@ -140,6 +142,9 @@ def model_card(
         'network = from_pretrained("<repo id>", revision="<commit>")',
         "```",
     ]
+    if shape == WINDOW_RECURRENT:
+        # its ONNX step is float64 only (the export-and-hub workplan, D10)
+        lines += ["", f"**{FLOAT64_WARNING[0].upper()}{FLOAT64_WARNING[1:]}.**"]
     if description:
         lines += ["", description.strip()]
     return hub.ModelCard("\n".join(lines) + "\n")
