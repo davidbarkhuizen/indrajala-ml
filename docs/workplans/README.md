@@ -27,7 +27,6 @@ workplans retired ([retired.md](retired.md)).
 
 | workplan | scope |
 | --- | --- |
-| [window-timing-guard-workplan.md](infrastructure/window-timing-guard-workplan.md) | **open, 2026-11-11:** next-steps' infrastructure item 1, one A/B for the window program (learn, forward and the long test) and a control that holds after a heavy case |
 | [jebel-parked-workplan.md](infrastructure/jebel-parked-workplan.md) | **parked, 2026-11-05:** what's left of the crate performance plan, waiting for a healthy claim machine: the threshold re-sweep, the column split, new threaded sites and the closing baseline |
 
 Retired plans are listed in [retired.md](retired.md).
