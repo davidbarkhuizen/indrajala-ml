@@ -67,6 +67,7 @@ leftovers; that text is `git show 2490bdf:docs/next-steps.md`.
 | Removing duplicated code, third pass (DRY, 2026-10-30) | #1100 | #1101-#1106, crate #77, #1108, #1109 | `git show d07a9e3:docs/workplans/library/dry-third-pass-workplan.md` |
 | The crate's speed: kernels and threads as one plan (its jebel-dependent work parked) | #1243 | crate #100-#116, #1244-#1273 | `git show 4176d10:docs/workplans/infrastructure/crate-performance-workplan.md` |
 | A window of array layers, a given gradient, stored states (the array window; indrajala-research's machine-policy plan, M1) | #1282 | #1283-#1285, crate #119 | `git show 32d4d23:docs/workplans/library/array-window-workplan.md` |
+| One A/B guards the window program (learn, forward and the long test; next-steps' infrastructure item 1) | #1291 | indrajala-studies #21, #1292, #1304 | `git show ffea64a:docs/workplans/infrastructure/window-timing-guard-workplan.md` (its status names stage 2 as #1300: it is #1292) |
 
 The optimization docs (the Rust-against-numpy baseline, and the implemented, rejected and
 candidate optimizations) were retired the same way: `git show 0a04977:docs/optimizations.md` and
