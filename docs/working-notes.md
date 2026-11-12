@@ -402,9 +402,10 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   built crate doesn't, so a script run straight from it (not through `ab.py`, which builds each side's crate)
   fails on the crate's arguments (2026-11-12: `WindowProgram` got an unexpected `tokens`, on `klip` and
   `stone`). After a pull, `git submodule update rust` and `./cli build-rust` (`source ~/.cargo/env` first).
-- **`stone`'s profile no longer matches it** (2026-11-12): its kernel moved to 7.0.0-42 and its
-  energy-performance preference to `balance_power`, so `ab.py run` refuses until it is re-profiled or the
-  setting is back. A guard A/A that claims no speed can pass `--skip-profile`; a timed claim can't.
+- **`stone`'s energy-performance preference drops to `balance_power` on battery** (power-profiles-daemon's
+  "balanced" profile; seen 2026-11-12, back at `balance_performance` on AC). `ab.py run` then refuses its profile:
+  check it's on AC (`/sys/class/power_supply/AC/online`) before a timed run. Its profile was re-recorded for kernel
+  7.0.0-42 the same day; re-record it (`machine_profile.py profile`, keeping its noise rules) after a kernel update.
 - **A worktree's `.venv` may be a symlink to the main checkout's** (`ls -la .venv`): building a
   branch's crate into it replaces main's, and its editable install loads main's Python, so a
   golden run or suite there tests main's code against the branch's crate. A branch with a crate
