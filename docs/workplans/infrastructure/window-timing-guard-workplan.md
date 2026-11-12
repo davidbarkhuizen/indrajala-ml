@@ -163,6 +163,10 @@ stone's and klip's readings to choose between them:
     - A different control from every archived window run.
     - Not shown to avoid this effect: a clock state touches one core as much as eight.
 
+**Decided at stage 3 (2026-11-12): (a).** Neither runner shows the effect: the control straight after the long
+test reads as it does cold, every second of 30, on both (stage 3's record below). The effect is recorded as
+`pyramidon`'s, as the rule below says.
+
 **How it is decided:** `--settle long-test-family-p7-f32-U1-n1024-c1023 --settle-seconds 30` on
 `stone` and on `klip` (stage 3, step 1).
 - The control recovers within a few seconds there, and the A/A's control is within noise: **(a)**,
@@ -262,5 +266,29 @@ Each stage is one PR, merged before the next.
 
 - Workplan: this PR.
 - Stage 1: done (indrajala-studies #21).
-- Stage 2: this PR.
-- Stage 3: waits for `stone` and `klip` (about 12:30).
+- Stage 2: done (#1300).
+- Stage 3: done 2026-11-12; the record below. D2: (a).
+
+### Stage 3's record (2026-11-12)
+
+**`klip`** (ml `de66e13`, its crate rebuilt at `rust/`'s `2c4415b` first, since the pulled tree's Python outran the
+built crate; thermal guard at 85 C, `ulimit -v 4500000`):
+- **Settle,** µs a step: cold 569-571 for 30 s; after one long-test step (18.4 s), 567-571 for 30 s. No effect.
+- **The default pass,** once: every case and the control ran; 167 s. The long test was 18.5 s a step and the
+  control 577 µs. Peak 53 C.
+- **The A/A** (`2026-11-12-guard3-aa-klip`, ONNO, 17 min, peak 41 C): the profile's identity matches
+  (`ryzen7-3700u-klip.json`); the control is within noise; 7 rows within noise, max |Δ| 2.3%. **Passes.**
+
+**`stone`** (ml `de66e13` by bundle, its crate rebuilt at `2c4415b` for the same reason; the studies at
+`e3f010e` in `~/labour/code/studies-main`):
+- **Settle,** µs a step: cold 713-818 for 30 s; after one long-test step (10.8 s), 705-836. No effect, though
+  noisier than `klip`'s.
+- **The default pass,** once: every case and the control ran; 101 s. The long test was 11.0 s a step and the
+  control 602 µs.
+- **The A/A:** refused first. `stone`'s identity no longer matches its profile: its kernel moved from
+  7.0.0-38 to 7.0.0-42, and its energy-performance preference from `balance_performance` to `balance_power`.
+  It is the owner's desktop, so that may be the owner's setting. This A/A claims no speed, so it ran with
+  `--skip-profile` (`2026-11-12-guard3-aa-stone2`, ONNO, 6 min, Chrome open): the control is within noise; 7 rows
+  within noise (1 separated inside its spread), max |Δ| 5.6%. **Passes.**
+- **Left open for `stone`:** a new profile (tier 3, measurement.md §1) before its next timed claim, or the
+  owner's power setting restored. In next-steps.

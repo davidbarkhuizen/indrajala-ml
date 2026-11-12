@@ -398,6 +398,13 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   run locally: `./cli test tests/ --shard 3/8`.
 - **Crate builds:** `./cli build-rust`; after switching branches whose `rust/` differs, `git
   submodule update rust`, then rebuild.
+- **A runner's own `.venv` goes stale when its checkout is pulled or fast-forwarded:** the Python moves but the
+  built crate doesn't, so a script run straight from it (not through `ab.py`, which builds each side's crate)
+  fails on the crate's arguments (2026-11-12: `WindowProgram` got an unexpected `tokens`, on `klip` and
+  `stone`). After a pull, `git submodule update rust` and `./cli build-rust` (`source ~/.cargo/env` first).
+- **`stone`'s profile no longer matches it** (2026-11-12): its kernel moved to 7.0.0-42 and its
+  energy-performance preference to `balance_power`, so `ab.py run` refuses until it is re-profiled or the
+  setting is back. A guard A/A that claims no speed can pass `--skip-profile`; a timed claim can't.
 - **A worktree's `.venv` may be a symlink to the main checkout's** (`ls -la .venv`): building a
   branch's crate into it replaces main's, and its editable install loads main's Python, so a
   golden run or suite there tests main's code against the branch's crate. A branch with a crate
