@@ -452,6 +452,10 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
 - **After a local `setsid nohup cmd &`, `$!` is `setsid`'s short-lived parent, not the run**
   (`pyramidon`, from the Bash tool: the waiters on it exited at once); find the run with `pgrep -af`
   after launch. Over ssh to `jebel`, `$!` was the run.
+- **Inside a single-quoted `ssh host '...'`, write `$!`, not `\$!`:** the remote shell sees the quote's text
+  as is, so `\$!` writes the literal `$!` to a pid file. A waiter's `kill -0 $(cat run.pid)` then fails at once
+  and reports the run ended while it still runs (2026-11-11, W2.4's dump run on `stone`). Inside a nested
+  `bash -c "..."` within that quote, `\$` is right for variables the inner shell expands.
 - **`cd X && ... && cmd &` backgrounds the whole chain in a subshell:** variables set in it don't
   reach the next command, and over ssh the session stays open until the chain ends.
 - **`pkill -f PATTERN` and `pgrep -f PATTERN` match their own shell** (its command line holds the
