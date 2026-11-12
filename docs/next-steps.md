@@ -545,6 +545,9 @@ indrajala-studies' `scripts/studies/addition_study.py`'s docstring):
   `hidden_delta_batch` at batch 32 3.5% slower with its products unchanged and
   `accumulate_gradient_batch` 7.6% faster; #678's crate bump 7-18% faster on five Rust rows. Read
   as codegen or layout shifts (x86 placement: infra 41); none claimed.
+- **`stone`'s profile** (the window timing guard's stage 3, 2026-11-12): its kernel moved to 7.0.0-42 and its
+  energy-performance preference to `balance_power`, so `ab.py run` refuses it. Before its next timed claim,
+  re-profile it (`machine_profile.py`, tier 3), or ask the owner whether `balance_performance` comes back.
 - **Rerunning the baseline** after a change that could move every number (kernel, BIOS,
   numpy/OpenBLAS, rustc, the frequency policy): the benchmark-machine plan's stages 4-5 at the same
   tags, then at `main`, replacing [machine_profiles/i7-9700k.md](machine_profiles/i7-9700k.md)'s
