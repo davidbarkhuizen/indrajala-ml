@@ -364,7 +364,10 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   thermal guard** `scripts/runner/thermal_guard.sh LOG [STOP] -- COMMAND...` (indrajala-studies'; on `klip`,
   `~/code/indrajala-studies/scripts/runner/thermal_guard.sh`): it starts the command in its own
   process group, logs the k10temp sensor every 5 s to LOG and stops the group at STOP C (85) or
-  above, with an "ended, status N, peak T C" line. A waiter there watches the probe's "probe ended" line
+  above, with an "ended, status N, peak T C" line. **To stop a guarded job early, kill the command's group, not
+  the guard's:** the guard `setsid`s the command, so it leads a group of its own (the PGID of the `bash` under the
+  guard, in `ps -eo pid,pgid,cmd`). `kill -- -GUARD_PID` kills the guard alone and leaves the job running unguarded
+  (2026-11-13: R2's seed 3 ran on for 2.5 hours, unwatched, after a stopper did that). A waiter there watches the probe's "probe ended" line
   or the guard's process gone (`pgrep -f "[t]hermal_guard.sh <its LOG's directory>"`). **`./cli setup` over ssh** (indrajala-rl's,
   `~/labour/code/indrajala-rl`) needs `export PATH=$HOME/.cargo/bin:$PATH` first: a non-interactive shell has no
   `rustup`.
