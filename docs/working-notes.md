@@ -268,8 +268,7 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   It exits 0 all the same, so `./cli build-rust && golden_training_run.py check ...` checks the
   old crate and passes (2026-11-04, #1240): confirm the installed `.so`'s hash is the build's.
 
-- **`sudo` needs a password on `jebel`, `stone` and `klip`; `litshe` alone has passwordless sudo.**
-  An agent can't sudo on the first three, and the owner's `! ssh -t host sudo ...` fails too (a `!`
+- **`sudo` on the machines needs a password, so an agent can't sudo there,** and the owner's `! ssh -t host sudo ...` fails too (a `!`
   command has no tty: "a terminal is required to authenticate"); the owner runs those in a terminal
   of their own.
 - **Development on `pyramidon`, timing and long studies on `jebel`** (measurement.md section 4).
@@ -299,11 +298,10 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   `$LABOUR/site-straight` on `stone`). Without it every run ends in a second with
   `window_program_learn() got an unexpected keyword argument 'straight'` (D67's first launch,
   2026-10-23). A launcher's `ended` lines in its first minute are the sign: read one `.out`.
-- **`jebel` shares its power supply with the wifi access point:** a power cut (2026-10-18, about
-  45 minutes) takes both down, so `stone` loses its network too and moves to another wifi. After one,
-  re-apply `jebel`'s setup (PL1) and relaunch its study; `stone`'s runs go on.
+- **After a power cut** (2026-10-18, about 45 minutes) `jebel` reboots and `stone` may lose its
+  network and move to another. After one, re-apply `jebel`'s setup (PL1) and relaunch its study; `stone`'s runs go on.
 - **`stone` can drop off the wifi with no power cut** (2026-10-21: it jumped to another network;
-  the owner moves it back to hlatikulu). Its runs survive (launched with `setsid`); only ssh
+  the owner moves it back). Its runs survive (launched with `setsid`); only ssh
   waiters on `pyramidon` die. Wait on `stone` by polling `timeout 30 ssh stone 'pgrep -f ...'`,
   reading an ssh failure as "still running", never as "ended"; wrap a launching ssh in `timeout
   20` and confirm the launch by its log.
@@ -316,7 +314,7 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   the waiter never sees the job end (2026-11-02: the context-length waiter on jebel sat 30 minutes
   past the sweep's end; klip's `! pgrep -f after-k42.sh` could never fire). Always bracket one
   character, `pgrep -f "[c]ontext_length_study.py sweep"`, which the pattern's own text can't match.
-- **`jebel.local` sometimes doesn't resolve** (mDNS): try its address (it was `192.168.1.88`). A
+- **`jebel.local` sometimes doesn't resolve** (mDNS): try its LAN address. A
   connection that opens but times out "during banner exchange" means `jebel` is thrashing, not
   down.
 - **`jebel`'s non-interactive shell lacks cargo:** `PATH=$HOME/.cargo/bin:$PATH ./cli build-rust`.
@@ -330,8 +328,8 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
 - **The permission classifier has blocked `pkill` and `kill` over ssh on `jebel`** at times; a kill
   of a named PID or process group the owner asked for went through. If blocked, ask the owner.
 - **`stone`, the third machine (since 2026-10-18): studies, and a timing guard** (no claims; the crate
-  performance workplan's D12, below). `ssh stone`
-  (192.168.1.101, user david); i7-1255U laptop (2 performance and 8 efficiency cores, 12 threads,
+  performance workplan's D12, below). `ssh stone`;
+  i7-1255U laptop (2 performance and 8 efficiency cores, 12 threads,
   15 W), 30 GB. **Available weekdays 18:00-07:00 and all weekend**: a study must fit the window or
   split by whole runs. Lid and idle sleep are off (logind drop-in, GNOME), and it should be on AC.
 - **`stone`'s sandbox (the owner's rules):** work only in `~/labour` and below, and **no authed
@@ -357,7 +355,7 @@ background jobs) moved to indrajala-studies' `docs/working-notes.md` with the re
   at 0.9-1.1 GHz (its power cap, 72 C), an epoch 640-690 s against 76 s for one job alone, so 8
   workers did about one lone job's work. Size a long study's budget on its throughput measured at
   the worker count it will run.
-- **`klip`, the fourth machine: studies, and the Ryzen's timing guard** (the crate performance workplan, D12; `ab.py` there is local, under its thermal guard, with `AB_CRATE_REPO` unset: `~/code/indrajala-math-rust` is its clone). `ssh klip` (192.168.1.104); Ryzen 7 3700U laptop
+- **`klip`, the fourth machine: studies, and the Ryzen's timing guard** (the crate performance workplan, D12; `ab.py` there is local, under its thermal guard, with `AB_CRATE_REPO` unset: `~/code/indrajala-math-rust` is its clone). `ssh klip`; Ryzen 7 3700U laptop
   (4 cores, 8 threads), 5 GB, so about 3 small runs at once. Always on, all cores; the owner's
   limit (2026-10-21): <= 85 C, ideally <= 80 C. **CPU boost is off** (`cpu-boost-off.service`;
   `/sys/devices/system/cpu/cpufreq/boost` reads 0): boost overheats it. **Run every job under the
