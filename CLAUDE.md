@@ -33,10 +33,11 @@ writing its workplan. The research notes (findings, reports, the literature revi
 kinds, the goal) are there too, in `docs/research-notes/`, and so are the research workplans, where
 findings are registered and recorded, in `docs/workplans/` (moved from here 2026-10-30).
 
-- **Every cell must be able to succeed, and its training must exclude memorising:** the model can
+- **Every cell must be able to succeed, and its training must cover the target:** the model can
   represent the target (codes at least its minimal states), and the longest training length is at
-  least `m + q - 1` (the exclusion bound), each bound written beside the cell and tested against
-  the config. An impossible cell only with a stated reason.
+  least 1.75 times the target's depth plus Chow's `k` (the coverage rule, from 2026-11-18; it
+  replaced the exclusion bound `m + q - 1` as the rule), each bound written beside the cell and
+  tested against the config. An impossible cell only with a stated reason.
 - **Claims and their refutations are registered before the data; no setting changes after it.** A
   flaw found mid-study is recorded and fixed in a new registered experiment.
 - **Certify where a model admits proof**; sampled tests overstate "works".
